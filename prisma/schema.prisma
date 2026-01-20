@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Venue {
+  id              String        @id @default(cuid())
+  name            String
+  address         String?
+  neighborhood    String?
+  city            String?
+  state           String?
+  zipCode         String?
+  description     String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  hourlySeatPrice Float
+  latitude        Float?
+  longitude       Float?
+  rulesText       String?
+  tags            String[]
+  reservations    Reservation[]
+  tables          Table[]
+
+  @@map("venues")
+}
+
+model Table {
+  id           String        @id @default(cuid())
+  venueId      String
+  name         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  seatCount    Int           @default(1)
+  reservations Reservation[]
+  seats        Seat[]
+  venue        Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@map("tables")
+}
+
+model Seat {
+  id           String        @id @default(cuid())
+  tableId      String
+  name         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
+  table        Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@map("seats")
+}
+
+model Reservation {
+  id        String   @id @default(cuid())
+  venueId   String
+  tableId   String?
+  seatId    String?
+  userId    String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  endAt     DateTime
+  seatCount Int      @default(1)
+  startAt   DateTime
+  seat      Seat?    @relation(fields: [seatId], references: [id])
+  table     Table?   @relation(fields: [tableId], references: [id])
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@map("reservations")
+}
