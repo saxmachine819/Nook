@@ -1,5 +1,5 @@
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { ExploreClient } from "./ExploreClient"
 
 function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
@@ -55,13 +55,44 @@ function computeAvailabilityLabel(
   return "Sold out for now"
 }
 
-export default async function ExplorePage() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const north = parseFloat(searchParams.get("north") || "")
+    const south = parseFloat(searchParams.get("south") || "")
+    const east = parseFloat(searchParams.get("east") || "")
+    const west = parseFloat(searchParams.get("west") || "")
+
+    // Validate bounds
+    if (
+      isNaN(north) ||
+      isNaN(south) ||
+      isNaN(east) ||
+      isNaN(west) ||
+      north <= south ||
+      east <= west
+    ) {
+      return NextResponse.json(
+        { error: "Invalid map bounds provided." },
+        { status: 400 }
+      )
+    }
+
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
 
-    // Fetch all venues from database
+    // Query venues within bounds
     const venues = await prisma.venue.findMany({
+      where: {
+        latitude: {
+          gte: south,
+          lte: north,
+        },
+        longitude: {
+          gte: west,
+          lte: east,
+        },
+      },
       include: {
         tables: true,
       },
@@ -72,7 +103,6 @@ export default async function ExplorePage() {
 
     const venueIds = venues.map((v) => v.id)
 
-    // Fetch reservations for all venues in the next 12 hours (active only)
     const reservations = venueIds.length
       ? await prisma.reservation.findMany({
           where: {
@@ -108,7 +138,7 @@ export default async function ExplorePage() {
       return acc
     }, {})
 
-    // Format venues for client component
+    // Format venues for client
     const formattedVenues = venues.map((venue) => {
       const capacity = venue.tables.reduce((sum, table) => sum + table.seatCount, 0)
       const venueReservations = reservationsByVenue[venue.id] || []
@@ -131,10 +161,12 @@ export default async function ExplorePage() {
       }
     })
 
-    return <ExploreClient venues={formattedVenues} />
+    return NextResponse.json({ venues: formattedVenues })
   } catch (error) {
-    console.error("Error fetching venues:", error)
-    // Return empty array on error to prevent page crash
-    return <ExploreClient venues={[]} />
+    console.error("Error searching venues by bounds:", error)
+    return NextResponse.json(
+      { error: "Failed to search venues. Please try again." },
+      { status: 500 }
+    )
   }
 }

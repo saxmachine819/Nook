@@ -1,0 +1,6 @@
+Add these lines to your .env file:
+
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="oY05KLtM5kB+sCnKgEaejYIRx45AhhSGVVKT2VwwOfo="
+GOOGLE_CLIENT_ID="249190954079-2vk375i4ha5q0cifdi728bfa0o3r4coq.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="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"

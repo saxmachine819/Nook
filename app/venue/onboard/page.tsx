@@ -52,6 +52,18 @@ export default function VenueOnboardPage() {
   const [tables, setTables] = useState<TableRow[]>([
     { id: "1", name: "", seatCount: 1 },
   ])
+  
+  // Google Places enrichment state
+  const [googlePlaceId, setGooglePlaceId] = useState<string | null>(null)
+  const [googleMapsUrl, setGoogleMapsUrl] = useState<string | null>(null)
+  const [openingHoursJson, setOpeningHoursJson] = useState<any>(null)
+  const [availablePhotos, setAvailablePhotos] = useState<Array<{
+    photoUrl: string
+    photoReference: string | null
+    name: string
+  }>>([])
+  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState<Set<number>>(new Set())
+  const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -116,7 +128,7 @@ export default function VenueOnboardPage() {
       }
     )
 
-    autocompleteRef.current.addListener("place_changed", () => {
+    autocompleteRef.current.addListener("place_changed", async () => {
       const place = autocompleteRef.current.getPlace()
 
       if (!place.geometry) {
@@ -191,7 +203,67 @@ export default function VenueOnboardPage() {
         setLongitude(place.geometry.location.lng().toString())
       }
 
-      showToast("Place details loaded successfully!", "success")
+      // Fetch enriched place details (photos, opening hours) if place_id is available
+      if (place.place_id) {
+        setGooglePlaceId(place.place_id)
+        setIsLoadingPlaceDetails(true)
+        
+        try {
+          console.log("Fetching place details for:", place.place_id)
+          const response = await fetch(`/api/google/place-details?placeId=${place.place_id}`)
+          const data = await response.json()
+
+          console.log("Place details response:", { ok: response.ok, data })
+
+          if (response.ok && data) {
+            // Update coordinates if provided
+            if (data.location) {
+              setLatitude(data.location.latitude.toString())
+              setLongitude(data.location.longitude.toString())
+            }
+
+            // Store opening hours
+            if (data.openingHours) {
+              setOpeningHoursJson(data.openingHours)
+              console.log("Opening hours loaded:", data.openingHours)
+            }
+            // If no hours are provided, clear any previous hours so UI matches the selected place
+            if (!data.openingHours) {
+              setOpeningHoursJson(null)
+            }
+
+            // Store Google Maps URL
+            if (data.googleMapsUri) {
+              setGoogleMapsUrl(data.googleMapsUri)
+            }
+
+            // Set available photos
+            if (data.photos && data.photos.length > 0) {
+              console.log("Photos loaded:", data.photos.length)
+              setAvailablePhotos(data.photos)
+              // Auto-select first 3-5 photos as default (reasonable selection)
+              const defaultCount = Math.min(5, Math.max(3, data.photos.length))
+              setSelectedPhotoIndices(new Set(Array.from({ length: defaultCount }, (_, i) => i)))
+              showToast(`Place details loaded! Found ${data.photos.length} photos.`, "success")
+            } else {
+              console.log("No photos found for this place")
+              setAvailablePhotos([])
+              setSelectedPhotoIndices(new Set())
+              showToast("Place details loaded! (No photos available for this place)", "success")
+            }
+          } else {
+            console.error("Failed to fetch place details:", data.error, data.details)
+            showToast("Basic info loaded, but couldn't fetch photos/hours", "error")
+          }
+        } catch (error) {
+          console.error("Error fetching place details:", error)
+          showToast("Basic info loaded, but couldn't fetch photos/hours", "error")
+        } finally {
+          setIsLoadingPlaceDetails(false)
+        }
+      } else {
+        showToast("Place details loaded successfully!", "success")
+      }
     })
   }, [isLoadingScript, showToast])
 
@@ -213,6 +285,23 @@ export default function VenueOnboardPage() {
 
   const toggleTag = (tag: string) => {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+  }
+
+  const togglePhotoSelection = (index: number) => {
+    setSelectedPhotoIndices((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(index)) {
+        newSet.delete(index)
+      } else {
+        // Limit to 8 photos max
+        if (newSet.size < 8) {
+          newSet.add(index)
+        } else {
+          showToast("You can select up to 8 photos", "error")
+        }
+      }
+      return newSet
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -267,6 +356,26 @@ export default function VenueOnboardPage() {
             name: t.name.trim(),
             seatCount: t.seatCount,
           })),
+          // Google Places enrichment fields
+          googlePlaceId: googlePlaceId || null,
+          googleMapsUrl: googleMapsUrl || null,
+          openingHoursJson: openingHoursJson || null,
+          googlePhotoRefs: availablePhotos.length > 0
+            ? availablePhotos.map((photo) => ({
+                name: photo.name,
+                photoReference: photo.photoReference,
+              }))
+            : null,
+          heroImageUrl:
+            selectedPhotoIndices.size > 0
+              ? availablePhotos[Array.from(selectedPhotoIndices)[0]]?.photoUrl || null
+              : null,
+          imageUrls:
+            selectedPhotoIndices.size > 0
+              ? Array.from(selectedPhotoIndices)
+                  .map((idx) => availablePhotos[idx]?.photoUrl)
+                  .filter(Boolean)
+              : null,
         }),
       })
 
@@ -309,7 +418,7 @@ export default function VenueOnboardPage() {
               {apiKey && (
                 <div>
                   <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                    Search for your venue <span className="text-muted-foreground">(optional)</span>
+                    Find on Google <span className="text-muted-foreground">(optional)</span>
                   </label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -317,8 +426,8 @@ export default function VenueOnboardPage() {
                       id="place-search"
                       ref={autocompleteInputRef}
                       type="text"
-                      disabled={isLoadingScript}
-                      placeholder={isLoadingScript ? "Loading..." : "Search for your venue or address"}
+                      disabled={isLoadingScript || isLoadingPlaceDetails}
+                      placeholder={isLoadingScript ? "Loading..." : isLoadingPlaceDetails ? "Loading place details..." : "Search for your venue or address"}
                       className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     />
                   </div>
@@ -438,6 +547,114 @@ export default function VenueOnboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Google Places Photos */}
+        {(availablePhotos.length > 0 || isLoadingPlaceDetails || googlePlaceId) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Photos</CardTitle>
+              <CardDescription>
+                Select the best interior shots (3–8 photos)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingPlaceDetails ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Loading photos and place details...</p>
+                  <p className="text-xs text-muted-foreground">This may take a few seconds</p>
+                </div>
+              ) : availablePhotos.length === 0 && googlePlaceId ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">No photos available for this place</p>
+                  <p className="text-xs text-muted-foreground">You can still create the venue without photos</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Select the best interior shots. We cannot guarantee interior-only photos.
+                  </p>
+                  {/* Smaller tiles: more columns + tighter gap */}
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                    {availablePhotos.map((photo, index) => {
+                      const isSelected = selectedPhotoIndices.has(index)
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => togglePhotoSelection(index)}
+                          className={cn(
+                            "group relative aspect-square overflow-hidden rounded-lg border-2 transition-all",
+                            isSelected
+                              ? "border-primary ring-2 ring-primary ring-offset-2"
+                              : "border-muted hover:border-primary/50"
+                          )}
+                        >
+                          <img
+                            src={photo.photoUrl}
+                            alt={`Venue photo ${index + 1}`}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              // Fallback if image fails to load
+                              ;(e.target as HTMLImageElement).style.display = "none"
+                            }}
+                          />
+                          {isSelected && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                <span className="text-xs font-semibold">
+                                  {Array.from(selectedPhotoIndices).indexOf(index) + 1}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                          {!isSelected && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/10">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+                                <Plus className="h-3.5 w-3.5 text-white" />
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedPhotoIndices.size > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {selectedPhotoIndices.size} photo{selectedPhotoIndices.size > 1 ? "s" : ""} selected
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Google Places Hours */}
+        {(isLoadingPlaceDetails || googlePlaceId) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Hours</CardTitle>
+              <CardDescription>From Google (optional)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingPlaceDetails ? (
+                <p className="text-sm text-muted-foreground">Loading hours…</p>
+              ) : openingHoursJson?.weekdayDescriptions?.length ? (
+                <div className="space-y-1">
+                  {openingHoursJson.weekdayDescriptions.map((line: string) => (
+                    <p key={line} className="text-sm text-muted-foreground">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No hours available for this place.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

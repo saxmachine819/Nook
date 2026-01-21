@@ -62,6 +62,13 @@ export async function POST(request: NextRequest) {
         rulesText: body.rulesText?.trim() || null,
         tags: Array.isArray(body.tags) ? body.tags : [],
         description: body.description?.trim() || null,
+        // Google Places enrichment fields
+        googlePlaceId: body.googlePlaceId?.trim() || null,
+        googleMapsUrl: body.googleMapsUrl?.trim() || null,
+        openingHoursJson: body.openingHoursJson || null,
+        googlePhotoRefs: body.googlePhotoRefs || null,
+        heroImageUrl: body.heroImageUrl?.trim() || null,
+        imageUrls: body.imageUrls || null,
         tables: {
           create: body.tables.map((table: { name: string; seatCount: number }) => ({
             name: table.name.trim(),

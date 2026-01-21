@@ -2,7 +2,16 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
   },
   // Allow Mapbox CSS to be imported
   transpilePackages: [],

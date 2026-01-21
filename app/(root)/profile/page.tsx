@@ -1,12 +1,98 @@
+"use client"
+
+import { useSession, signIn, signOut } from "next-auth/react"
+import { useSearchParams, useRouter } from "next/navigation"
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { User } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { User, Mail, LogOut, LogIn } from "lucide-react"
+
+function initialsFromName(name?: string | null) {
+  const trimmed = (name || "").trim()
+  if (!trimmed) return ""
+  return trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase())
+    .join("")
+}
 
 export default function ProfilePage() {
+  const { data: session, status } = useSession()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const callbackUrl = searchParams.get("callbackUrl")
+
+  // Redirect to callbackUrl after successful sign-in
+  useEffect(() => {
+    if (session && callbackUrl) {
+      // Preserve any booking params in the callback URL
+      router.push(callbackUrl)
+    }
+  }, [session, callbackUrl, router])
+
+  if (status === "loading") {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex items-center justify-center py-12">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    const handleSignIn = () => {
+      const redirectUrl = callbackUrl || "/"
+      signIn("google", { callbackUrl: redirectUrl })
+    }
+
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="mb-6 flex items-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <User className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
+            <p className="text-sm text-muted-foreground">Sign in to manage your account</p>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sign in</CardTitle>
+            <CardDescription>
+              Sign in to reserve seats and manage your reservations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={handleSignIn}
+              className="w-full"
+              size="lg"
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign in with Google
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="mb-6 flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <User className="h-8 w-8 text-muted-foreground" />
+        <div className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-muted">
+          <div className="flex h-full w-full items-center justify-center bg-muted text-sm font-medium text-muted-foreground">
+            {initialsFromName(session.user?.name) ? (
+              initialsFromName(session.user?.name)
+            ) : (
+              <User className="h-8 w-8" />
+            )}
+          </div>
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
@@ -19,26 +105,22 @@ export default function ProfilePage() {
           <CardHeader>
             <CardTitle>Account Information</CardTitle>
             <CardDescription>
-              Your personal details and preferences
+              Your personal details
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium">Name</label>
-                <input
-                  type="text"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="Your name"
-                />
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">Name</label>
+                <p className="text-sm font-medium">
+                  {session.user?.name || "Not provided"}
+                </p>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium">Email</label>
-                <input
-                  type="email"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  placeholder="your.email@example.com"
-                />
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">Email</label>
+                <p className="text-sm font-medium">
+                  {session.user?.email || "Not provided"}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -46,15 +128,21 @@ export default function ProfilePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Preferences</CardTitle>
+            <CardTitle>Account Actions</CardTitle>
             <CardDescription>
-              Customize your experience
+              Manage your account
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Preference settings will be added here.
-            </p>
+            <Button
+              onClick={() => signOut()}
+              variant="outline"
+              className="w-full"
+              size="lg"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
           </CardContent>
         </Card>
       </div>
