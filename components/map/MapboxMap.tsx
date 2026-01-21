@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
+import { Button } from "@/components/ui/button"
+import { Navigation } from "lucide-react"
 
 interface Venue {
   id: string
@@ -15,122 +17,308 @@ interface Venue {
 
 interface MapboxMapProps {
   venues: Venue[]
+  onSelectVenue?: (id: string) => void
+  userLocation?: { lat: number; lng: number } | null
+  onSearchArea?: (bounds: { north: number; south: number; east: number; west: number }) => void
+  isSearching?: boolean
 }
 
 // NYC coordinates (default center)
 const NYC_CENTER = { lat: 40.7128, lng: -74.006 }
 
-export function MapboxMap({ venues }: MapboxMapProps) {
+export function MapboxMap({
+  venues,
+  onSelectVenue,
+  userLocation,
+  onSearchArea,
+  isSearching = false,
+}: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
-  const markersRef = useRef<mapboxgl.Marker[]>([])
+  const userLocationMarkerRef = useRef<mapboxgl.Marker | null>(null)
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
+  const hasFitBoundsRef = useRef<boolean>(false) // Track if we've done initial fitBounds
+  const onSelectVenueRef = useRef<((id: string) => void) | undefined>(onSelectVenue) // Keep callback current
+  const pinImageLoadedRef = useRef<boolean>(false) // Track if pin image has been loaded
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState<string | null>(null)
+  const [showSearchButton, setShowSearchButton] = useState(false)
+
+  // Keep callback ref up-to-date
+  useEffect(() => {
+    onSelectVenueRef.current = onSelectVenue
+  }, [onSelectVenue])
+
+  // Convert venues array to GeoJSON FeatureCollection
+  const venuesToGeoJSON = (venues: Venue[]) => {
+    return {
+      type: "FeatureCollection" as const,
+      features: venues
+        .filter((v) => v.latitude !== null && v.longitude !== null)
+        .map((venue) => ({
+          type: "Feature" as const,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [venue.longitude!, venue.latitude!] as [number, number],
+          },
+          properties: {
+            id: venue.id,
+            name: venue.name,
+            address: venue.address,
+            hourlySeatPrice: venue.hourlySeatPrice,
+          },
+        })),
+    }
+  }
+
+  // Create pin icon image (canvas-based, returns data URL)
+  const createPinImage = (): string => {
+    const size = 24
+    const canvas = document.createElement("canvas")
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext("2d")
+    if (!ctx) {
+      throw new Error("Could not get canvas context")
+    }
+
+    // Draw pin shape (rotated square/teardrop)
+    ctx.save()
+    ctx.translate(size / 2, size / 2)
+    ctx.rotate((-45 * Math.PI) / 180) // Rotate -45 degrees
+
+    // Outer pin shape
+    ctx.fillStyle = "#0F5132"
+    ctx.strokeStyle = "#ffffff"
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(0, -size / 2)
+    ctx.lineTo(size / 2, 0)
+    ctx.lineTo(0, size / 2)
+    ctx.lineTo(-size / 2, 0)
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+
+    // Inner white dot
+    ctx.restore()
+    ctx.fillStyle = "#ffffff"
+    ctx.beginPath()
+    ctx.arc(size / 2, size / 2, 5, 0, Math.PI * 2)
+    ctx.fill()
+
+    return canvas.toDataURL()
+  }
 
   const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
 
-  // Debug: Log component mount
-  useEffect(() => {
-    console.log("🗺️ MapboxMap component mounted", {
-      hasToken: !!accessToken,
-      tokenPreview: accessToken ? `${accessToken.substring(0, 10)}...` : "MISSING",
-      venuesCount: venues.length,
-      hasContainer: !!mapContainerRef.current,
+  // Initialize venues source and layers
+  const initializeVenuesSource = (map: mapboxgl.Map) => {
+
+    // Remove existing event listeners if they exist
+    map.off("click", "clusters")
+    map.off("click", "unclustered-point")
+    map.off("mouseenter", "clusters")
+    map.off("mouseleave", "clusters")
+    map.off("mouseenter", "unclustered-point")
+    map.off("mouseleave", "unclustered-point")
+
+    // Remove existing source and layers if they exist
+    if (map.getSource("venues")) {
+      if (map.getLayer("clusters")) map.removeLayer("clusters")
+      if (map.getLayer("cluster-count")) map.removeLayer("cluster-count")
+      if (map.getLayer("unclustered-point")) map.removeLayer("unclustered-point")
+      map.removeSource("venues")
+    }
+
+    // Add GeoJSON source with clustering
+    const venuesGeoJSON = venuesToGeoJSON(venues)
+    map.addSource("venues", {
+      type: "geojson",
+      data: venuesGeoJSON,
+      cluster: true,
+      clusterRadius: 50,
+      clusterMaxZoom: 14,
     })
-  }, [])
+
+
+    // Add cluster circle layer
+    map.addLayer({
+      id: "clusters",
+      type: "circle",
+      source: "venues",
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#0F5132",
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          20, // radius for clusters with < 50 points
+          50, 30, // radius for clusters with 50-100 points
+          100, 40, // radius for clusters with 100+ points
+        ],
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      },
+    })
+
+    // Add cluster count label layer
+    map.addLayer({
+      id: "cluster-count",
+      type: "symbol",
+      source: "venues",
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": "{point_count_abbreviated}",
+        "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+        "text-size": 12,
+      },
+      paint: {
+        "text-color": "#ffffff",
+      },
+    })
+
+    // Add unclustered point layer (individual pins) - simple circle approach
+    map.addLayer({
+      id: "unclustered-point",
+      type: "circle",
+      source: "venues",
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": "#0F5132",
+        "circle-radius": 8,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      },
+    }, "cluster-count")
+
+    // Click handler for clusters - zoom in to expand
+    map.on("click", "clusters", (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["clusters"],
+      })
+      const clusterId = features[0].properties?.cluster_id
+      if (clusterId !== undefined) {
+        const source = map.getSource("venues") as mapboxgl.GeoJSONSource
+        source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+          if (err) return
+
+          const coordinates = (features[0].geometry as { type: "Point"; coordinates: [number, number] }).coordinates
+          map.easeTo({
+            center: [coordinates[0], coordinates[1]],
+            zoom: zoom,
+            duration: 500,
+          })
+        })
+      }
+    })
+
+    // Click handler for individual pins
+    map.on("click", "unclustered-point", (e) => {
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["unclustered-point"],
+      })
+      if (features.length > 0) {
+        const venueId = features[0].properties?.id
+        if (venueId && onSelectVenueRef.current) {
+          onSelectVenueRef.current(venueId)
+        }
+      }
+    })
+
+
+    // Change cursor on hover
+    map.on("mouseenter", "clusters", () => {
+      map.getCanvas().style.cursor = "pointer"
+    })
+    map.on("mouseleave", "clusters", () => {
+      map.getCanvas().style.cursor = ""
+    })
+    map.on("mouseenter", "unclustered-point", () => {
+      map.getCanvas().style.cursor = "pointer"
+    })
+    map.on("mouseleave", "unclustered-point", () => {
+      map.getCanvas().style.cursor = ""
+    })
+  }
 
   useEffect(() => {
     if (!accessToken || accessToken === "your_mapbox_token_here") {
-      console.error("❌ Mapbox access token not configured", {
-        hasToken: !!accessToken,
-        tokenValue: accessToken,
-      })
-      setMapError("Mapbox access token not configured. Please add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to your .env file with a valid Mapbox token.")
+      console.error("❌ Mapbox access token not configured")
+      setMapError(
+        "Mapbox access token not configured. Please add NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN to your .env file with a valid Mapbox token."
+      )
       setIsLoading(false)
       return
     }
 
     if (!mapContainerRef.current || mapRef.current) {
-      console.log("⏭️ Skipping initialization", {
-        hasContainer: !!mapContainerRef.current,
-        hasMap: !!mapRef.current,
-      })
       return
     }
 
-    console.log("🚀 Initializing Mapbox map...", {
-      hasContainer: !!mapContainerRef.current,
-      containerElement: mapContainerRef.current,
-    })
-
     mapboxgl.accessToken = accessToken
 
-    // Determine center
+    // Determine center: prioritize user location, then first venue, then NYC
     let center: [number, number] = [NYC_CENTER.lng, NYC_CENTER.lat]
-    const validVenues = venues.filter(
-      (v) => v.latitude !== null && v.longitude !== null
-    )
-    if (validVenues.length > 0) {
-      center = [validVenues[0].longitude!, validVenues[0].latitude!]
+    let zoom = 10
+
+    if (userLocation) {
+      center = [userLocation.lng, userLocation.lat]
+      zoom = 14
+    } else {
+      const validVenues = venues.filter((v) => v.latitude !== null && v.longitude !== null)
+      if (validVenues.length > 0) {
+        center = [validVenues[0].longitude!, validVenues[0].latitude!]
+        zoom = 12
+      }
     }
 
     try {
-      console.log("🗺️ Creating Mapbox map instance...", { center, zoom: validVenues.length > 0 ? 12 : 10 })
-      
-      // Create map with branded, minimal style
       const map = new mapboxgl.Map({
         container: mapContainerRef.current!,
-        style: "mapbox://styles/mapbox/light-v11", // Light, minimal style
+        style: "mapbox://styles/mapbox/light-v11",
         center,
-        zoom: validVenues.length > 0 ? 12 : 10,
-        attributionControl: false, // We'll add custom attribution
+        zoom,
+        attributionControl: false,
       })
-      
-      console.log("✅ Map instance created, waiting for load event...")
 
-      // Add custom attribution (minimal)
-      map.addControl(new mapboxgl.AttributionControl({
-        compact: true,
-        customAttribution: '© Nook'
-      }))
+      map.addControl(
+        new mapboxgl.AttributionControl({
+          compact: true,
+          customAttribution: "© Nook",
+        })
+      )
 
-      // Add navigation controls (zoom)
-      map.addControl(new mapboxgl.NavigationControl({
-        showCompass: false,
-        showZoom: true,
-      }))
+      map.addControl(
+        new mapboxgl.NavigationControl({
+          showCompass: false,
+          showZoom: true,
+        })
+      )
 
-      // Set up a timeout in case load event never fires
       if (loadTimeoutRef.current) {
         clearTimeout(loadTimeoutRef.current)
       }
       loadTimeoutRef.current = setTimeout(() => {
-        console.error("⏰ Map load timeout - load event didn't fire after 10 seconds")
         setMapError("Map took too long to load. Please check your Mapbox token and network connection.")
         setIsLoading(false)
-      }, 10000) // 10 second timeout
+      }, 10000)
 
-      // Wait for map to load
-      map.on("load", () => {
+      map.on("load", async () => {
         if (loadTimeoutRef.current) {
           clearTimeout(loadTimeoutRef.current)
           loadTimeoutRef.current = null
         }
-        console.log("✅ Mapbox map loaded successfully")
-        
+
         try {
-          // Style street labels with branded, minimal aesthetic
           const layers = map.getStyle().layers
-          console.log("📝 Styling labels from", layers.length, "layers")
-          
+
           layers.forEach((layer) => {
-            // Style road labels (street names) - keep them visible but branded
             if (layer.type === "symbol" && layer.id.includes("road") && layer.id.includes("label")) {
               try {
                 map.setLayoutProperty(layer.id, "visibility", "visible")
-                // Style with warm, readable colors
-                map.setPaintProperty(layer.id, "text-color", "#5c6b66") // Warm gray-green
+                map.setPaintProperty(layer.id, "text-color", "#5c6b66")
                 map.setPaintProperty(layer.id, "text-halo-color", "#ffffff")
                 map.setPaintProperty(layer.id, "text-halo-width", 1.5)
                 map.setPaintProperty(layer.id, "text-halo-blur", 1)
@@ -138,12 +326,11 @@ export function MapboxMap({ venues }: MapboxMapProps) {
                 // Layer might not support this property
               }
             }
-            
-            // Hide POI labels (business names, etc.) - keep it minimal
-            if (layer.type === "symbol" && (
-              layer.id.includes("poi") || 
-              layer.id.includes("place") && !layer.id.includes("road")
-            )) {
+
+            if (
+              layer.type === "symbol" &&
+              (layer.id.includes("poi") || (layer.id.includes("place") && !layer.id.includes("road")))
+            ) {
               try {
                 map.setLayoutProperty(layer.id, "visibility", "none")
               } catch (e) {
@@ -152,14 +339,10 @@ export function MapboxMap({ venues }: MapboxMapProps) {
             }
           })
 
-          // Apply custom colors for warm, minimal aesthetic
           try {
-            // Style water with calm tone
             if (map.getLayer("water")) {
               map.setPaintProperty("water", "fill-color", "#e8f5e9")
             }
-            
-            // Style roads with warm neutrals
             const roadLayers = ["road", "road-street", "road-primary", "road-secondary"]
             roadLayers.forEach((layerName) => {
               try {
@@ -174,16 +357,129 @@ export function MapboxMap({ venues }: MapboxMapProps) {
             // Layer might not exist
           }
 
-          // Add markers
-          addMarkers(map)
+          // Load pin image
+          if (!pinImageLoadedRef.current) {
+            try {
+              const pinImageDataUrl = createPinImage()
+              // Create Image object from data URL
+              const img = new Image()
+              img.onload = () => {
+                try {
+                  map.addImage("venue-pin", img)
+                  pinImageLoadedRef.current = true
+                  
+                  // If source already exists, ensure unclustered layer exists
+                  if (map.getSource("venues")) {
+                    if (!map.getLayer("unclustered-point")) {
+                      try {
+                        map.addLayer({
+                          id: "unclustered-point",
+                          type: "circle",
+                          source: "venues",
+                          filter: ["!", ["has", "point_count"]],
+                          paint: {
+                            "circle-color": "#0F5132",
+                            "circle-radius": 8,
+                            "circle-stroke-width": 2,
+                            "circle-stroke-color": "#ffffff",
+                          },
+                        }, "cluster-count")
+                      } catch (error) {
+                        console.error("Error adding unclustered point layer:", error)
+                      }
+                    }
+                  } else {
+                    // Initialize venues source and layers after image is loaded
+                    initializeVenuesSource(map)
+                  }
+                } catch (error) {
+                  console.error("Error adding pin image to map:", error)
+                }
+              }
+              img.onerror = (error) => {
+                console.error("Error loading pin image:", error)
+              }
+              img.src = pinImageDataUrl
+            } catch (error) {
+              console.error("Error creating pin image:", error)
+            }
+          } else {
+            // Image already loaded, initialize venues source
+            initializeVenuesSource(map)
+          }
+
+          // Store initial bounds
+          const bounds = map.getBounds()
+          if (bounds) {
+            currentBoundsRef.current = {
+              north: bounds.getNorth(),
+              south: bounds.getSouth(),
+              east: bounds.getEast(),
+              west: bounds.getWest(),
+            }
+          }
+
+          // Add user location marker if available
+          if (userLocation) {
+            addUserLocationMarker(map, userLocation)
+            // If user location is available, we already centered on it, so mark fit bounds as done
+            hasFitBoundsRef.current = true
+          }
+
+          // Fit bounds on initial load if needed
+          if (!hasFitBoundsRef.current && venues.length > 0 && !userLocation) {
+            const bounds = new mapboxgl.LngLatBounds()
+            venues.forEach((venue) => {
+              if (venue.latitude !== null && venue.longitude !== null) {
+                bounds.extend([venue.longitude, venue.latitude])
+              }
+            })
+            if (!bounds.isEmpty()) {
+              map.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: 16,
+              })
+              hasFitBoundsRef.current = true
+            }
+          }
 
           setIsLoading(false)
-          console.log("✅ Map initialization complete")
         } catch (error) {
           console.error("❌ Error styling map:", error)
           setIsLoading(false)
         }
       })
+
+      // Track map bounds changes
+      const handleMoveEnd = () => {
+        if (!map.loaded()) return
+
+        const bounds = map.getBounds()
+        if (!bounds) return
+        const newBounds = {
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest(),
+        }
+
+        // Check if bounds have changed significantly
+        if (currentBoundsRef.current) {
+          const threshold = 0.001 // Small threshold to avoid flickering
+          const hasChanged =
+            Math.abs(newBounds.north - currentBoundsRef.current.north) > threshold ||
+            Math.abs(newBounds.south - currentBoundsRef.current.south) > threshold ||
+            Math.abs(newBounds.east - currentBoundsRef.current.east) > threshold ||
+            Math.abs(newBounds.west - currentBoundsRef.current.west) > threshold
+
+          if (hasChanged && onSearchArea) {
+            setShowSearchButton(true)
+          }
+        }
+      }
+
+      map.on("moveend", handleMoveEnd)
+      map.on("zoomend", handleMoveEnd)
 
       map.on("error", (e: any) => {
         if (loadTimeoutRef.current) {
@@ -191,14 +487,8 @@ export function MapboxMap({ venues }: MapboxMapProps) {
           loadTimeoutRef.current = null
         }
         console.error("❌ Mapbox error:", e)
-        console.error("❌ Error details:", e.error)
-        console.error("❌ Error type:", e.type)
         setMapError(`Failed to load map: ${e.error?.message || e.message || "Unknown error"}`)
         setIsLoading(false)
-      })
-
-      map.on("style.load", () => {
-        console.log("🎨 Map style loaded")
       })
 
       map.on("style.error", (e: any) => {
@@ -207,35 +497,19 @@ export function MapboxMap({ venues }: MapboxMapProps) {
           loadTimeoutRef.current = null
         }
         console.error("❌ Map style error:", e)
-        console.error("❌ Style error details:", e.error)
         setMapError(`Failed to load map style: ${e.error?.message || "Unknown error"}. Check your Mapbox token.`)
         setIsLoading(false)
       })
 
-      // Listen for data event (fires when map data is loaded)
-      map.on("data", (e: any) => {
-        console.log("📊 Map data event:", e.dataType)
-        if (e.dataType === "style") {
-          console.log("📊 Style data loaded")
-        }
-      })
-
-      // Also listen for idle event as backup
       map.on("idle", () => {
-        console.log("✅ Map idle (all tiles loaded)")
-        // If we're still loading and load event hasn't fired, try to initialize anyway
         if (isLoading && map.loaded() && map.getStyle()) {
-          console.log("✅ Map is ready (idle event), initializing...")
           if (loadTimeoutRef.current) {
             clearTimeout(loadTimeoutRef.current)
             loadTimeoutRef.current = null
           }
           try {
             const layers = map.getStyle().layers
-            
-            // Style street labels
             layers.forEach((layer) => {
-              // Style road labels (street names)
               if (layer.type === "symbol" && layer.id.includes("road") && layer.id.includes("label")) {
                 try {
                   map.setLayoutProperty(layer.id, "visibility", "visible")
@@ -245,21 +519,17 @@ export function MapboxMap({ venues }: MapboxMapProps) {
                   map.setPaintProperty(layer.id, "text-halo-blur", 1)
                 } catch (e) {}
               }
-              
-              // Hide POI and place labels (except roads)
-              if (layer.type === "symbol" && (
-                layer.id.includes("poi") || 
-                (layer.id.includes("place") && !layer.id.includes("road"))
-              )) {
+              if (
+                layer.type === "symbol" &&
+                (layer.id.includes("poi") || (layer.id.includes("place") && !layer.id.includes("road")))
+              ) {
                 try {
                   map.setLayoutProperty(layer.id, "visibility", "none")
                 } catch (e) {}
               }
             })
-            
-            addMarkers(map)
+            // Markers will be added by venues useEffect, don't call addMarkers here
             setIsLoading(false)
-            console.log("✅ Map initialized via idle event")
           } catch (error) {
             console.error("❌ Error initializing via idle:", error)
           }
@@ -273,10 +543,18 @@ export function MapboxMap({ venues }: MapboxMapProps) {
           clearTimeout(loadTimeoutRef.current)
           loadTimeoutRef.current = null
         }
-        // Cleanup markers
-        markersRef.current.forEach((marker) => marker.remove())
-        markersRef.current = []
+        if (userLocationMarkerRef.current) {
+          userLocationMarkerRef.current.remove()
+          userLocationMarkerRef.current = null
+        }
         if (mapRef.current) {
+          // Remove event listeners
+          mapRef.current.off("click", "clusters")
+          mapRef.current.off("click", "unclustered-point")
+          mapRef.current.off("mouseenter", "clusters")
+          mapRef.current.off("mouseleave", "clusters")
+          mapRef.current.off("mouseenter", "unclustered-point")
+          mapRef.current.off("mouseleave", "unclustered-point")
           mapRef.current.remove()
           mapRef.current = null
         }
@@ -286,126 +564,120 @@ export function MapboxMap({ venues }: MapboxMapProps) {
       setMapError("Failed to initialize map")
       setIsLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, userLocation])
 
-  // Update markers when venues change
+
+  const addUserLocationMarker = (map: mapboxgl.Map, location: { lat: number; lng: number }) => {
+    const el = document.createElement("div")
+    el.className = "user-location-marker"
+    el.style.width = "16px"
+    el.style.height = "16px"
+    el.style.borderRadius = "50%"
+    el.style.backgroundColor = "#0F5132"
+    el.style.border = "3px solid #ffffff"
+    el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)"
+    el.style.cursor = "default"
+
+    userLocationMarkerRef.current = new mapboxgl.Marker(el)
+      .setLngLat([location.lng, location.lat])
+      .addTo(map)
+  }
+
+  // Update user location marker when userLocation changes
   useEffect(() => {
-    if (mapRef.current && !isLoading) {
-      // Clear existing markers
-      markersRef.current.forEach((marker) => marker.remove())
-      markersRef.current = []
-      addMarkers(mapRef.current)
-    }
-  }, [venues])
-
-  const addMarkers = (map: mapboxgl.Map) => {
-    // Create custom branded marker element
-    const createMarkerElement = (venue: Venue) => {
-      const el = document.createElement("div")
-      el.className = "custom-marker"
-      el.style.width = "24px"
-      el.style.height = "24px"
-      el.style.borderRadius = "50% 50% 50% 0"
-      el.style.backgroundColor = "#0F5132" // Dark green primary
-      el.style.border = "2px solid #ffffff"
-      el.style.transform = "rotate(-45deg)"
-      el.style.cursor = "pointer"
-      el.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)"
-      
-      // Inner circle
-      const inner = document.createElement("div")
-      inner.style.width = "10px"
-      inner.style.height = "10px"
-      inner.style.borderRadius = "50%"
-      inner.style.backgroundColor = "#ffffff"
-      inner.style.position = "absolute"
-      inner.style.top = "50%"
-      inner.style.left = "50%"
-      inner.style.transform = "translate(-50%, -50%) rotate(45deg)"
-      el.appendChild(inner)
-
-      return el
-    }
-
-    venues.forEach((venue) => {
-      if (venue.latitude === null || venue.longitude === null) return
-
-      const el = createMarkerElement(venue)
-
-      // Create popup
-      const popup = new mapboxgl.Popup({
-        offset: 25,
-        closeButton: true,
-        closeOnClick: false,
-        className: "mapbox-popup",
-      }).setHTML(`
-        <div style="
-          padding: 16px; 
-          min-width: 220px; 
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
-        ">
-          <h3 style="
-            margin: 0 0 10px 0; 
-            font-size: 18px; 
-            font-weight: 600; 
-            color: #1f2937;
-            letter-spacing: -0.01em;
-          ">
-            ${venue.name}
-          </h3>
-          <p style="
-            margin: 0 0 12px 0; 
-            font-size: 15px; 
-            color: #4b5563;
-            font-weight: 500;
-          ">
-            $${venue.hourlySeatPrice.toFixed(2)} <span style="font-weight: 400; font-size: 13px; color: #6b7280;">/ seat / hour</span>
-          </p>
-          <a 
-            href="/venue/${venue.id}" 
-            style="
-              display: inline-block; 
-              padding: 8px 16px; 
-              background: #0F5132; 
-              color: white; 
-              text-decoration: none; 
-              border-radius: 6px; 
-              font-size: 14px; 
-              font-weight: 500;
-            "
-          >
-            View Details
-          </a>
-        </div>
-      `)
-
-      // Create marker
-      const marker = new mapboxgl.Marker(el)
-        .setLngLat([venue.longitude, venue.latitude])
-        .setPopup(popup)
-        .addTo(map)
-
-      markersRef.current.push(marker)
-    })
-
-    // Fit bounds to show all venues
-    if (venues.length > 1) {
-      const bounds = new mapboxgl.LngLatBounds()
-      venues.forEach((venue) => {
-        if (venue.latitude !== null && venue.longitude !== null) {
-          bounds.extend([venue.longitude, venue.latitude])
-        }
-      })
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, {
-          padding: 50,
-          maxZoom: 16,
-        })
+    if (mapRef.current && userLocation && !isLoading) {
+      if (userLocationMarkerRef.current) {
+        userLocationMarkerRef.current.remove()
       }
-    } else if (venues.length === 1 && venues[0].latitude !== null && venues[0].longitude !== null) {
-      map.setCenter([venues[0].longitude, venues[0].latitude])
-      map.setZoom(14)
+      addUserLocationMarker(mapRef.current, userLocation)
     }
+  }, [userLocation, isLoading])
+
+  // Update venues source when venues change
+  useEffect(() => {
+    if (!mapRef.current || isLoading || !mapRef.current.loaded()) return
+
+    // If pin image should be loaded but isn't in map, reload it
+    if (pinImageLoadedRef.current && !mapRef.current.hasImage("venue-pin")) {
+      try {
+        const pinImageDataUrl = createPinImage()
+        const img = new Image()
+        img.onload = () => {
+          if (mapRef.current) {
+            mapRef.current.addImage("venue-pin", img)
+            // Now initialize or update source
+            const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
+            if (source) {
+              const venuesGeoJSON = venuesToGeoJSON(venues)
+              source.setData(venuesGeoJSON)
+            } else {
+              initializeVenuesSource(mapRef.current)
+            }
+          }
+        }
+        img.src = pinImageDataUrl
+      } catch (error) {
+        console.error("Error reloading pin image:", error)
+      }
+      return
+    }
+
+    const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
+    if (source) {
+      const venuesGeoJSON = venuesToGeoJSON(venues)
+      source.setData(venuesGeoJSON)
+      
+      // Ensure unclustered point layer exists if source exists but layer doesn't
+      if (!mapRef.current.getLayer("unclustered-point")) {
+        try {
+          mapRef.current.addLayer({
+            id: "unclustered-point",
+            type: "circle",
+            source: "venues",
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+              "circle-color": "#0F5132",
+              "circle-radius": 8,
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#ffffff",
+            },
+          }, "cluster-count")
+        } catch (error) {
+          console.error("Error adding missing unclustered point layer:", error)
+        }
+      }
+    } else {
+      // Source doesn't exist yet, initialize it
+      // initializeVenuesSource will handle adding layers even if pin image isn't loaded
+      initializeVenuesSource(mapRef.current)
+    }
+  }, [venues, isLoading])
+
+  const handleSearchArea = () => {
+    if (!mapRef.current || !onSearchArea) return
+
+    const bounds = mapRef.current.getBounds()
+    if (!bounds) return
+    const newBounds = {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest(),
+    }
+
+    currentBoundsRef.current = newBounds
+    setShowSearchButton(false)
+    onSearchArea(newBounds)
+  }
+
+  const handleCenterOnMe = () => {
+    if (!mapRef.current || !userLocation) return
+
+    mapRef.current.flyTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom: 14,
+      duration: 800, // Smooth animation
+    })
   }
 
   if (mapError) {
@@ -419,17 +691,38 @@ export function MapboxMap({ venues }: MapboxMapProps) {
   }
 
   return (
-    <div className="relative h-full w-full">
-      <div 
-        ref={mapContainerRef} 
-        className="h-full w-full"
-        style={{ minHeight: "400px" }}
-      />
+    <div className="relative h-full w-full overflow-hidden">
+      <div ref={mapContainerRef} className="h-full w-full" style={{ minHeight: "400px", position: "relative" }} />
       {isLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/50">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Loading map...</p>
           </div>
+        </div>
+      )}
+      {userLocation && !isLoading && (
+        <div className="absolute right-4 top-16 z-20">
+          <Button
+            size="sm"
+            onClick={handleCenterOnMe}
+            className="shadow-lg h-10 w-10 p-0"
+            variant="secondary"
+            aria-label="Center on me"
+          >
+            <Navigation className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+      {showSearchButton && !isLoading && (
+        <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+          <Button
+            size="sm"
+            onClick={handleSearchArea}
+            disabled={isSearching}
+            className="shadow-lg"
+          >
+            {isSearching ? "Searching..." : "Search this area"}
+          </Button>
         </div>
       )}
     </div>
