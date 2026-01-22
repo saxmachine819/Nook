@@ -1,0 +1,196 @@
+"use client"
+
+import { useState, useRef, useEffect } from "react"
+import { cn } from "@/lib/utils"
+
+interface VenueImageCarouselProps {
+  images: string[]
+  className?: string
+}
+
+export function VenueImageCarousel({ images, className }: VenueImageCarouselProps) {
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [startX, setStartX] = useState(0)
+  const [translateX, setTranslateX] = useState(0)
+  const carouselRef = useRef<HTMLDivElement>(null)
+
+  // If no images, show placeholder
+  if (!images || images.length === 0) {
+    return (
+      <div
+        className={cn(
+          "flex h-[217px] w-full items-center justify-center bg-muted sm:h-64",
+          className
+        )}
+      >
+        <div className="text-center">
+          <svg
+            className="mx-auto h-12 w-12 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+          <p className="mt-2 text-sm text-muted-foreground">No image available</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If single image, no carousel needed
+  if (images.length === 1) {
+    return (
+      <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
+        <img
+          src={images[0]}
+          alt="Venue"
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            // Fallback if image fails to load
+            const target = e.target as HTMLImageElement
+            target.style.display = "none"
+          }}
+        />
+      </div>
+    )
+  }
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true)
+    setStartX(e.touches[0].clientX)
+    setTranslateX(0)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return
+    const currentX = e.touches[0].clientX
+    const diff = currentX - startX
+    setTranslateX(diff)
+  }
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    const threshold = 50 // Minimum swipe distance
+    if (Math.abs(translateX) > threshold) {
+      if (translateX > 0 && currentIndex > 0) {
+        // Swipe right - go to previous
+        setCurrentIndex(currentIndex - 1)
+      } else if (translateX < 0 && currentIndex < images.length - 1) {
+        // Swipe left - go to next
+        setCurrentIndex(currentIndex + 1)
+      }
+    }
+    setTranslateX(0)
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true)
+    setStartX(e.clientX)
+    setTranslateX(0)
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return
+    const currentX = e.clientX
+    const diff = currentX - startX
+    setTranslateX(diff)
+  }
+
+  const handleMouseUp = () => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    const threshold = 50
+    if (Math.abs(translateX) > threshold) {
+      if (translateX > 0 && currentIndex > 0) {
+        setCurrentIndex(currentIndex - 1)
+      } else if (translateX < 0 && currentIndex < images.length - 1) {
+        setCurrentIndex(currentIndex + 1)
+      }
+    }
+    setTranslateX(0)
+  }
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      setIsDragging(false)
+      setTranslateX(0)
+    }
+  }
+
+  // Reset to first image if images array changes
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [images.length])
+
+  return (
+    <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
+      <div
+        ref={carouselRef}
+        className="flex h-full transition-transform duration-300 ease-out"
+        style={{
+          transform: `translateX(-${currentIndex * 100}%) translateX(${translateX}px)`,
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
+        {images.map((image, index) => (
+          <div
+            key={index}
+            className="h-full w-full shrink-0"
+          >
+            <img
+              src={image}
+              alt={`Venue image ${index + 1}`}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                // Fallback if image fails to load
+                const target = e.target as HTMLImageElement
+                target.style.display = "none"
+              }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination dots - using divs instead of buttons to avoid nested button hydration error */}
+      <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
+        {images.map((_, index) => (
+          <div
+            key={index}
+            role="button"
+            tabIndex={0}
+            onClick={() => setCurrentIndex(index)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setCurrentIndex(index)
+              }
+            }}
+            className={cn(
+              "h-1.5 cursor-pointer rounded-full transition-all",
+              index === currentIndex
+                ? "w-6 bg-white"
+                : "w-1.5 bg-white/50"
+            )}
+            aria-label={`Go to image ${index + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}

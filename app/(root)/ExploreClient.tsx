@@ -6,20 +6,32 @@ import { VenueCard } from "@/components/venue/VenueCard"
 import { MapboxMap } from "@/components/map/MapboxMap"
 import { Button } from "@/components/ui/button"
 
+// #region agent log
+if (typeof window !== 'undefined') {
+  window.addEventListener('error', (e) => {
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient:global-error',message:'Global error caught',data:{message:e.message,filename:e.filename,lineno:e.lineno,colno:e.colno,error:e.error?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient:unhandled-rejection',message:'Unhandled promise rejection',data:{reason:e.reason?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  });
+}
+// #endregion
+
 interface Venue {
   id: string
   name: string
   address: string
-  neighborhood?: string
   city?: string
   state?: string
   latitude: number | null
   longitude: number | null
-  hourlySeatPrice: number
+  minPrice: number
+  maxPrice: number
   tags: string[]
   capacity: number
   rulesText?: string
   availabilityLabel?: string
+  imageUrls?: string[]
 }
 
 interface ExploreClientProps {
@@ -29,9 +41,11 @@ interface ExploreClientProps {
 type LocationState = "idle" | "requesting" | "granted" | "denied" | "unavailable"
 
 export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:31',message:'ExploreClient render start',data:{initialVenuesCount:initialVenues?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [venues, setVenues] = useState<Venue[]>(initialVenues)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
@@ -106,8 +120,6 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     router.refresh()
   }
 
-  const selectedVenue = selectedVenueId ? venues.find((v) => v.id === selectedVenueId) || null : null
-
   // Separate venues with and without coordinates
   // Memoize these arrays so they don't create new references on every render
   // This prevents the infinite loop in MapboxMap's useEffect dependency
@@ -149,7 +161,10 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           <div className="mb-8 h-[400px] w-full overflow-hidden rounded-lg border">
             <MapboxMap
               venues={venuesWithLocation}
-              onSelectVenue={(id) => setSelectedVenueId(id)}
+              onSelectVenue={(id) => {
+                // Navigate directly to venue page for seat-level booking
+                router.push(`/venue/${id}`)
+              }}
               userLocation={userLocation}
               onSearchArea={handleSearchArea}
               isSearching={isSearching}
@@ -172,72 +187,59 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
 
         {/* List Section */}
         <div className="space-y-4">
-          {venuesWithLocation.map((venue) => {
-            const isSelected = selectedVenueId === venue.id
-            const shouldDim = !!selectedVenueId && !isSelected
-            return (
-              <div
-                key={venue.id}
-                className={[
-                  "transition-all duration-200",
-                  shouldDim ? "opacity-55" : "opacity-100",
-                ].join(" ")}
-              >
-                <VenueCard
-                  id={venue.id}
-                  name={venue.name}
-                  address={venue.address}
-                  neighborhood={venue.neighborhood}
-                  city={venue.city}
-                  state={venue.state}
-                  hourlySeatPrice={venue.hourlySeatPrice}
-                  tags={venue.tags}
-                  capacity={venue.capacity}
-                  rulesText={venue.rulesText}
-                  availabilityLabel={venue.availabilityLabel}
-                  isExpanded={isSelected}
-                  isDeemphasized={shouldDim}
-                  onSelect={() => setSelectedVenueId(venue.id)}
-                  onClose={() => setSelectedVenueId(null)}
-                  onBookingSuccess={handleBookingSuccess}
-                />
-              </div>
-            )
-          })}
+          {venuesWithLocation.map((venue) => (
+            <VenueCard
+              key={venue.id}
+              id={venue.id}
+              name={venue.name}
+              address={venue.address}
+              city={venue.city}
+              state={venue.state}
+              minPrice={venue.minPrice}
+              maxPrice={venue.maxPrice}
+              tags={venue.tags}
+              capacity={venue.capacity}
+              rulesText={venue.rulesText}
+              availabilityLabel={venue.availabilityLabel}
+              imageUrls={venue.imageUrls}
+              isExpanded={false}
+              isDeemphasized={false}
+              onSelect={() => {
+                // Navigate directly to venue page for seat-level booking
+                router.push(`/venue/${venue.id}`)
+              }}
+              onClose={() => {}}
+              onBookingSuccess={handleBookingSuccess}
+            />
+          ))}
 
-          {venuesWithoutLocation.map((venue) => {
-            const isSelected = selectedVenueId === venue.id
-            const shouldDim = !!selectedVenueId && !isSelected
-            return (
-              <div
-                key={venue.id}
-                className={[
-                  "transition-all duration-200",
-                  shouldDim ? "opacity-55" : "opacity-100",
-                ].join(" ")}
-              >
-                <VenueCard
-                  id={venue.id}
-                  name={venue.name}
-                  address={venue.address}
-                  neighborhood={venue.neighborhood}
-                  city={venue.city}
-                  state={venue.state}
-                  hourlySeatPrice={venue.hourlySeatPrice}
-                  tags={venue.tags}
-                  capacity={venue.capacity}
-                  rulesText={venue.rulesText}
-                  availabilityLabel={venue.availabilityLabel}
-                  missingLocation={true}
-                  isExpanded={isSelected}
-                  isDeemphasized={shouldDim}
-                  onSelect={() => setSelectedVenueId(venue.id)}
-                  onClose={() => setSelectedVenueId(null)}
-                  onBookingSuccess={handleBookingSuccess}
-                />
-              </div>
-            )
-          })}
+          {venuesWithoutLocation.map((venue) => (
+            <div key={venue.id}>
+              <VenueCard
+                id={venue.id}
+                name={venue.name}
+                address={venue.address}
+                city={venue.city}
+                state={venue.state}
+                minPrice={venue.minPrice}
+                maxPrice={venue.maxPrice}
+                tags={venue.tags}
+                capacity={venue.capacity}
+                rulesText={venue.rulesText}
+                availabilityLabel={venue.availabilityLabel}
+                imageUrls={venue.imageUrls}
+                missingLocation={true}
+                isExpanded={false}
+                isDeemphasized={false}
+                onSelect={() => {
+                  // Navigate directly to venue page for seat-level booking
+                  router.push(`/venue/${venue.id}`)
+                }}
+                onClose={() => {}}
+                onBookingSuccess={handleBookingSuccess}
+              />
+            </div>
+          ))}
 
           {venues.length === 0 && (
             <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">

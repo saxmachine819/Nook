@@ -8,21 +8,23 @@ import { useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { MapPin, X } from "lucide-react"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
+import { VenueImageCarousel } from "./VenueImageCarousel"
 
 interface VenueCardProps {
   id: string
   name: string
   address?: string
-  neighborhood?: string
   city?: string
   state?: string
-  hourlySeatPrice?: number
+  minPrice?: number
+  maxPrice?: number
   tags?: string[]
   className?: string
   missingLocation?: boolean
   capacity: number
   rulesText?: string
   availabilityLabel?: string
+  imageUrls?: string[]
   isExpanded?: boolean
   isDeemphasized?: boolean
   onSelect?: () => void
@@ -41,16 +43,17 @@ export function VenueCard({
   id,
   name,
   address,
-  neighborhood,
   city,
   state,
-  hourlySeatPrice = 15,
+  minPrice = 0,
+  maxPrice = 0,
   tags = [],
   className,
   missingLocation = false,
   capacity,
   rulesText,
   availabilityLabel,
+  imageUrls = [],
   isExpanded = false,
   isDeemphasized = false,
   onSelect,
@@ -72,8 +75,8 @@ export function VenueCard({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // Format location display: prefer neighborhood, fallback to address, then city/state
-  const locationDisplay = neighborhood || address || (city && state ? `${city}, ${state}` : city || "")
+  // Format location display: prefer address, then city/state
+  const locationDisplay = address || (city && state ? `${city}, ${state}` : city || "")
 
   // Initialize date to today
   useEffect(() => {
@@ -219,289 +222,97 @@ export function VenueCard({
     }
   }
 
+  // Redirect to venue detail page when expanded (for seat-level booking)
+  useEffect(() => {
+    if (isExpanded) {
+      router.push(`/venue/${id}`)
+    }
+  }, [isExpanded, id, router])
+
   if (isExpanded) {
+    // Show loading state while redirecting
     return (
-      <>
-        <Card className={cn("transition-all", className)}>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold leading-tight">{name}</h3>
-                {locationDisplay && (
-                  <div className="mt-1 flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      {locationDisplay}
-                    </p>
-                    {missingLocation && (
-                      <span className="ml-2 text-xs text-muted-foreground opacity-50">
-                        (location missing)
-                      </span>
-                    )}
-                  </div>
-                )}
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  ${hourlySeatPrice.toFixed(0)}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    / seat / hour · {capacity} seats
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full p-1 text-muted-foreground hover:bg-muted"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-0">
-            {/* Tags */}
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {tags.slice(0, 4).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Booking Form */}
-            <div className="space-y-3 border-t pt-4">
-              <div className="flex items-end gap-2">
-                <div className="flex-1 flex flex-col">
-                  <label className="text-xs font-medium text-muted-foreground mb-1">Date</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs font-medium text-muted-foreground mb-1">Seats</label>
-                  <select
-                    className="rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-                    value={seats}
-                    onChange={(e) => setSeats(Number(e.target.value))}
-                  >
-                    {Array.from(
-                      { length: Math.min(8, Math.max(1, capacity)) },
-                      (_, i) => i + 1
-                    ).map((s) => (
-                      <option key={s} value={s}>
-                        {s} seat{s > 1 ? "s" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-xs font-medium text-muted-foreground mb-1">Duration</label>
-                  <select
-                    className="rounded-md border bg-background px-2 py-1.5 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-                    value={durationSlots}
-                    onChange={(e) => setDurationSlots(Number(e.target.value))}
-                  >
-                    {[1, 2, 3, 4, 6, 8, 12, 16].map((slotsCount) => {
-                      const minutes = slotsCount * 15
-                      const hours = minutes / 60
-                      const label =
-                        minutes < 60
-                          ? `${minutes} min`
-                          : `${hours} hr${hours > 1 ? "s" : ""}`
-                      return (
-                        <option key={slotsCount} value={slotsCount}>
-                          {label}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              {/* Time Slots */}
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Start time
-                </p>
-                <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-                  {isLoadingSlots && (
-                    <p className="text-xs text-muted-foreground">Loading times…</p>
-                  )}
-                  {!isLoadingSlots && slotsError && (
-                    <p className="text-xs text-red-600">{slotsError}</p>
-                  )}
-                  {!isLoadingSlots && !slotsError && upcomingSlots.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      No more times today. Try another date.
-                    </p>
-                  )}
-                  {!isLoadingSlots &&
-                    !slotsError &&
-                    upcomingSlots.map((slot) => {
-                      const start = new Date(slot.start)
-                      const label = start.toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
-                      const isSelected = selectedSlot?.start === slot.start
-                      const disabled = slot.isFullyBooked || slot.availableSeats <= 0
-
-                      return (
-                        <button
-                          key={slot.start}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => setSelectedSlot(slot)}
-                          className={cn(
-                            "whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                            disabled
-                              ? "border-muted-foreground/20 bg-muted text-muted-foreground/60 line-through cursor-not-allowed"
-                              : isSelected
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-muted-foreground/20 bg-background text-foreground hover:border-primary/60"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      )
-                    })}
-                </div>
-              </div>
-
-              {/* Rules Text */}
-              {rulesText && (
-                <div className="rounded-md bg-muted/50 p-3">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">House rules</p>
-                  <p className="text-xs text-muted-foreground whitespace-pre-line">
-                    {rulesText}
-                  </p>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {submitError && (
-                <p className="text-xs text-red-600">{submitError}</p>
-              )}
-
-              {/* Reserve Button */}
-              <div className="flex items-center justify-between pt-2">
-                <div className="text-xs text-muted-foreground">
-                  {selectedSlot ? (
-                    <span>
-                      Starting at{" "}
-                      {new Date(selectedSlot.start).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  ) : (
-                    <span>Choose a start time to continue</span>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  className="px-4 text-xs"
-                  disabled={isSubmitting || !selectedSlot}
-                  onClick={handleBook}
-                >
-                  {isSubmitting ? "Reserving..." : "Reserve"}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        {ToastComponent}
-
-        <BookingConfirmationModal
-          open={confirmationOpen}
-          onOpenChange={setConfirmationOpen}
-          reservation={confirmedReservation}
-        />
-      </>
+      <Card className={cn("transition-all", className)}>
+        <CardContent className="py-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading booking...</p>
+        </CardContent>
+      </Card>
     )
   }
 
+
   // Collapsed state
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="w-full text-left"
-    >
-      <Card
-        className={cn(
-          "transition-shadow hover:shadow-md",
-          isDeemphasized ? "shadow-none" : "",
-          className
-        )}
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          router.push(`/venue/${id}`)
+        }}
+        className="w-full text-left"
       >
-        <CardHeader className={cn(isDeemphasized ? "pb-2 pt-3" : "pb-3")}>
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h3 className={cn(isDeemphasized ? "text-base font-semibold leading-tight" : "text-lg font-semibold leading-tight")}>
-                {name}
-              </h3>
-              {locationDisplay && (
-                <div className="mt-1 flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-muted-foreground" />
-                  <p className={cn(isDeemphasized ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground")}>
-                    {locationDisplay}
-                  </p>
-                  {missingLocation && (
-                    <span className="ml-2 text-xs text-muted-foreground opacity-50">
-                      (location missing)
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+        <Card
+          className={cn(
+            "overflow-hidden transition-shadow hover:shadow-md",
+            isDeemphasized ? "shadow-none" : "",
+            className
+          )}
+        >
+          {/* Image Section with Carousel */}
+          <div className="relative">
+            <VenueImageCarousel images={imageUrls} />
+            {/* Availability label overlaying top-right of image */}
             {availabilityLabel && (
-              <span className={cn(
-                "ml-2 rounded-full bg-primary/10 font-medium text-primary",
-                isDeemphasized ? "px-2 py-0.5 text-[11px]" : "px-2 py-1 text-xs"
-              )}>
+              <span
+                className={cn(
+                  "absolute top-2 right-2 z-10 rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
+                  isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
+                )}
+              >
                 {availabilityLabel}
               </span>
             )}
           </div>
-        </CardHeader>
-        <CardContent className={cn("pt-0", isDeemphasized ? "pb-3" : "")}>
-          <div className="flex items-center justify-between">
-            <div className={cn(isDeemphasized ? "text-sm font-medium text-foreground" : "text-base font-medium text-foreground")}>
-              ${hourlySeatPrice.toFixed(2)}
-              <span className={cn(isDeemphasized ? "ml-1 text-xs font-normal text-muted-foreground" : "ml-1 text-sm font-normal text-muted-foreground")}>
-                / seat / hour
-              </span>
-            </div>
-            {/* Deemphasized cards collapse tags for a smaller, calmer list */}
-            {!isDeemphasized && tags.length > 0 && (
-              <div className="flex gap-1">
-                {tags.slice(0, 4).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground"
-                  >
-                    {tag}
+
+          {/* Text Content Below Image */}
+          <CardContent className={cn("p-4", isDeemphasized ? "pb-3" : "")}>
+            <h3 className={cn(isDeemphasized ? "text-base font-semibold leading-tight" : "text-lg font-semibold leading-tight")}>
+              {name}
+            </h3>
+            {locationDisplay && (
+              <div className="mt-1 flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                <p className={cn(isDeemphasized ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground")}>
+                  {locationDisplay}
+                </p>
+                {missingLocation && (
+                  <span className="ml-2 text-xs text-muted-foreground opacity-50">
+                    (location missing)
                   </span>
-                ))}
+                )}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
+            {/* Pricing directly under address */}
+            <div className="mt-0.5">
+              {minPrice === maxPrice ? (
+                <p className="text-xs text-muted-foreground">
+                  ${minPrice.toFixed(0)} / hour
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  ${minPrice.toFixed(0)}-${maxPrice.toFixed(0)} / hour
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </button>
 
       <BookingConfirmationModal
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
         reservation={confirmedReservation}
       />
-    </button>
+    </>
   )
 }

@@ -12,7 +12,8 @@ interface Venue {
   address: string
   latitude: number | null
   longitude: number | null
-  hourlySeatPrice: number
+  minPrice: number
+  maxPrice: number
 }
 
 interface MapboxMapProps {
@@ -66,7 +67,6 @@ export function MapboxMap({
             id: venue.id,
             name: venue.name,
             address: venue.address,
-            hourlySeatPrice: venue.hourlySeatPrice,
           },
         })),
     }
@@ -714,12 +714,12 @@ export function MapboxMap({
         </div>
       )}
       {showSearchButton && !isLoading && (
-        <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+        <div className="absolute top-4 left-1/2 z-20 -translate-x-1/2">
           <Button
             size="sm"
             onClick={handleSearchArea}
             disabled={isSearching}
-            className="shadow-lg"
+            className="shadow-lg px-3 py-1.5 text-xs"
           >
             {isSearching ? "Searching..." : "Search this area"}
           </Button>

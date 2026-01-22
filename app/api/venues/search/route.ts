@@ -94,7 +94,11 @@ export async function GET(request: Request) {
         },
       },
       include: {
-        tables: true,
+        tables: {
+          include: {
+            seats: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -140,9 +144,68 @@ export async function GET(request: Request) {
 
     // Format venues for client
     const formattedVenues = venues.map((venue) => {
-      const capacity = venue.tables.reduce((sum, table) => sum + table.seatCount, 0)
+      // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+      const capacity = venue.tables.reduce((sum, table) => {
+        if (table.seats.length > 0) {
+          return sum + table.seats.length
+        }
+        // Fallback for older venues without Seat records
+        return sum + (table.seatCount || 0)
+      }, 0)
+      
+      // Calculate pricing based on booking modes
+      const groupTables = venue.tables.filter(t => (t as any).bookingMode === "group")
+      const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
+      
+      let averageSeatPrice = venue.hourlySeatPrice
+      
+      if (individualTables.length > 0) {
+        const individualSeats = individualTables.flatMap(t => t.seats)
+        if (individualSeats.length > 0) {
+          averageSeatPrice = individualSeats.reduce((sum, seat) => sum + (seat as any).pricePerHour, 0) / individualSeats.length
+        }
+      } else if (groupTables.length > 0) {
+        // Only group tables - calculate average table price per seat
+        const groupPrices = groupTables
+          .filter(t => (t as any).tablePricePerHour)
+          .map(t => ({ price: (t as any).tablePricePerHour!, seatCount: t.seats.length }))
+        if (groupPrices.length > 0) {
+          const totalPricePerSeat = groupPrices.reduce((sum, t) => sum + (t.price / t.seatCount), 0)
+          averageSeatPrice = totalPricePerSeat / groupPrices.length
+        }
+      }
+      
       const venueReservations = reservationsByVenue[venue.id] || []
       const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations)
+
+      // Parse and combine image URLs
+      // heroImageUrl takes priority as first image, then imageUrls array
+      let imageUrls: string[] = []
+      const venueWithImages = venue as any
+      
+      // Parse imageUrls JSON field (can be array, string, or null)
+      if (venueWithImages.imageUrls) {
+        if (Array.isArray(venueWithImages.imageUrls)) {
+          imageUrls = venueWithImages.imageUrls.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
+        } else if (typeof venueWithImages.imageUrls === 'string') {
+          try {
+            const parsed = JSON.parse(venueWithImages.imageUrls)
+            if (Array.isArray(parsed)) {
+              imageUrls = parsed.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
+            }
+          } catch {
+            // If parsing fails, treat as single URL string
+            if (venueWithImages.imageUrls.length > 0) {
+              imageUrls = [venueWithImages.imageUrls]
+            }
+          }
+        }
+      }
+      
+      // Add heroImageUrl as first image if it exists
+      if (venueWithImages.heroImageUrl && typeof venueWithImages.heroImageUrl === 'string' && venueWithImages.heroImageUrl.length > 0) {
+        imageUrls = [venueWithImages.heroImageUrl, ...imageUrls.filter((url: string) => url !== venueWithImages.heroImageUrl)]
+      }
 
       return {
         id: venue.id,
@@ -153,11 +216,12 @@ export async function GET(request: Request) {
         state: venue.state || "",
         latitude: venue.latitude,
         longitude: venue.longitude,
-        hourlySeatPrice: venue.hourlySeatPrice,
+        hourlySeatPrice: averageSeatPrice, // Use average seat price for display
         tags: venue.tags || [],
         capacity,
         rulesText: venue.rulesText || "",
         availabilityLabel,
+        imageUrls,
       }
     })
 
