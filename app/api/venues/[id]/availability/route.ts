@@ -82,6 +82,25 @@ function getOpenIntervalsForDate(
   return normalized.length ? normalized : fallback
 }
 
+// Check if a time window falls within venue opening hours
+function isTimeWindowWithinOpeningHours(
+  startAt: Date,
+  endAt: Date,
+  openingHoursJson: any
+): boolean {
+  const dateStr = startAt.toISOString().split('T')[0]
+  const intervals = getOpenIntervalsForDate(dateStr, openingHoursJson)
+  
+  // Convert to local time (minutes since midnight)
+  const startMin = startAt.getHours() * 60 + startAt.getMinutes()
+  const endMin = endAt.getHours() * 60 + endAt.getMinutes()
+  
+  // Check if the time window overlaps with any open interval
+  return intervals.some(interval => 
+    startMin >= interval.startMin && endMin <= interval.endMin
+  )
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -90,8 +109,344 @@ export async function GET(
   const venueId = params.id
 
   const { searchParams } = new URL(request.url)
+  const startAt = searchParams.get("startAt")
+  const endAt = searchParams.get("endAt")
   const date = searchParams.get("date")
+  const seatCountParam = searchParams.get("seatCount")
+  const seatCount = seatCountParam ? parseInt(seatCountParam, 10) : 1
 
+  // New seat-level availability endpoint (for /venue/[id] booking widget)
+  if (startAt && endAt) {
+    if (!startAt || !endAt) {
+      return NextResponse.json(
+        { error: "Missing required parameters: startAt and endAt (ISO strings)." },
+        { status: 400 }
+      )
+    }
+
+    const parsedStart = new Date(startAt)
+    const parsedEnd = new Date(endAt)
+
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid date format. Use ISO strings." },
+        { status: 400 }
+      )
+    }
+
+    if (parsedEnd <= parsedStart) {
+      return NextResponse.json(
+        { error: "End time must be after start time." },
+        { status: 400 }
+      )
+    }
+
+    try {
+      // Fetch venue with ALL tables and seats (both group and individual booking modes)
+      const venue = await prisma.venue.findUnique({
+        where: { id: venueId },
+        include: {
+          tables: {
+            include: {
+              seats: {
+                orderBy: {
+                  position: "asc",
+                },
+              },
+            },
+          },
+        },
+      })
+
+      if (!venue) {
+        return NextResponse.json({ error: "Venue not found." }, { status: 404 })
+      }
+
+      // Calculate total capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+      const totalCapacity = venue.tables.reduce((sum, table) => {
+        if (table.seats.length > 0) {
+          return sum + table.seats.length
+        }
+        // Fallback for older venues without Seat records
+        return sum + (table.seatCount || 0)
+      }, 0)
+
+      // Validate requested seat count doesn't exceed capacity
+      if (seatCount > totalCapacity) {
+        return NextResponse.json(
+          {
+            availableSeats: [],
+            availableSeatGroups: [],
+            unavailableSeatIds: [],
+            error: `This venue only has ${totalCapacity} seat${totalCapacity > 1 ? "s" : ""} available. Please select ${totalCapacity} or fewer seats.`,
+          },
+          { status: 200 }
+        )
+      }
+
+      // Check if time window is within opening hours
+      const openingHoursJson = (venue as any).openingHoursJson
+      if (openingHoursJson) {
+        const isWithinHours = isTimeWindowWithinOpeningHours(
+          parsedStart,
+          parsedEnd,
+          openingHoursJson
+        )
+        
+        if (!isWithinHours) {
+          return NextResponse.json(
+            {
+              availableSeats: [],
+              unavailableSeatIds: [],
+              error: "This venue is not open during the requested time. Please check opening hours.",
+            },
+            { status: 200 }
+          )
+        }
+      }
+      // If no opening hours data, allow booking (fallback behavior)
+
+      // Find overlapping reservations for this time window
+      const overlappingReservations = await prisma.reservation.findMany({
+        where: {
+          venueId: venue.id,
+          status: {
+            not: "cancelled",
+          },
+          startAt: {
+            lt: parsedEnd,
+          },
+          endAt: {
+            gt: parsedStart,
+          },
+        },
+        select: {
+          seatId: true,
+          tableId: true,
+        },
+      })
+
+      // Get set of unavailable seat IDs from individual seat reservations
+      const unavailableSeatIds = new Set(
+        overlappingReservations
+          .filter((r) => r.seatId !== null)
+          .map((r) => r.seatId!)
+      )
+
+      // Check for group table reservations that block individual seats
+      // When a group table is booked, ALL seats in that table become unavailable for individual booking
+      const groupTableReservations = overlappingReservations.filter(
+        (r) => r.tableId !== null && r.seatId === null
+      )
+
+      // For each group table reservation, mark all seats in that table as unavailable
+      for (const groupReservation of groupTableReservations) {
+        const table = venue.tables.find((t) => t.id === groupReservation.tableId)
+        if (table) {
+          table.seats.forEach((seat) => {
+            unavailableSeatIds.add(seat.id)
+          })
+        }
+      }
+
+      // Build allAvailableSeats array from venue's tables and seats
+      const allAvailableSeats: Array<{
+        id: string
+        tableId: string
+        tableName: string | null
+        label: string | null
+        position: number | null
+        pricePerHour: number
+        tags: string[] | null
+        imageUrls: string[] | null
+        tableImageUrls: string[] | null
+        isCommunal: boolean
+      }> = []
+
+      venue.tables.forEach((table) => {
+        const tableImageUrls = Array.isArray(table.imageUrls)
+          ? table.imageUrls
+          : table.imageUrls
+          ? typeof table.imageUrls === "string"
+            ? JSON.parse(table.imageUrls)
+            : table.imageUrls
+          : []
+
+        const isCommunal = (table as any).isCommunal || false
+
+        table.seats.forEach((seat) => {
+          const seatImageUrls = Array.isArray(seat.imageUrls)
+            ? seat.imageUrls
+            : seat.imageUrls
+            ? typeof seat.imageUrls === "string"
+              ? JSON.parse(seat.imageUrls)
+              : seat.imageUrls
+            : []
+
+          const seatTags = Array.isArray(seat.tags)
+            ? seat.tags
+            : seat.tags
+            ? typeof seat.tags === "string"
+              ? JSON.parse(seat.tags)
+              : seat.tags
+            : []
+
+          allAvailableSeats.push({
+            id: seat.id,
+            tableId: table.id,
+            tableName: table.name,
+            label: seat.label,
+            position: seat.position,
+            pricePerHour: seat.pricePerHour,
+            tags: seatTags,
+            imageUrls: seatImageUrls,
+            tableImageUrls: tableImageUrls,
+            isCommunal: isCommunal,
+          })
+        })
+      })
+
+      // Build availableGroupTables array (tables with bookingMode === "group")
+      const availableGroupTables: Array<{
+        id: string
+        name: string | null
+        seatCount: number
+        pricePerHour: number
+        imageUrls: string[]
+        isCommunal: boolean
+      }> = []
+
+      venue.tables.forEach((table) => {
+        const bookingMode = (table as any).bookingMode || "individual"
+        if (bookingMode === "group") {
+          const tablePricePerHour = (table as any).tablePricePerHour
+          const tableImageUrls = Array.isArray(table.imageUrls)
+            ? table.imageUrls
+            : table.imageUrls
+            ? typeof table.imageUrls === "string"
+              ? JSON.parse(table.imageUrls)
+              : table.imageUrls
+            : []
+
+          const isCommunal = (table as any).isCommunal || false
+
+          availableGroupTables.push({
+            id: table.id,
+            name: table.name,
+            seatCount: table.seats.length,
+            pricePerHour: tablePricePerHour || table.seats.reduce((sum, s) => sum + s.pricePerHour, 0) / table.seats.length,
+            imageUrls: tableImageUrls,
+            isCommunal: isCommunal,
+          })
+        }
+      })
+
+      // Helper function to find adjacent seats within available seats array
+      function findAdjacentSeats(
+        seats: typeof allAvailableSeats,
+        count: number
+      ): typeof allAvailableSeats | null {
+        if (seats.length < count) return null
+
+        // Sort by position (null positions go to end)
+        const sorted = [...seats].sort((a, b) => {
+          if (a.position === null && b.position === null) return 0
+          if (a.position === null) return 1
+          if (b.position === null) return -1
+          return a.position - b.position
+        })
+
+        // Check for consecutive positions
+        for (let i = 0; i <= sorted.length - count; i++) {
+          const candidate = sorted.slice(i, i + count)
+          const positions = candidate
+            .map((s) => s.position)
+            .filter((p): p is number => p !== null)
+            .sort((a, b) => a - b)
+
+          // Check if positions are consecutive
+          if (positions.length === count) {
+            let consecutive = true
+            for (let j = 1; j < positions.length; j++) {
+              if (positions[j] !== positions[j - 1] + 1) {
+                consecutive = false
+                break
+              }
+            }
+            if (consecutive) return candidate
+          }
+        }
+
+        return null
+      }
+
+      // If seatCount === 1, return all individual seats AND group tables that have at least 1 seat
+      if (seatCount === 1) {
+        return NextResponse.json(
+          {
+            availableSeats: allAvailableSeats,
+            availableSeatGroups: [],
+            availableGroupTables: availableGroupTables,
+            unavailableSeatIds: Array.from(unavailableSeatIds),
+          },
+          { status: 200 }
+        )
+      }
+
+      // If seatCount > 1, find groups of adjacent seats
+      const availableSeatGroups: Array<{
+        seats: typeof allAvailableSeats
+        tableId: string
+        totalPricePerHour: number
+      }> = []
+
+      // Group seats by table
+      const seatsByTable = new Map<string, typeof allAvailableSeats>()
+      allAvailableSeats.forEach((seat) => {
+        if (!seatsByTable.has(seat.tableId)) {
+          seatsByTable.set(seat.tableId, [])
+        }
+        seatsByTable.get(seat.tableId)!.push(seat)
+      })
+
+      // Find adjacent groups in each table
+      seatsByTable.forEach((seats, tableId) => {
+        const adjacentGroup = findAdjacentSeats(seats, seatCount)
+        if (adjacentGroup && adjacentGroup.length === seatCount) {
+          const totalPricePerHour = adjacentGroup.reduce(
+            (sum, seat) => sum + seat.pricePerHour,
+            0
+          )
+          availableSeatGroups.push({
+            seats: adjacentGroup,
+            tableId,
+            totalPricePerHour,
+          })
+        }
+      })
+
+      // For seatCount > 1, return groups AND group tables that match the seat count
+      return NextResponse.json(
+        {
+          availableSeats: allAvailableSeats, // Keep for display
+          availableSeatGroups,
+          availableGroupTables: availableGroupTables.filter(
+            (table) => table.seatCount === seatCount
+          ),
+          unavailableSeatIds: Array.from(unavailableSeatIds),
+        },
+        { status: 200 }
+      )
+    } catch (error) {
+      console.error("Error fetching seat availability:", error)
+      return NextResponse.json(
+        { error: "Failed to fetch seat availability." },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Old slot-based availability endpoint (for VenueCard/InlineVenueBookingSheet)
   if (!date) {
     return NextResponse.json(
       { error: "Missing date parameter (YYYY-MM-DD)." },
@@ -186,4 +541,3 @@ export async function GET(
     )
   }
 }
-

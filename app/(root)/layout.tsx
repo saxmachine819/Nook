@@ -1,6 +1,13 @@
-import { BottomNav } from "@/components/layout/BottomNav"
+import dynamic from "next/dynamic"
 
-export default function RootLayout({
+const BottomNav = dynamic(
+  () => import("@/components/layout/BottomNav").then((mod) => ({ default: mod.BottomNav })),
+  {
+    ssr: false,
+  }
+)
+
+export default function RootGroupLayout({
   children,
 }: {
   children: React.ReactNode

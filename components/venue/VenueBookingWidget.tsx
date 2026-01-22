@@ -1,21 +1,63 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
+import { SeatCard } from "@/components/venue/SeatCard"
+import { cn } from "@/lib/utils"
+
+interface Table {
+  id: string
+  name: string | null
+  imageUrls: string[] | null
+  seats: Array<{
+    id: string
+    label: string | null
+    position: number | null
+    pricePerHour: number
+    tags: string[] | null
+    imageUrls: string[] | null
+  }>
+}
 
 interface VenueBookingWidgetProps {
   venueId: string
-  hourlySeatPrice: number
-  maxCapacity: number
+  tables: Table[]
+}
+
+interface AvailableSeat {
+  id: string
+  tableId: string
+  tableName: string | null
+  label: string | null
+  position: number | null
+  pricePerHour: number
+  tags: string[]
+  imageUrls: string[]
+  tableImageUrls: string[]
+  isCommunal?: boolean
+}
+
+interface AvailableSeatGroup {
+  seats: AvailableSeat[]
+  tableId: string
+  totalPricePerHour: number
+}
+
+interface AvailableGroupTable {
+  id: string
+  name: string | null
+  seatCount: number
+  pricePerHour: number
+  imageUrls: string[]
+  isCommunal?: boolean
 }
 
 export function VenueBookingWidget({
   venueId,
-  hourlySeatPrice,
-  maxCapacity,
+  tables,
 }: VenueBookingWidgetProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -26,9 +68,86 @@ export function VenueBookingWidget({
   const [date, setDate] = useState<string>("")
   const [startTime, setStartTime] = useState<string>("")
   const [durationHours, setDurationHours] = useState<number>(2)
-  const [seats, setSeats] = useState<number>(1)
+  const [seatCount, setSeatCount] = useState<number>(1)
+  const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
+  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
+  const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
+  const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
+  const [availableSeatGroups, setAvailableSeatGroups] = useState<AvailableSeatGroup[]>([])
+  const [availableGroupTables, setAvailableGroupTables] = useState<AvailableGroupTable[]>([])
+  const [unavailableSeatIds, setUnavailableSeatIds] = useState<Set<string>>(
+    new Set()
+  )
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const handleCheckAvailability = useCallback(async () => {
+    if (!date || !startTime) {
+      setError("Please select a date and start time first.")
+      return
+    }
+
+    setIsLoadingAvailability(true)
+    setError(null)
+    setSelectedSeatId(null)
+    setSelectedSeatIds([])
+    setSelectedGroupTableId(null)
+
+    try {
+      const startAtLocal = new Date(`${date}T${startTime}`)
+      const endAtLocal = new Date(
+        startAtLocal.getTime() + durationHours * 60 * 60 * 1000
+      )
+
+      const response = await fetch(
+        `/api/venues/${venueId}/availability?startAt=${encodeURIComponent(
+          startAtLocal.toISOString()
+        )}&endAt=${encodeURIComponent(endAtLocal.toISOString())}&seatCount=${seatCount}`
+      )
+
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        setError(data?.error || "Failed to check availability.")
+        setAvailableSeats([])
+        setAvailableSeatGroups([])
+        setUnavailableSeatIds(new Set())
+        return
+      }
+
+      // Check for opening hours error or capacity error
+      if (data.error) {
+        setError(data.error)
+        setAvailableSeats([])
+        setAvailableSeatGroups([])
+        setAvailableGroupTables([])
+        setUnavailableSeatIds(new Set())
+        return
+      }
+
+      setAvailableSeats(data.availableSeats || [])
+      setAvailableSeatGroups(data.availableSeatGroups || [])
+      setAvailableGroupTables(data.availableGroupTables || [])
+      setUnavailableSeatIds(new Set(data.unavailableSeatIds || []))
+    } catch (err) {
+      console.error("Error checking availability:", err)
+      setError("Something went wrong while checking availability.")
+      setAvailableSeats([])
+      setUnavailableSeatIds(new Set())
+    } finally {
+      setIsLoadingAvailability(false)
+    }
+  }, [date, startTime, durationHours, venueId, seatCount])
+
+  // Track if we've initialized date/time to prevent re-initialization
+  const hasInitialized = useRef(false)
+  const handleCheckAvailabilityRef = useRef(handleCheckAvailability)
+
+  // Keep ref updated with latest handleCheckAvailability
+  useEffect(() => {
+    handleCheckAvailabilityRef.current = handleCheckAvailability
+  }, [handleCheckAvailability])
 
   // Restore booking data from URL params if present (after sign-in)
   useEffect(() => {
@@ -38,59 +157,122 @@ export function VenueBookingWidget({
         const bookingData = JSON.parse(decodeURIComponent(bookingParam))
         if (bookingData.date) setDate(bookingData.date)
         if (bookingData.startTime) {
-          // Convert "HHMM" format to "HH:MM"
           const timeStr = String(bookingData.startTime).padStart(4, "0")
           if (timeStr.length === 4) {
             setStartTime(`${timeStr.slice(0, 2)}:${timeStr.slice(2)}`)
           }
         }
         if (bookingData.duration !== undefined) {
-          // Duration is in hours (converted from VenueCard slots or from VenueBookingWidget)
           setDurationHours(bookingData.duration)
         }
-        if (bookingData.seats) setSeats(bookingData.seats)
-        
-        // Remove booking param from URL
+        if (bookingData.seatId) setSelectedSeatId(bookingData.seatId)
+
         const newUrl = new URL(window.location.href)
         newUrl.searchParams.delete("booking")
         router.replace(newUrl.pathname + newUrl.search, { scroll: false })
-        
-        // Auto-submit after a brief delay to ensure form is ready
-        setTimeout(() => {
-          const form = document.querySelector('form')
-          if (form) {
-            form.requestSubmit()
-          }
-        }, 200)
+
+        // Auto-fetch availability if time is set
+        if (bookingData.date && bookingData.startTime) {
+          setTimeout(() => {
+            handleCheckAvailabilityRef.current()
+          }, 200)
+        }
+        hasInitialized.current = true
       } catch (e) {
         console.error("Failed to parse booking data:", e)
       }
       return
     }
 
-    // Default initialization if no booking data
-    const now = new Date()
-    const rounded = new Date(now)
-    if (rounded.getMinutes() > 0 || rounded.getSeconds() > 0 || rounded.getMilliseconds() > 0) {
-      rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
-    } else {
-      rounded.setMinutes(0, 0, 0)
+    // Default initialization - only run once on mount
+    if (!hasInitialized.current && date === "" && startTime === "") {
+      const now = new Date()
+      const rounded = new Date(now)
+      if (
+        rounded.getMinutes() > 0 ||
+        rounded.getSeconds() > 0 ||
+        rounded.getMilliseconds() > 0
+      ) {
+        rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
+      } else {
+        rounded.setMinutes(0, 0, 0)
+      }
+
+      const yyyy = rounded.getFullYear()
+      const mm = String(rounded.getMonth() + 1).padStart(2, "0")
+      const dd = String(rounded.getDate()).padStart(2, "0")
+      const hh = String(rounded.getHours()).padStart(2, "0")
+      const min = String(rounded.getMinutes()).padStart(2, "0")
+
+      setDate(`${yyyy}-${mm}-${dd}`)
+      setStartTime(`${hh}:${min}`)
+      hasInitialized.current = true
     }
-
-    const yyyy = rounded.getFullYear()
-    const mm = String(rounded.getMonth() + 1).padStart(2, "0")
-    const dd = String(rounded.getDate()).padStart(2, "0")
-    const hh = String(rounded.getHours()).padStart(2, "0")
-    const min = String(rounded.getMinutes()).padStart(2, "0")
-
-    setDate(`${yyyy}-${mm}-${dd}`)
-    setStartTime(`${hh}:${min}`)
   }, [searchParams, router])
 
+  // Group available seats by table
+  const seatsByTable = useMemo(() => {
+    const grouped = new Map<string, AvailableSeat[]>()
+    availableSeats.forEach((seat) => {
+      if (!grouped.has(seat.tableId)) {
+        grouped.set(seat.tableId, [])
+      }
+      grouped.get(seat.tableId)!.push(seat)
+    })
+    return grouped
+  }, [availableSeats])
+
+  // Get table info for display
+  const getTableInfo = (tableId: string) => {
+    const table = tables.find((t) => t.id === tableId)
+    if (!table) return null
+    
+    // Parse imageUrls from JSON if needed
+    const imageUrls = Array.isArray(table.imageUrls) 
+      ? table.imageUrls 
+      : table.imageUrls 
+        ? (typeof table.imageUrls === 'string' ? JSON.parse(table.imageUrls) : table.imageUrls)
+        : []
+    
+    return {
+      ...table,
+      imageUrls: Array.isArray(imageUrls) ? imageUrls : [],
+    }
+  }
+
+  // Calculate total price for selected seat(s) or table
   const totalPrice = useMemo(() => {
-    if (!hourlySeatPrice || !durationHours || !seats) return 0
-    return hourlySeatPrice * durationHours * seats
-  }, [hourlySeatPrice, durationHours, seats])
+    if (!durationHours) return 0
+    
+    // Group table selection
+    if (selectedGroupTableId) {
+      const table = availableGroupTables.find((t) => t.id === selectedGroupTableId)
+      if (!table) return 0
+      return table.pricePerHour * durationHours
+    }
+    
+    // Individual seat selection
+    if (seatCount === 1 && selectedSeatId) {
+      const seat = availableSeats.find((s) => s.id === selectedSeatId)
+      if (!seat) return 0
+      return seat.pricePerHour * durationHours
+    }
+    
+    // Multi-seat selection
+    if (seatCount > 1 && selectedSeatIds.length > 0) {
+      const selectedSeats = availableSeats.filter((s) => selectedSeatIds.includes(s.id))
+      const totalPricePerHour = selectedSeats.reduce((sum, seat) => sum + seat.pricePerHour, 0)
+      return totalPricePerHour * durationHours
+    }
+    
+    return 0
+  }, [selectedSeatId, selectedSeatIds, selectedGroupTableId, durationHours, availableSeats, availableGroupTables, seatCount])
+
+  const canCheckAvailability = date && startTime && !isLoadingAvailability;
+  
+  const hasSingleSeatData = seatCount === 1 && (availableSeats.length > 0 || availableGroupTables.length > 0 || unavailableSeatIds.size > 0);
+  const hasMultiSeatData = seatCount > 1 && (availableSeatGroups.length > 0 || availableGroupTables.length > 0 || unavailableSeatIds.size > 0);
+  const hasAvailabilityData = hasSingleSeatData || hasMultiSeatData;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,8 +283,22 @@ export function VenueBookingWidget({
       return
     }
 
-    if (seats < 1 || seats > 8) {
-      setError("You can reserve between 1 and 8 seats.")
+    if (!hasAvailabilityData) {
+      setError("Please click 'Check availability' first to see available seats.")
+      return
+    }
+
+    // Check if user has selected either individual seats OR a group table
+    const hasIndividualSelection = seatCount === 1 && selectedSeatId
+    const hasMultiSeatSelection = seatCount > 1 && selectedSeatIds.length === seatCount
+    const hasGroupTableSelection = selectedGroupTableId !== null
+
+    if (!hasIndividualSelection && !hasMultiSeatSelection && !hasGroupTableSelection) {
+      if (seatCount === 1) {
+        setError("Please select a seat or table from the available options below.")
+      } else {
+        setError(`Please select ${seatCount} seats or a table from the available options below.`)
+      }
       return
     }
 
@@ -111,51 +307,65 @@ export function VenueBookingWidget({
       return
     }
 
-    if (seats > maxCapacity) {
-      setError(`This venue can host up to ${maxCapacity} seats at once.`)
-      return
-    }
-
     try {
       setIsSubmitting(true)
 
       const startAtLocal = new Date(`${date}T${startTime}`)
-      const endAtLocal = new Date(startAtLocal.getTime() + durationHours * 60 * 60 * 1000)
+      const endAtLocal = new Date(
+        startAtLocal.getTime() + durationHours * 60 * 60 * 1000
+      )
+
+      // Determine what to book: group table or individual seats
+      let requestBody: any = {
+        venueId,
+        startAt: startAtLocal.toISOString(),
+        endAt: endAtLocal.toISOString(),
+      }
+
+      if (selectedGroupTableId) {
+        // Booking a group table
+        requestBody.tableId = selectedGroupTableId
+        requestBody.seatCount = seatCount
+      } else {
+        // Booking individual seats
+        const seatIds = seatCount === 1 
+          ? [selectedSeatId!]
+          : selectedSeatIds
+        requestBody.seatIds = seatIds
+      }
 
       const response = await fetch("/api/reservations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          venueId,
-          startAt: startAtLocal.toISOString(),
-          endAt: endAtLocal.toISOString(),
-          seatCount: seats,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        // Handle authentication errors - redirect to sign-in with booking data
         if (response.status === 401) {
-          // Encode booking data in URL params
           const bookingData = {
             date: date,
             startTime: startTime.replace(":", ""),
-            duration: Math.round(durationHours * 60 / 15), // Convert hours to 15min slots
-            seats: seats,
+            duration: durationHours,
+            seatId: seatCount === 1 ? selectedSeatId : null,
+            seatIds: seatCount > 1 ? selectedSeatIds : null,
+            seatCount: seatCount,
           }
           const bookingParam = encodeURIComponent(JSON.stringify(bookingData))
-          router.push(`/profile?callbackUrl=${encodeURIComponent(`/venue/${venueId}?booking=${bookingParam}`)}`)
+          router.push(
+            `/profile?callbackUrl=${encodeURIComponent(
+              `/venue/${venueId}?booking=${bookingParam}`
+            )}`
+          )
           return
         }
         setError(data?.error || "Failed to create reservation. Please try again.")
         return
       }
 
-      // Open confirmation modal (no redirect)
       setConfirmedReservation(data?.reservation || null)
       setConfirmationOpen(true)
       showToast("Reservation confirmed.", "success")
@@ -167,106 +377,487 @@ export function VenueBookingWidget({
     }
   }
 
+  // Helper function to render single seat selection
+  const renderSingleSeatSelection = () => {
+    if (availableSeats.length === 0 && availableGroupTables.length === 0) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          No seats or tables available for this time. Try a different time or date.
+        </p>
+      )
+    }
+
+    return (
+      <>
+        {/* Group tables section */}
+        {availableGroupTables.length > 0 && (
+          <div className="mb-6 space-y-3">
+            <h4 className="text-xs font-medium text-muted-foreground">
+              Book full table
+            </h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {availableGroupTables.map((table) => {
+                const isSelected = selectedGroupTableId === table.id
+                return (
+                  <button
+                    key={table.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroupTableId(table.id)
+                      setSelectedSeatId(null)
+                    }}
+                    className={cn(
+                      "relative rounded-md border p-4 text-left transition-all",
+                      "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                      isSelected
+                        ? "border-primary ring-2 ring-primary"
+                        : "border-muted hover:border-primary/50"
+                    )}
+                  >
+                    {table.imageUrls.length > 0 && (
+                      <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        <img
+                          src={table.imageUrls[0]}
+                          alt={table.name || "Table"}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-medium">
+                        {table.name || "Table"}
+                      </h5>
+                      {table.isCommunal === true && (
+                        <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          <svg
+                            className="h-2.5 w-2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                          </svg>
+                          Communal
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {table.seatCount} seat{table.seatCount > 1 ? "s" : ""}
+                      {table.isCommunal === true && (
+                        <span className="block mt-1 text-[10px] italic">
+                          Note: This is a communal space. Other guests may be seated at the same table.
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      ${table.pricePerHour.toFixed(0)}/hour
+                    </p>
+                    {isSelected && (
+                      <div className="absolute right-2 top-2">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <svg
+                            className="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Individual seats section */}
+        {availableSeats.length > 0 && (
+          <div className={availableGroupTables.length > 0 ? "space-y-6" : ""}>
+            {availableGroupTables.length > 0 && (
+              <h4 className="text-xs font-medium text-muted-foreground">
+                Book individual seats
+              </h4>
+            )}
+            <div className="space-y-6">
+              {Array.from(seatsByTable.entries()).map(([tableId, seats]) => {
+                const table = getTableInfo(tableId)
+                if (!table) return null
+
+                // Check if this table is communal (all seats should have same isCommunal flag)
+                const isCommunal = Boolean(seats.length > 0 && seats[0]?.isCommunal)
+
+                return (
+                  <div key={tableId} className="space-y-3">
+                    {/* Table header with photo */}
+                    <div className="flex items-center gap-3">
+                      {table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
+                        <div className="h-12 w-12 overflow-hidden rounded-md">
+                          <img
+                            src={table.imageUrls[0]}
+                            alt={table.name || "Table"}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-medium">
+                            {table.name || "Table"}
+                          </h4>
+                          {isCommunal && (
+                            <span className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                              <svg
+                                className="h-3 w-3"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                                />
+                              </svg>
+                              Communal
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {seats.length} seat{seats.length > 1 ? "s" : ""} available
+                          {isCommunal && (
+                            <span className="block mt-1 text-xs italic">
+                              Note: This is a communal space. Other guests may be seated at the same table.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Seat cards grid */}
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {seats.map((seat) => {
+                        const isAvailable = !unavailableSeatIds.has(seat.id)
+                        const isSelected = selectedSeatId === seat.id
+
+                        return (
+                          <SeatCard
+                            key={seat.id}
+                            seat={{
+                              id: seat.id,
+                              label: seat.label,
+                              position: seat.position,
+                              pricePerHour: seat.pricePerHour,
+                              tags: seat.tags,
+                              imageUrls: seat.imageUrls,
+                            }}
+                            table={{
+                              id: tableId,
+                              name: table.name,
+                              imageUrls: (table.imageUrls as string[]) || [],
+                            }}
+                            isAvailable={isAvailable}
+                            isSelected={isSelected}
+                            isCommunal={seat.isCommunal ?? false}
+                            onSelect={() => {
+                              if (isAvailable) {
+                                setSelectedSeatId(seat.id)
+                              }
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  // Helper function to render multi-seat selection
+  const renderMultiSeatSelection = () => {
+    if (availableSeatGroups.length === 0) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          No groups of {seatCount} adjacent seats available for this time. Try a different time, date, or number of seats.
+        </p>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        {availableSeatGroups.map((group, groupIndex) => {
+          const table = getTableInfo(group.tableId)
+          const allSeatIdsInGroup = group.seats.map(s => s.id)
+          const isGroupSelected = selectedSeatIds.length === seatCount && 
+            allSeatIdsInGroup.every(id => selectedSeatIds.includes(id))
+
+          return (
+            <div key={groupIndex} className="space-y-3">
+              {/* Group header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {table && table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
+                    <div className="h-12 w-12 overflow-hidden rounded-md">
+                      <img
+                        src={table.imageUrls[0]}
+                        alt={table.name || "Table"}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="text-sm font-medium">
+                      {table?.name || "Table"} - {seatCount} seats
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      ${group.totalPricePerHour.toFixed(0)}/hour total
+                    </p>
+                  </div>
+                </div>
+                {isGroupSelected && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <svg
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {/* Seat cards in group */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {group.seats.map((seat) => {
+                  const isSeatSelected = selectedSeatIds.includes(seat.id)
+
+                  return (
+                    <SeatCard
+                      key={seat.id}
+                      seat={{
+                        id: seat.id,
+                        label: seat.label,
+                        position: seat.position,
+                        pricePerHour: seat.pricePerHour,
+                        tags: seat.tags,
+                        imageUrls: seat.imageUrls,
+                      }}
+                      table={{
+                        id: group.tableId,
+                        name: table?.name || null,
+                        imageUrls: (table?.imageUrls as string[]) || [],
+                      }}
+                      isAvailable={true}
+                      isSelected={isSeatSelected}
+                      isCommunal={seat.isCommunal ?? false}
+                      onSelect={() => {
+                        setSelectedSeatIds(allSeatIdsInGroup)
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Main render function for seat selection
+  const renderSeatSelection = () => {
+    if (seatCount === 1) {
+      return renderSingleSeatSelection()
+    } else {
+      return renderMultiSeatSelection()
+    }
+  }
+
   return (
     <>
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Date</label>
-            <input
-              type="date"
-              className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              min={new Date().toISOString().split("T")[0]}
-              required
-            />
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Time Selection */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Date
+              </label>
+              <input
+                type="date"
+                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                value={date}
+                onChange={(e) => {
+                  setDate(e.target.value)
+                  setAvailableSeats([])
+                  setAvailableSeatGroups([])
+                  setSelectedSeatId(null)
+                  setSelectedSeatIds([])
+                }}
+                min={new Date().toISOString().split("T")[0]}
+                required
+              />
+            </div>
+
+            <div className="flex flex-col space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Start time
+              </label>
+              <input
+                type="time"
+                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                value={startTime}
+                onChange={(e) => {
+                  setStartTime(e.target.value)
+                  setAvailableSeats([])
+                  setAvailableSeatGroups([])
+                  setSelectedSeatId(null)
+                  setSelectedSeatIds([])
+                }}
+                required
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Start time</label>
-            <input
-              type="time"
-              className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              required
-            />
-          </div>
-        </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Duration
+              </label>
+              <select
+                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                value={durationHours}
+                onChange={(e) => {
+                  setDurationHours(Number(e.target.value))
+                  setAvailableSeats([])
+                  setAvailableSeatGroups([])
+                  setSelectedSeatId(null)
+                  setSelectedSeatIds([])
+                }}
+              >
+                {Array.from({ length: 8 }, (_, i) => i + 1).map((h) => (
+                  <option key={h} value={h}>
+                    {h} hour{h > 1 ? "s" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Duration</label>
-            <select
-              className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-              value={durationHours}
-              onChange={(e) => setDurationHours(Number(e.target.value))}
-            >
-              {Array.from({ length: 8 }, (_, i) => i + 1).map((h) => (
-                <option
-                  key={h}
-                  value={h}
-                >
-                  {h} hour{h > 1 ? "s" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Seats</label>
-            <select
-              className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
-              value={seats}
-              onChange={(e) => setSeats(Number(e.target.value))}
-            >
-              {Array.from({ length: Math.min(8, Math.max(1, maxCapacity)) }, (_, i) => i + 1).map(
-                (s) => (
-                  <option
-                    key={s}
-                    value={s}
-                  >
+            <div className="flex flex-col space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Number of seats
+              </label>
+              <select
+                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                value={seatCount}
+                onChange={(e) => {
+                  setSeatCount(Number(e.target.value))
+                  setAvailableSeats([])
+                  setAvailableSeatGroups([])
+                  setSelectedSeatId(null)
+                  setSelectedSeatIds([])
+                }}
+              >
+                {Array.from({ length: 8 }, (_, i) => i + 1).map((s) => (
+                  <option key={s} value={s}>
                     {s} seat{s > 1 ? "s" : ""}
                   </option>
-                )
-              )}
-            </select>
+                ))}
+              </select>
+            </div>
           </div>
+
+          <Button
+            type="button"
+            onClick={handleCheckAvailability}
+            disabled={!canCheckAvailability}
+            className="w-full"
+            variant="outline"
+          >
+            {isLoadingAvailability ? "Checking..." : "Check availability"}
+          </Button>
         </div>
 
-        <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
-          <span className="text-xs font-medium text-muted-foreground">Estimated total</span>
-          <span className="text-sm font-semibold">
-            ${totalPrice.toFixed(0)}
-            <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-              ({seats} seat{seats > 1 ? "s" : ""} · {durationHours}h)
-            </span>
-          </span>
-        </div>
+        {/* Seat Selection */}
+        {hasAvailabilityData && (
+          <div className="space-y-4 border-t pt-4">
+            <h3 className="text-sm font-medium">
+              {seatCount === 1 ? "Select a seat" : `Select ${seatCount} seats`}
+            </h3>
 
-        {error && (
-          <p className="text-xs text-red-600">
-            {error}
+            {renderSeatSelection()}
+
+            {/* Price estimate */}
+            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) || 
+              (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
+              <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Estimated total
+                </span>
+                <span className="text-sm font-semibold">
+                  ${totalPrice.toFixed(0)}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    ({durationHours}h)
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
+
+        {!hasAvailabilityData && (
+          <p className="text-xs text-muted-foreground">
+            Select a date and time, then click "Check availability" to see available seats.
           </p>
         )}
 
-        <Button
-          type="submit"
-          className="mt-1 w-full"
-          size="lg"
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Reserving..." : "Reserve seats"}
-        </Button>
+        {/* Only show reserve button after a selection is made */}
+        {hasAvailabilityData && 
+         ((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
+          (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
+          <>
+            <Button
+              type="submit"
+              className="mt-1 w-full"
+              size="lg"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Reserving..." : "Reserve seat"}
+            </Button>
 
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          You’ll only be charged later when we add payments. For now, this reserves your seats
-          without payment.
-        </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              You'll only be charged later when we add payments. For now, this
+              reserves your seat without payment.
+            </p>
+          </>
+        )}
       </form>
 
       {ToastComponent}
@@ -279,4 +870,3 @@ export function VenueBookingWidget({
     </>
   )
 }
-

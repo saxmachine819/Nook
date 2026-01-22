@@ -16,18 +16,49 @@ export async function POST(request: NextRequest) {
     // Validate tables
     if (!body.tables || !Array.isArray(body.tables) || body.tables.length === 0) {
       return NextResponse.json(
-        { error: "At least one table with name and seatCount is required" },
+        { error: "At least one table with name and seats is required" },
         { status: 400 }
       )
     }
 
-    // Validate each table
+    // Validate each table and its seats
     for (const table of body.tables) {
-      if (!table.name || typeof table.seatCount !== "number" || table.seatCount < 1) {
+      if (!table.name || !table.seats || !Array.isArray(table.seats) || table.seats.length === 0) {
         return NextResponse.json(
-          { error: "Each table must have a name and seatCount (minimum 1)" },
+          { error: "Each table must have a name and at least one seat" },
           { status: 400 }
         )
+      }
+
+      // Validate booking mode
+      const bookingMode = table.bookingMode || "individual"
+      if (bookingMode !== "group" && bookingMode !== "individual") {
+        return NextResponse.json(
+          { error: "bookingMode must be 'group' or 'individual'" },
+          { status: 400 }
+        )
+      }
+
+      // Validate group mode requires tablePricePerHour
+      if (bookingMode === "group") {
+        if (typeof table.tablePricePerHour !== "number" || table.tablePricePerHour <= 0) {
+          return NextResponse.json(
+            { error: "Group booking mode requires tablePricePerHour greater than 0" },
+            { status: 400 }
+          )
+        }
+      }
+
+      // Validate individual mode: each seat has pricePerHour
+      if (bookingMode === "individual") {
+        for (const seat of table.seats) {
+          if (typeof seat.pricePerHour !== "number" || seat.pricePerHour <= 0) {
+            return NextResponse.json(
+              { error: "Each seat must have a valid pricePerHour greater than 0" },
+              { status: 400 }
+            )
+          }
+        }
       }
     }
 
@@ -47,7 +78,7 @@ export async function POST(request: NextRequest) {
       ? (typeof body.longitude === 'string' ? parseFloat(body.longitude) : body.longitude)
       : null
 
-    // Create venue with tables in a transaction
+    // Create venue with tables and seats in a transaction
     const venue = await prisma.venue.create({
       data: {
         name: body.name.trim(),
@@ -70,14 +101,41 @@ export async function POST(request: NextRequest) {
         heroImageUrl: body.heroImageUrl?.trim() || null,
         imageUrls: body.imageUrls || null,
         tables: {
-          create: body.tables.map((table: { name: string; seatCount: number }) => ({
-            name: table.name.trim(),
-            seatCount: Number(table.seatCount),
-          })),
+          create: body.tables.map((table: any) => {
+            const bookingMode = table.bookingMode || "individual"
+            const tablePricePerHour = bookingMode === "group" ? Number(table.tablePricePerHour) : null
+
+            return {
+              name: table.name.trim(),
+              seatCount: table.seats.length,
+              bookingMode,
+              tablePricePerHour,
+              imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
+                ? table.imageUrls
+                : null,
+              seats: {
+                create: table.seats.map((seat: any, index: number) => ({
+                  pricePerHour: Number(seat.pricePerHour),
+                  position: seat.position ?? index + 1, // Auto-assign position if not provided (1-indexed)
+                  label: seat.label?.trim() || null,
+                  tags: seat.tags && Array.isArray(seat.tags) && seat.tags.length > 0
+                    ? seat.tags
+                    : null,
+                  imageUrls: seat.imageUrls && Array.isArray(seat.imageUrls) && seat.imageUrls.length > 0
+                    ? seat.imageUrls
+                    : null,
+                })),
+              },
+            }
+          }),
         },
       },
       include: {
-        tables: true,
+        tables: {
+          include: {
+            seats: true,
+          },
+        },
       },
     })
 

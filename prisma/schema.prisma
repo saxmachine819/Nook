@@ -37,15 +37,19 @@ model Venue {
 }
 
 model Table {
-  id           String        @id @default(cuid())
-  venueId      String
-  name         String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  seatCount    Int           @default(1)
-  reservations Reservation[]
-  seats        Seat[]
-  venue        Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  venueId         String
+  name            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  seatCount       Int           @default(1)
+  bookingMode     String        @default("individual") // "group" | "individual"
+  tablePricePerHour Float?      // For group bookings
+  isCommunal      Boolean       @default(false) // For communal spaces like bars
+  imageUrls        Json?
+  reservations    Reservation[]
+  seats            Seat[]
+  venue            Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@map("tables")
 }
@@ -54,6 +58,11 @@ model Seat {
   id           String        @id @default(cuid())
   tableId      String
   name         String?
+  label        String?
+  position     Int?          // Position within table (1, 2, 3...) for adjacency checking
+  pricePerHour Float
+  tags         Json?
+  imageUrls    Json?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   reservations Reservation[]

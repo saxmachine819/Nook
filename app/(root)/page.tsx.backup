@@ -1,0 +1,206 @@
+import { prisma } from "@/lib/prisma"
+import { ExploreClient } from "./ExploreClient"
+
+function roundUpToNext15Minutes(date: Date): Date {
+  const result = new Date(date)
+  const minutes = result.getMinutes()
+  const remainder = minutes % 15
+  if (remainder !== 0) {
+    result.setMinutes(minutes + (15 - remainder), 0, 0)
+  } else if (result.getSeconds() > 0 || result.getMilliseconds() > 0) {
+    result.setMinutes(minutes + 15, 0, 0)
+  } else {
+    result.setSeconds(0, 0)
+  }
+  return result
+}
+
+function formatTimeLabel(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function computeAvailabilityLabel(
+  capacity: number,
+  reservations: { startAt: Date; endAt: Date; seatCount: number }[]
+): string {
+  if (capacity <= 0) return "Sold out for now"
+
+  const now = new Date()
+  const startBase = roundUpToNext15Minutes(now)
+  const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
+  const slotMs = 15 * 60 * 1000 // 15 minutes
+
+  for (let offset = 0; offset < horizonMs; offset += slotMs) {
+    const windowStart = new Date(startBase.getTime() + offset)
+    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
+
+    const bookedSeats = reservations.reduce((sum, res) => {
+      if (res.startAt < windowEnd && res.endAt > windowStart) {
+        return sum + res.seatCount
+      }
+      return sum
+    }, 0)
+
+    if (bookedSeats < capacity) {
+      if (offset === 0) {
+        return "Available now"
+      }
+      return `Next available at ${formatTimeLabel(windowStart)}`
+    }
+  }
+
+  return "Sold out for now"
+}
+
+export default async function ExplorePage() {
+  // #region agent log
+  console.error('[DEBUG] ExplorePage server component entry', {timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+  // #endregion
+  try {
+    const now = new Date()
+    const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
+
+    // Fetch all venues from database
+    // #region agent log
+    console.error('[DEBUG] Before Prisma venues query', {timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+    const venues = await prisma.venue.findMany({
+      include: {
+        tables: {
+          include: {
+            seats: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    })
+    // #region agent log
+    console.error('[DEBUG] After Prisma venues query', {venueCount:venues.length,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+
+    const venueIds = venues.map((v) => v.id)
+
+    // Fetch reservations for all venues in the next 12 hours (active only)
+    const reservations = venueIds.length
+      ? await prisma.reservation.findMany({
+          where: {
+            venueId: { in: venueIds },
+            status: {
+              not: "cancelled",
+            },
+            startAt: {
+              lt: horizonEnd,
+            },
+            endAt: {
+              gt: now,
+            },
+          },
+          select: {
+            venueId: true,
+            startAt: true,
+            endAt: true,
+            seatCount: true,
+          },
+        })
+      : []
+    // #region agent log
+    console.error('[DEBUG] After Prisma reservations query', {reservationCount:reservations.length,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+
+    const reservationsByVenue = reservations.reduce<
+      Record<string, { startAt: Date; endAt: Date; seatCount: number }[]>
+    >((acc, res) => {
+      if (!acc[res.venueId]) acc[res.venueId] = []
+      acc[res.venueId].push({
+        startAt: res.startAt,
+        endAt: res.endAt,
+        seatCount: res.seatCount,
+      })
+      return acc
+    }, {})
+
+    // #region agent log
+    console.error('[DEBUG] Before formatting venues', {venueCount:venues.length,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+    // Format venues for client component
+    const formattedVenues = venues.map((venue, venueIndex) => {
+      // #region agent log
+      if (venueIndex === 0) {
+        console.error('[DEBUG] Processing first venue', {venueId:venue.id,tableCount:venue.tables?.length,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+      }
+      // #endregion
+      // Calculate capacity from actual seats
+      const allSeats = venue.tables.flatMap(table => table.seats)
+      const capacity = allSeats.length
+      
+      // Calculate pricing based on booking modes
+      const groupTables = venue.tables.filter(t => (t as any).bookingMode === "group")
+      const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
+      
+      let averageSeatPrice = venue.hourlySeatPrice
+      
+      if (individualTables.length > 0) {
+        const individualSeats = individualTables.flatMap(t => t.seats)
+        if (individualSeats.length > 0) {
+          // #region agent log
+          if (venueIndex === 0) {
+            console.error('[DEBUG] Calculating individual seat prices', {individualSeatsCount:individualSeats.length,firstSeatPrice:(individualSeats[0] as any)?.pricePerHour,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'});
+          }
+          // #endregion
+          averageSeatPrice = individualSeats.reduce((sum, seat) => sum + (seat as any).pricePerHour, 0) / individualSeats.length
+        }
+      } else if (groupTables.length > 0) {
+        // Only group tables - calculate average table price per seat
+        // #region agent log
+        if (venueIndex === 0) {
+          console.error('[DEBUG] Calculating group table prices', {groupTablesCount:groupTables.length,firstTablePrice:(groupTables[0] as any)?.tablePricePerHour,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'});
+        }
+        // #endregion
+        const groupPrices = groupTables
+          .filter(t => (t as any).tablePricePerHour)
+          .map(t => ({ price: (t as any).tablePricePerHour!, seatCount: t.seats.length }))
+        if (groupPrices.length > 0) {
+          const totalPricePerSeat = groupPrices.reduce((sum, t) => sum + (t.price / t.seatCount), 0)
+          averageSeatPrice = totalPricePerSeat / groupPrices.length
+        }
+      }
+      
+      const venueReservations = reservationsByVenue[venue.id] || []
+      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations)
+
+      return {
+        id: venue.id,
+        name: venue.name,
+        address: venue.address || "",
+        neighborhood: venue.neighborhood || "",
+        city: venue.city || "",
+        state: venue.state || "",
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        hourlySeatPrice: averageSeatPrice, // Use average seat price for display
+        tags: venue.tags || [],
+        capacity,
+        rulesText: venue.rulesText || "",
+        availabilityLabel,
+      }
+    })
+
+    // #region agent log
+    console.error('[DEBUG] Before returning ExploreClient', {formattedVenuesCount:formattedVenues.length,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+
+    return <ExploreClient venues={formattedVenues} />
+  } catch (error) {
+    // #region agent log
+    console.error('[DEBUG] Error in ExplorePage', {error:error instanceof Error ? error.message : String(error),stack:error instanceof Error ? error.stack : undefined,errorType:error?.constructor?.name,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
+    // #endregion
+    console.error("Error fetching venues:", error)
+    // Return empty array on error to prevent page crash
+    return <ExploreClient venues={[]} />
+  }
+}

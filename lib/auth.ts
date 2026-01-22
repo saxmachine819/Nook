@@ -21,7 +21,7 @@ if (!process.env.NEXTAUTH_URL) {
 export const authOptions: NextAuthOptions = {
   debug: true, // Always debug for now
   trustHost: true, // Required for NextAuth v5
-  adapter: PrismaAdapter(prisma) as any,
+    adapter: PrismaAdapter(prisma) as any,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -60,9 +60,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, user }) {
       // With database sessions, 'user' comes from the database
-      // If user is null, the session is invalid (user was deleted or doesn't exist)
       if (!user) {
-        console.error("❌ Session callback: user is null")
         return session
       }
       

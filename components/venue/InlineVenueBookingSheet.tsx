@@ -9,7 +9,6 @@ interface InlineVenue {
   id: string
   name: string
   address: string
-  neighborhood?: string
   city?: string
   state?: string
   hourlySeatPrice: number
@@ -156,7 +155,6 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
   }
 
   const locationDisplay =
-    venue.neighborhood ||
     venue.address ||
     (venue.city && venue.state ? `${venue.city}, ${venue.state}` : venue.city || "")
 
@@ -176,7 +174,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
               )}
               <p className="text-xs font-medium text-foreground">
                 ${venue.hourlySeatPrice.toFixed(0)}
-                <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
                   / seat / hour · {venue.capacity} seats
                 </span>
               </p>
@@ -192,7 +190,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
 
           <div className="mb-3 flex items-center gap-2">
             <div className="flex-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Date</label>
+              <label className="text-xs font-medium text-muted-foreground">Date</label>
               <input
                 type="date"
                 className="mt-0.5 w-full rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
@@ -201,7 +199,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-[11px] font-medium text-muted-foreground">Seats</label>
+              <label className="text-xs font-medium text-muted-foreground">Seats</label>
               <select
                 className="mt-0.5 rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={seats}
@@ -221,7 +219,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
               </select>
             </div>
             <div className="flex flex-col">
-              <label className="text-[11px] font-medium text-muted-foreground">Duration</label>
+              <label className="text-xs font-medium text-muted-foreground">Duration</label>
               <select
                 className="mt-0.5 rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={durationSlots}
@@ -248,7 +246,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
           </div>
 
           <div className="mb-2">
-            <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">
               Start time
             </p>
             <div className="no-scrollbar flex gap-1 overflow-x-auto pb-1">
@@ -281,7 +279,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
                       disabled={disabled}
                       onClick={() => setSelectedSlot(slot)}
                       className={[
-                        "whitespace-nowrap rounded-full border px-3 py-1 text-[11px] font-medium",
+                        "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium",
                         disabled
                           ? "border-muted-foreground/20 bg-muted text-muted-foreground/60 line-through"
                           : isSelected
@@ -297,7 +295,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
           </div>
 
           {submitError && (
-            <p className="mb-1 text-[11px] text-red-600">
+            <p className="mb-1 text-xs text-red-600">
               {submitError}
             </p>
           )}

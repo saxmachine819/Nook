@@ -15,9 +15,15 @@ type ReservationForConfirmation = {
   venue: {
     name: string
     address: string | null
-    hourlySeatPrice: number
+    hourlySeatPrice: number // Fallback for backward compatibility
+    averageSeatPrice?: number // Seat-level pricing (preferred)
     rulesText: string | null
   }
+  seat?: {
+    id: string
+    label: string | null
+    pricePerHour: number
+  } | null
 }
 
 function formatDateTimeRange(startAtISO: string, endAtISO: string) {
@@ -122,7 +128,12 @@ export function BookingConfirmationModal({
 
     const { date, timeRange } = formatDateTimeRange(reservation.startAt, reservation.endAt)
     const hours = hoursBetween(reservation.startAt, reservation.endAt)
-    const estimated = reservation.venue.hourlySeatPrice * hours * reservation.seatCount
+    // Use seat.pricePerHour if available, otherwise fallback to averageSeatPrice or hourlySeatPrice
+    const pricePerSeatPerHour =
+      reservation.seat?.pricePerHour ??
+      reservation.venue.averageSeatPrice ??
+      reservation.venue.hourlySeatPrice
+    const estimated = pricePerSeatPerHour * hours * reservation.seatCount
 
     const googleUrl = (() => {
       const text = `Nook: Reservation @ ${reservation.venue.name}`
@@ -154,7 +165,7 @@ export function BookingConfirmationModal({
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => onOpenChange(isOpen)}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="mb-2 flex justify-center">
             <div className="rounded-full bg-emerald-50 p-3">
@@ -192,9 +203,16 @@ export function BookingConfirmationModal({
 
                     <div className="flex items-center gap-2 text-sm">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <p className="font-medium">
-                        {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
-                      </p>
+                      <div>
+                        <p className="font-medium">
+                          {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
+                        </p>
+                        {reservation.seat?.label && (
+                          <p className="text-xs text-muted-foreground">
+                            {reservation.seat.label}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
 
