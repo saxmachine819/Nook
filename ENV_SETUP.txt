@@ -1,5 +1,8 @@
 Add these lines to your .env file:
 
+# Optional: set NEXT_PUBLIC_SKIP_AUTH=0 or false to enable SessionProvider (Profile/sign-in).
+# When unset or true, auth is skipped to avoid white screen; Explore works, Profile breaks.
+
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="oY05KLtM5kB+sCnKgEaejYIRx45AhhSGVVKT2VwwOfo="
 GOOGLE_CLIENT_ID="249190954079-2vk375i4ha5q0cifdi728bfa0o3r4coq.apps.googleusercontent.com"

@@ -55,13 +55,32 @@ function computeAvailabilityLabel(
   return "Sold out for now"
 }
 
-export default async function ExplorePage() {
+interface ExplorePageProps {
+  searchParams: { q?: string }
+}
+
+export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   try {
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
+    const q = searchParams?.q?.trim() || ""
 
-    // Fetch all venues from database
-    const venues = await prisma.venue.findMany({
+    // Build where clause for search
+    const whereClause: any = {}
+
+    if (q.length > 0) {
+      const searchConditions: any[] = [
+        { name: { contains: q, mode: "insensitive" as const } },
+        { address: { contains: q, mode: "insensitive" as const } },
+        { city: { contains: q, mode: "insensitive" as const } },
+        { neighborhood: { contains: q, mode: "insensitive" as const } },
+      ]
+      whereClause.OR = searchConditions
+    }
+
+    // Fetch venues from database (with optional search filter)
+    let venues = await prisma.venue.findMany({
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       include: {
         tables: {
           include: {
@@ -69,10 +88,31 @@ export default async function ExplorePage() {
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      take: 100, // Limit results
+      orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
     })
+
+    // Filter by tags if query provided (case-insensitive)
+    if (q.length > 0) {
+      const queryLower = q.toLowerCase()
+      venues = venues.filter((venue) => {
+        // Check if already matched by other fields
+        const matchedByOtherFields = 
+          venue.name.toLowerCase().includes(queryLower) ||
+          venue.address?.toLowerCase().includes(queryLower) ||
+          venue.city?.toLowerCase().includes(queryLower) ||
+          venue.neighborhood?.toLowerCase().includes(queryLower)
+
+        if (matchedByOtherFields) return true
+
+        // Check tags array
+        if (Array.isArray(venue.tags) && venue.tags.length > 0) {
+          return venue.tags.some((tag: string) => tag.toLowerCase().includes(queryLower))
+        }
+
+        return false
+      })
+    }
 
     const venueIds = venues.map((v) => v.id)
 

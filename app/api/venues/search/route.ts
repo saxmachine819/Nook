@@ -58,41 +58,115 @@ function computeAvailabilityLabel(
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const north = parseFloat(searchParams.get("north") || "")
-    const south = parseFloat(searchParams.get("south") || "")
-    const east = parseFloat(searchParams.get("east") || "")
-    const west = parseFloat(searchParams.get("west") || "")
+    const north = searchParams.get("north")
+    const south = searchParams.get("south")
+    const east = searchParams.get("east")
+    const west = searchParams.get("west")
+    const q = searchParams.get("q")?.trim() || ""
+    
+    // Filter parameters
+    const tagsParam = searchParams.get("tags")
+    const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : []
+    const priceMin = searchParams.get("priceMin")
+    const priceMax = searchParams.get("priceMax")
+    const priceMinNum = priceMin ? parseFloat(priceMin) : null
+    const priceMaxNum = priceMax ? parseFloat(priceMax) : null
+    const seatCountParam = searchParams.get("seatCount")
+    const seatCount = seatCountParam ? parseInt(seatCountParam, 10) : null
+    const bookingModeParam = searchParams.get("bookingMode")
+    const bookingModes = bookingModeParam ? (bookingModeParam.split(",").filter(Boolean) as ("communal" | "full-table")[]) : []
+    // Note: openNow is not implemented yet (coming soon)
 
-    // Validate bounds
-    if (
-      isNaN(north) ||
-      isNaN(south) ||
-      isNaN(east) ||
-      isNaN(west) ||
-      north <= south ||
-      east <= west
-    ) {
-      return NextResponse.json(
-        { error: "Invalid map bounds provided." },
-        { status: 400 }
-      )
+    // Validate bounds if provided
+    const hasBounds = north && south && east && west
+    let boundsValid = false
+    let parsedBounds: { north: number; south: number; east: number; west: number } | null = null
+
+    if (hasBounds) {
+      const northNum = parseFloat(north)
+      const southNum = parseFloat(south)
+      const eastNum = parseFloat(east)
+      const westNum = parseFloat(west)
+
+      if (
+        !isNaN(northNum) &&
+        !isNaN(southNum) &&
+        !isNaN(eastNum) &&
+        !isNaN(westNum) &&
+        northNum > southNum &&
+        eastNum > westNum
+      ) {
+        boundsValid = true
+        parsedBounds = { north: northNum, south: southNum, east: eastNum, west: westNum }
+      } else if (hasBounds) {
+        // Bounds provided but invalid
+        return NextResponse.json(
+          { error: "Invalid map bounds provided." },
+          { status: 400 }
+        )
+      }
     }
 
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
 
-    // Query venues within bounds
-    const venues = await prisma.venue.findMany({
-      where: {
-        latitude: {
-          gte: south,
-          lte: north,
-        },
-        longitude: {
-          gte: west,
-          lte: east,
-        },
-      },
+    // Build where clause
+    const whereClause: any = {}
+
+    // Add bounds filter if valid bounds provided
+    if (boundsValid && parsedBounds) {
+      whereClause.latitude = {
+        gte: parsedBounds.south,
+        lte: parsedBounds.north,
+      }
+      whereClause.longitude = {
+        gte: parsedBounds.west,
+        lte: parsedBounds.east,
+      }
+    }
+
+    // Add text search filter if query provided
+    if (q.length > 0) {
+      const searchConditions: any[] = [
+        { name: { contains: q, mode: "insensitive" as const } },
+        { address: { contains: q, mode: "insensitive" as const } },
+      ]
+
+      // Add city and neighborhood if they exist
+      if (q.length > 0) {
+        searchConditions.push({ city: { contains: q, mode: "insensitive" as const } })
+        searchConditions.push({ neighborhood: { contains: q, mode: "insensitive" as const } })
+      }
+
+      // For tags array search, we'll filter in JavaScript after fetching
+      // Prisma doesn't have great array contains with case-insensitive matching
+      whereClause.OR = searchConditions
+    }
+
+    // Add tags filter (hasSome - match any selected tag)
+    if (tags.length > 0) {
+      whereClause.tags = {
+        hasSome: tags,
+      }
+    }
+
+    // Add price filter (using venue.hourlySeatPrice as "starting at" price)
+    if (priceMinNum !== null && !isNaN(priceMinNum)) {
+      whereClause.hourlySeatPrice = {
+        ...(whereClause.hourlySeatPrice || {}),
+        gte: priceMinNum,
+      }
+    }
+    if (priceMaxNum !== null && !isNaN(priceMaxNum)) {
+      whereClause.hourlySeatPrice = {
+        ...(whereClause.hourlySeatPrice || {}),
+        lte: priceMaxNum,
+      }
+    }
+
+    // Query venues with filters
+    let venues = await prisma.venue.findMany({
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       include: {
         tables: {
           include: {
@@ -100,10 +174,62 @@ export async function GET(request: Request) {
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      take: 100, // Limit results
+      orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
     })
+
+    // Filter by tags if query provided (case-insensitive)
+    if (q.length > 0) {
+      const queryLower = q.toLowerCase()
+      venues = venues.filter((venue) => {
+        // Check if already matched by other fields
+        const matchedByOtherFields = 
+          venue.name.toLowerCase().includes(queryLower) ||
+          venue.address?.toLowerCase().includes(queryLower) ||
+          venue.city?.toLowerCase().includes(queryLower) ||
+          venue.neighborhood?.toLowerCase().includes(queryLower)
+
+        if (matchedByOtherFields) return true
+
+        // Check tags array
+        if (Array.isArray(venue.tags) && venue.tags.length > 0) {
+          return venue.tags.some((tag: string) => tag.toLowerCase().includes(queryLower))
+        }
+
+        return false
+      })
+    }
+
+    // Apply seat count filter (requires calculating capacity)
+    if (seatCount !== null && !isNaN(seatCount) && seatCount > 0) {
+      venues = venues.filter((venue) => {
+        // Calculate total capacity
+        const capacity = venue.tables.reduce((sum, table) => {
+          if (table.seats.length > 0) {
+            return sum + table.seats.length
+          }
+          return sum + (table.seatCount || 0)
+        }, 0)
+        return capacity >= seatCount
+      })
+    }
+
+    // Apply booking mode filter (multiple modes can be selected)
+    if (bookingModes.length > 0) {
+      venues = venues.filter((venue) => {
+        // Check if venue matches any of the selected booking modes
+        return bookingModes.some((mode) => {
+          if (mode === "communal") {
+            // Check if venue has any communal tables
+            return venue.tables.some((table) => (table as any).isCommunal === true)
+          } else if (mode === "full-table") {
+            // Check if venue has any group booking mode tables
+            return venue.tables.some((table) => (table as any).bookingMode === "group")
+          }
+          return false
+        })
+      })
+    }
 
     const venueIds = venues.map((v) => v.id)
 

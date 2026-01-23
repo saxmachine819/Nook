@@ -216,7 +216,7 @@ export default async function VenuePage({ params }: VenuePageProps) {
           <CardContent>
             <VenueBookingWidget
               venueId={venue.id}
-              tables={individualTablesForBooking}
+              tables={individualTablesForBooking as any}
             />
           </CardContent>
         </Card>

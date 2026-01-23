@@ -19,9 +19,11 @@ interface Venue {
 interface MapboxMapProps {
   venues: Venue[]
   onSelectVenue?: (id: string) => void
+  onMapClick?: () => void
   userLocation?: { lat: number; lng: number } | null
   onSearchArea?: (bounds: { north: number; south: number; east: number; west: number }) => void
   isSearching?: boolean
+  centerOnVenueId?: string | null
 }
 
 // NYC coordinates (default center)
@@ -30,9 +32,11 @@ const NYC_CENTER = { lat: 40.7128, lng: -74.006 }
 export function MapboxMap({
   venues,
   onSelectVenue,
+  onMapClick,
   userLocation,
   onSearchArea,
   isSearching = false,
+  centerOnVenueId,
 }: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -41,15 +45,19 @@ export function MapboxMap({
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
   const hasFitBoundsRef = useRef<boolean>(false) // Track if we've done initial fitBounds
   const onSelectVenueRef = useRef<((id: string) => void) | undefined>(onSelectVenue) // Keep callback current
+  const onMapClickRef = useRef<(() => void) | undefined>(onMapClick)
   const pinImageLoadedRef = useRef<boolean>(false) // Track if pin image has been loaded
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState<string | null>(null)
   const [showSearchButton, setShowSearchButton] = useState(false)
 
-  // Keep callback ref up-to-date
+  // Keep callback refs up-to-date
   useEffect(() => {
     onSelectVenueRef.current = onSelectVenue
   }, [onSelectVenue])
+  useEffect(() => {
+    onMapClickRef.current = onMapClick
+  }, [onMapClick])
 
   // Convert venues array to GeoJSON FeatureCollection
   const venuesToGeoJSON = (venues: Venue[]) => {
@@ -116,13 +124,13 @@ export function MapboxMap({
   // Initialize venues source and layers
   const initializeVenuesSource = (map: mapboxgl.Map) => {
 
-    // Remove existing event listeners if they exist
-    map.off("click", "clusters")
-    map.off("click", "unclustered-point")
-    map.off("mouseenter", "clusters")
-    map.off("mouseleave", "clusters")
-    map.off("mouseenter", "unclustered-point")
-    map.off("mouseleave", "unclustered-point")
+    // Remove existing event listeners if they exist (layer-specific off; Mapbox types expect listener)
+    ;(map as any).off("click", "clusters")
+    ;(map as any).off("click", "unclustered-point")
+    ;(map as any).off("mouseenter", "clusters")
+    ;(map as any).off("mouseleave", "clusters")
+    ;(map as any).off("mouseenter", "unclustered-point")
+    ;(map as any).off("mouseleave", "unclustered-point")
 
     // Remove existing source and layers if they exist
     if (map.getSource("venues")) {
@@ -202,12 +210,12 @@ export function MapboxMap({
       if (clusterId !== undefined) {
         const source = map.getSource("venues") as mapboxgl.GeoJSONSource
         source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err) return
+          if (err || zoom == null) return
 
           const coordinates = (features[0].geometry as { type: "Point"; coordinates: [number, number] }).coordinates
           map.easeTo({
             center: [coordinates[0], coordinates[1]],
-            zoom: zoom,
+            zoom,
             duration: 500,
           })
         })
@@ -463,23 +471,38 @@ export function MapboxMap({
           west: bounds.getWest(),
         }
 
-        // Check if bounds have changed significantly
-        if (currentBoundsRef.current) {
-          const threshold = 0.001 // Small threshold to avoid flickering
-          const hasChanged =
-            Math.abs(newBounds.north - currentBoundsRef.current.north) > threshold ||
-            Math.abs(newBounds.south - currentBoundsRef.current.south) > threshold ||
-            Math.abs(newBounds.east - currentBoundsRef.current.east) > threshold ||
-            Math.abs(newBounds.west - currentBoundsRef.current.west) > threshold
+        // Initialize currentBoundsRef if it doesn't exist
+        if (!currentBoundsRef.current) {
+          currentBoundsRef.current = newBounds
+          return
+        }
 
-          if (hasChanged && onSearchArea) {
-            setShowSearchButton(true)
-          }
+        // Check if bounds have changed significantly
+        const threshold = 0.001 // Small threshold to avoid flickering
+        const hasChanged =
+          Math.abs(newBounds.north - currentBoundsRef.current.north) > threshold ||
+          Math.abs(newBounds.south - currentBoundsRef.current.south) > threshold ||
+          Math.abs(newBounds.east - currentBoundsRef.current.east) > threshold ||
+          Math.abs(newBounds.west - currentBoundsRef.current.west) > threshold
+
+        if (hasChanged && onSearchArea) {
+          setShowSearchButton(true)
         }
       }
 
       map.on("moveend", handleMoveEnd)
       map.on("zoomend", handleMoveEnd)
+
+      const handleMapClick = (e: mapboxgl.MapMouseEvent) => {
+        if (!map.loaded()) return
+        const features = map.queryRenderedFeatures(e.point, {
+          layers: ["clusters", "unclustered-point"],
+        })
+        if (features.length === 0 && onMapClickRef.current) {
+          onMapClickRef.current()
+        }
+      }
+      map.on("click", handleMapClick)
 
       map.on("error", (e: any) => {
         if (loadTimeoutRef.current) {
@@ -548,14 +571,18 @@ export function MapboxMap({
           userLocationMarkerRef.current = null
         }
         if (mapRef.current) {
-          // Remove event listeners
-          mapRef.current.off("click", "clusters")
-          mapRef.current.off("click", "unclustered-point")
-          mapRef.current.off("mouseenter", "clusters")
-          mapRef.current.off("mouseleave", "clusters")
-          mapRef.current.off("mouseenter", "unclustered-point")
-          mapRef.current.off("mouseleave", "unclustered-point")
-          mapRef.current.remove()
+          // Remove event listeners (handleMapClick is in closure; off uses same reference)
+          const m = mapRef.current as any
+          m.off("click", "clusters")
+          m.off("click", "unclustered-point")
+          m.off("mouseenter", "clusters")
+          m.off("mouseleave", "clusters")
+          m.off("mouseenter", "unclustered-point")
+          m.off("mouseleave", "unclustered-point")
+          m.off("click", handleMapClick)
+          m.off("moveend", handleMoveEnd)
+          m.off("zoomend", handleMoveEnd)
+          m.remove()
           mapRef.current = null
         }
       }
@@ -592,6 +619,20 @@ export function MapboxMap({
       addUserLocationMarker(mapRef.current, userLocation)
     }
   }, [userLocation, isLoading])
+
+  // Fly to venue when centerOnVenueId is set
+  useEffect(() => {
+    if (!centerOnVenueId || !mapRef.current || isLoading || !mapRef.current.loaded()) return
+    const venue = venues.find(
+      (v) => v.id === centerOnVenueId && v.latitude != null && v.longitude != null
+    )
+    if (!venue) return
+    mapRef.current.flyTo({
+      center: [venue.longitude!, venue.latitude!],
+      zoom: 15,
+      duration: 600,
+    })
+  }, [centerOnVenueId, venues, isLoading])
 
   // Update venues source when venues change
   useEffect(() => {
@@ -714,7 +755,7 @@ export function MapboxMap({
         </div>
       )}
       {showSearchButton && !isLoading && (
-        <div className="absolute top-4 left-1/2 z-20 -translate-x-1/2">
+        <div className="absolute top-24 left-1/2 z-20 -translate-x-1/2">
           <Button
             size="sm"
             onClick={handleSearchArea}
