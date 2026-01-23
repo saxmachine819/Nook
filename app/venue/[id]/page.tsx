@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
+import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
 
 function safeStringArray(value: unknown): string[] {
   if (!value) return []
@@ -75,9 +76,10 @@ function computeAvailabilityLabel(
 
 interface VenuePageProps {
   params: { id: string }
+  searchParams: { returnTo?: string }
 }
 
-export default async function VenuePage({ params }: VenuePageProps) {
+export default async function VenuePage({ params, searchParams }: VenuePageProps) {
   let venue
   try {
     venue = await prisma.venue.findUnique({
@@ -250,16 +252,11 @@ export default async function VenuePage({ params }: VenuePageProps) {
         {/* Photo panel */}
         <div className="space-y-4">
           {/* Venue header */}
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              {venue.name}
-            </h1>
-            {venue.address && (
-              <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
-                {venue.address}
-              </p>
-            )}
-          </div>
+          <VenuePageHeader 
+            name={venue.name} 
+            address={venue.address}
+            returnTo={searchParams?.returnTo}
+          />
 
           {/* Photo */}
           <div className="relative overflow-hidden rounded-2xl border bg-muted">
@@ -304,14 +301,14 @@ export default async function VenuePage({ params }: VenuePageProps) {
                 </div>
                 <div className="text-right">
                   {minPrice === maxPrice ? (
-                    <div className="text-2xl font-semibold tracking-tight">
+                    <div className="text-lg font-semibold tracking-tight whitespace-nowrap">
                       ${minPrice.toFixed(0)}
                       <span className="ml-1 text-sm font-normal text-muted-foreground">
                         /hr
                       </span>
                     </div>
                   ) : (
-                    <div className="text-2xl font-semibold tracking-tight">
+                    <div className="text-lg font-semibold tracking-tight whitespace-nowrap">
                       ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
                       <span className="ml-1 text-sm font-normal text-muted-foreground">
                         /hr

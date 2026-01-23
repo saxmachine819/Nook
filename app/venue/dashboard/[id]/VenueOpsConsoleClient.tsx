@@ -51,6 +51,8 @@ interface VenueOpsConsoleClientProps {
     tables: Array<{
       id: string
       name: string | null
+      bookingMode: string | null
+      tablePricePerHour: number | null
       seats: Array<{
         id: string
         label: string | null
@@ -103,7 +105,7 @@ export function VenueOpsConsoleClient({
   const [searchQuery, setSearchQuery] = useState("")
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null)
   const [blockingSeat, setBlockingSeat] = useState<{ seatId: string | null; tableName: string } | null>(null)
-  const [selectedSeat, setSelectedSeat] = useState<{ seatId: string; tableName: string } | null>(null)
+  const [selectedSeat, setSelectedSeat] = useState<{ seatId: string; tableId: string; tableName: string; isGroupTable?: boolean } | null>(null)
   const [lastUpdated, setLastUpdated] = useState(new Date())
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isTabVisible, setIsTabVisible] = useState(true)
@@ -529,31 +531,138 @@ export function VenueOpsConsoleClient({
     }
   }
 
-  // Get seat status for a given seat
-  const getSeatStatus = (seatId: string): "available" | "reserved" | "blocked" => {
+  // Helper function to normalize dates (handles both Date objects and ISO strings)
+  const normalizeDate = (date: Date | string): Date => {
+    return typeof date === "string" ? new Date(date) : date
+  }
+
+  // Get table status for a group table (table-level bookings only)
+  const getTableStatus = (
+    tableId: string
+  ): {
+    status: "available" | "reserved" | "blocked"
+    reservation: Reservation | null
+    block: SeatBlock | null
+  } => {
+    // Check if any seat in the table is blocked (for group tables, blocks affect the whole table)
+    const table = venue.tables.find((t) => t.id === tableId)
+    if (table) {
+      const activeBlock = seatBlocks.find((block) => {
+        // Check if block is for any seat in this table, or if it's a venue-wide block (seatId is null)
+        if (block.seatId === null) {
+          // Venue-wide block affects all tables
+          const start = normalizeDate(block.startAt)
+          const end = normalizeDate(block.endAt)
+          return start <= currentTime && currentTime < end
+        }
+        // Check if block is for a seat in this table
+        const isSeatInTable = table.seats.some((seat) => seat.id === block.seatId)
+        if (!isSeatInTable) return false
+        const start = normalizeDate(block.startAt)
+        const end = normalizeDate(block.endAt)
+        return start <= currentTime && currentTime < end
+      })
+      if (activeBlock) {
+        return {
+          status: "blocked",
+          reservation: null,
+          block: activeBlock,
+        }
+      }
+    }
+
+    // Check if reserved (table-level reservation only for group tables)
+    const activeReservation = reservations.find((r) => {
+      if (r.status === "cancelled") return false
+      if (r.tableId !== tableId) return false
+      
+      const start = normalizeDate(r.startAt)
+      const end = normalizeDate(r.endAt)
+      const isCurrentlyActive = start <= currentTime && currentTime < end
+      
+      return isCurrentlyActive
+    })
+    
+    if (activeReservation) {
+      return {
+        status: "reserved",
+        reservation: activeReservation,
+        block: null,
+      }
+    }
+
+    return {
+      status: "available",
+      reservation: null,
+      block: null,
+    }
+  }
+
+  // Get seat status for a given seat (for individual booking mode)
+  const getSeatStatus = (
+    seatId: string,
+    tableId: string,
+    bookingMode: string | null
+  ): {
+    status: "available" | "reserved" | "blocked"
+    reservation: Reservation | null
+    block: SeatBlock | null
+  } => {
     // Check if blocked
-    const activeBlocks = seatBlocks.filter((block) => {
+    const activeBlock = seatBlocks.find((block) => {
       if (block.seatId !== seatId) return false
-      const start = new Date(block.startAt)
-      const end = new Date(block.endAt)
+      const start = normalizeDate(block.startAt)
+      const end = normalizeDate(block.endAt)
       return start <= currentTime && currentTime < end
     })
-    if (activeBlocks.length > 0) {
-      return "blocked"
+    if (activeBlock) {
+      return {
+        status: "blocked",
+        reservation: null,
+        block: activeBlock,
+      }
     }
 
     // Check if reserved
     const activeReservation = reservations.find((r) => {
-      if (r.seatId !== seatId || r.status === "cancelled") return false
-      const start = new Date(r.startAt)
-      const end = new Date(r.endAt)
-      return start <= currentTime && currentTime < end
+      if (r.status === "cancelled") return false
+      
+      const start = normalizeDate(r.startAt)
+      const end = normalizeDate(r.endAt)
+      const isCurrentlyActive = start <= currentTime && currentTime < end
+      
+      if (!isCurrentlyActive) return false
+      
+      // For individual booking mode, ONLY check seat-level reservations
+      // For group booking mode, check table-level reservations
+      if (bookingMode === "group") {
+        // Group booking mode: check for table-level reservation
+        if (r.tableId !== null && r.tableId !== undefined && r.tableId === tableId && r.seatId === null) {
+          return true
+        }
+      } else {
+        // Individual booking mode: ONLY check seat-level reservations
+        if (r.seatId !== null && r.seatId !== undefined && r.seatId === seatId) {
+          return true
+        }
+      }
+      
+      return false
     })
+    
     if (activeReservation) {
-      return "reserved"
+      return {
+        status: "reserved",
+        reservation: activeReservation,
+        block: null,
+      }
     }
 
-    return "available"
+    return {
+      status: "available",
+      reservation: null,
+      block: null,
+    }
   }
 
   // Format last updated time
@@ -671,12 +780,6 @@ export function VenueOpsConsoleClient({
 
                 {/* Reservations List */}
                 <div className="space-y-2 max-h-[600px] overflow-y-auto relative">
-                  {/* Sticky Section Header (only for upcoming tab) */}
-                  {activeTab === "upcoming" && (
-                    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b pb-2 mb-2 -mx-2 px-2">
-                      <h3 className="text-sm font-semibold">{visibleSection}</h3>
-                    </div>
-                  )}
                   {activeTab === "upcoming" ? (
                     // Upcoming tab with sections
                     (() => {
@@ -802,54 +905,157 @@ export function VenueOpsConsoleClient({
                 <CardDescription>Current availability and blocks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {venue.tables.map((table) => (
-                  <div key={table.id} className="space-y-2">
-                    <h4 className="text-sm font-medium">{table.name || "Unnamed Table"}</h4>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {table.seats.map((seat) => {
-                        const status = getSeatStatus(seat.id)
-                        const seatLabel = getSeatLabel(seat)
+                {venue.tables.map((table) => {
+                  const isGroupTable = table.bookingMode === "group"
+                  
+                  // For group tables, show a single table card
+                  if (isGroupTable) {
+                    const tableStatus = getTableStatus(table.id)
+                    const { status, reservation, block } = tableStatus
+                    const seatCount = table.seats.length
+                    const pricePerHour = table.tablePricePerHour || 0
 
-                        return (
-                          <button
-                            key={seat.id}
-                            onClick={() =>
-                              setSelectedSeat({
-                                seatId: seat.id,
-                                tableName: table.name || "Table",
-                              })
-                            }
-                            className={cn(
-                              "rounded-lg border p-3 text-left transition-colors",
-                              status === "available" && "bg-muted/30 hover:bg-muted/50",
-                              status === "reserved" && "bg-amber-50 border-amber-200",
-                              status === "blocked" && "bg-red-50 border-red-200"
+                    return (
+                      <div key={table.id} className="space-y-2">
+                        <h4 className="text-sm font-medium">{table.name || "Unnamed Table"}</h4>
+                        <button
+                          onClick={() =>
+                            setSelectedSeat({
+                              seatId: table.seats[0]?.id || "",
+                              tableId: table.id,
+                              tableName: table.name || "Table",
+                              isGroupTable: true,
+                            })
+                          }
+                          className={cn(
+                            "w-full rounded-lg border p-3 text-left transition-colors",
+                            status === "available" && "bg-muted/30 hover:bg-muted/50",
+                            status === "reserved" && "bg-amber-50 border-amber-200",
+                            status === "blocked" && "bg-red-50 border-red-200"
+                          )}
+                        >
+                          <div className="text-xs font-medium">
+                            {table.name || "Unnamed Table"} ({seatCount} {seatCount === 1 ? "seat" : "seats"})
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            ${pricePerHour.toFixed(0)}/hr
+                          </div>
+                          <div className="mt-1 space-y-1">
+                            <span
+                              className={cn(
+                                "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                status === "available" && "bg-muted text-muted-foreground",
+                                status === "reserved" && "bg-amber-100 text-amber-700",
+                                status === "blocked" && "bg-red-100 text-red-700"
+                              )}
+                            >
+                              {status === "available" && "Available"}
+                              {status === "reserved" && "Reserved now"}
+                              {status === "blocked" && "Blocked"}
+                            </span>
+                            {status === "reserved" && reservation && (
+                              <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                                <div>
+                                  {formatTimeRange(
+                                    normalizeDate(reservation.startAt),
+                                    normalizeDate(reservation.endAt)
+                                  )}
+                                </div>
+                                <div>
+                                  {getBookerDisplay(reservation)}
+                                  <span className="ml-1">
+                                    · {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
+                                  </span>
+                                </div>
+                              </div>
                             )}
-                          >
-                            <div className="text-xs font-medium">{seatLabel}</div>
-                            <div className="text-xs text-muted-foreground">
-                              ${seat.pricePerHour}/hr
-                            </div>
-                            <div className="mt-1">
-                              <span
-                                className={cn(
-                                  "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
-                                  status === "available" && "bg-muted text-muted-foreground",
-                                  status === "reserved" && "bg-amber-100 text-amber-700",
-                                  status === "blocked" && "bg-red-100 text-red-700"
+                            {status === "blocked" && block && (
+                              <div className="text-[10px] text-red-600">
+                                {block.reason || "Blocked"}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </div>
+                    )
+                  }
+
+                  // For individual booking mode, show individual seats
+                  return (
+                    <div key={table.id} className="space-y-2">
+                      <h4 className="text-sm font-medium">{table.name || "Unnamed Table"}</h4>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {table.seats.map((seat) => {
+                          const seatStatus = getSeatStatus(seat.id, table.id, table.bookingMode)
+                          const seatLabel = getSeatLabel(seat)
+                          const { status, reservation, block } = seatStatus
+
+                          return (
+                            <button
+                              key={seat.id}
+                              onClick={() =>
+                                setSelectedSeat({
+                                  seatId: seat.id,
+                                  tableId: table.id,
+                                  tableName: table.name || "Table",
+                                  isGroupTable: false,
+                                })
+                              }
+                              className={cn(
+                                "rounded-lg border p-3 text-left transition-colors",
+                                status === "available" && "bg-muted/30 hover:bg-muted/50",
+                                status === "reserved" && "bg-amber-50 border-amber-200",
+                                status === "blocked" && "bg-red-50 border-red-200"
+                              )}
+                            >
+                              <div className="text-xs font-medium">{seatLabel}</div>
+                              <div className="text-xs text-muted-foreground">
+                                ${seat.pricePerHour}/hr
+                              </div>
+                              <div className="mt-1 space-y-1">
+                                <span
+                                  className={cn(
+                                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                    status === "available" && "bg-muted text-muted-foreground",
+                                    status === "reserved" && "bg-amber-100 text-amber-700",
+                                    status === "blocked" && "bg-red-100 text-red-700"
+                                  )}
+                                >
+                                  {status === "available" && "Available"}
+                                  {status === "reserved" && "Reserved now"}
+                                  {status === "blocked" && "Blocked"}
+                                </span>
+                                {status === "reserved" && reservation && (
+                                  <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                                    <div>
+                                      {formatTimeRange(
+                                        normalizeDate(reservation.startAt),
+                                        normalizeDate(reservation.endAt)
+                                      )}
+                                    </div>
+                                    <div>
+                                      {getBookerDisplay(reservation)}
+                                      {reservation.tableId && !reservation.seatId && (
+                                        <span className="ml-1">
+                                          · {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 )}
-                              >
-                                {status === "available" && "Available"}
-                                {status === "reserved" && "Reserved now"}
-                                {status === "blocked" && "Blocked"}
-                              </span>
-                            </div>
-                          </button>
-                        )
-                      })}
+                                {status === "blocked" && block && (
+                                  <div className="text-[10px] text-red-600">
+                                    {block.reason || "Blocked"}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
 
@@ -935,30 +1141,60 @@ export function VenueOpsConsoleClient({
         )}
       </Dialog>
 
-      {/* Seat Detail Modal */}
+      {/* Seat/Table Detail Modal */}
       <Dialog open={!!selectedSeat} onOpenChange={(open) => !open && setSelectedSeat(null)}>
         {selectedSeat && (
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Seat Details</DialogTitle>
+              <DialogTitle>{selectedSeat.isGroupTable ? "Table Details" : "Seat Details"}</DialogTitle>
               <DialogDescription>
-                {getSeatLabel(
-                  venue.tables
-                    .flatMap((t) => t.seats)
-                    .find((s) => s.id === selectedSeat.seatId)
-                )}{" "}
-                at {selectedSeat.tableName}
+                {selectedSeat.isGroupTable ? (
+                  <>
+                    {selectedSeat.tableName}
+                    {(() => {
+                      const table = venue.tables.find((t) => t.id === selectedSeat.tableId)
+                      return table ? ` (${table.seats.length} ${table.seats.length === 1 ? "seat" : "seats"})` : ""
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    {getSeatLabel(
+                      venue.tables
+                        .flatMap((t) => t.seats)
+                        .find((s) => s.id === selectedSeat.seatId)
+                    )}{" "}
+                    at {selectedSeat.tableName}
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
             <SeatDetailView
               seatId={selectedSeat.seatId}
+              tableId={selectedSeat.tableId}
               tableName={selectedSeat.tableName}
-              reservations={reservations.filter((r) => r.seatId === selectedSeat.seatId)}
-              seatBlocks={seatBlocks.filter((b) => b.seatId === selectedSeat.seatId)}
+              isGroupTable={selectedSeat.isGroupTable || false}
+              reservations={
+                selectedSeat.isGroupTable
+                  ? reservations.filter((r) => r.tableId === selectedSeat.tableId && r.seatId === null)
+                  : reservations.filter((r) => r.seatId === selectedSeat.seatId)
+              }
+              seatBlocks={
+                selectedSeat.isGroupTable
+                  ? seatBlocks.filter((b) => {
+                      // For group tables, show blocks for any seat in the table or venue-wide blocks
+                      if (b.seatId === null) return true // Venue-wide block
+                      const table = venue.tables.find((t) => t.id === selectedSeat.tableId)
+                      return table?.seats.some((s) => s.id === b.seatId) || false
+                    })
+                  : seatBlocks.filter((b) => b.seatId === selectedSeat.seatId)
+              }
               currentTime={currentTime}
               onBlock={() => {
                 setSelectedSeat(null)
-                setBlockingSeat(selectedSeat)
+                setBlockingSeat({
+                  seatId: selectedSeat.isGroupTable ? null : selectedSeat.seatId,
+                  tableName: selectedSeat.tableName,
+                })
               }}
               onUnblock={handleUnblockSeat}
               venueId={venue.id}
@@ -1214,10 +1450,12 @@ function BlockSeatForm({
   )
 }
 
-// Seat Detail View Component
+// Seat/Table Detail View Component
 function SeatDetailView({
   seatId,
+  tableId,
   tableName,
+  isGroupTable,
   reservations,
   seatBlocks,
   currentTime,
@@ -1226,7 +1464,9 @@ function SeatDetailView({
   venueId,
 }: {
   seatId: string
+  tableId: string
   tableName: string
+  isGroupTable: boolean
   reservations: Reservation[]
   seatBlocks: SeatBlock[]
   currentTime: Date
@@ -1265,6 +1505,11 @@ function SeatDetailView({
                   <div className="font-medium">{formatTimeRange(start, end)}</div>
                   <div className="text-xs text-muted-foreground">
                     {getBookerDisplay(r)}
+                    {isGroupTable && r.seatCount && (
+                      <span className="ml-1">
+                        · {r.seatCount} seat{r.seatCount > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
@@ -1307,7 +1552,7 @@ function SeatDetailView({
 
       <Button className="w-full" onClick={onBlock}>
         <Ban className="mr-2 h-4 w-4" />
-        Block this seat
+        {isGroupTable ? "Block this table" : "Block this seat"}
       </Button>
     </div>
   )

@@ -324,6 +324,16 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
               {/* Actions */}
               {!isCancelled && (
                 <div className="flex flex-col gap-2 pt-4">
+                  <Button 
+                    asChild 
+                    variant="outline" 
+                    className="w-full"
+                  >
+                    <Link href={`/venue/${reservation.venue.id}?returnTo=/reservations/${reservation.id}`}>
+                      <MapPin className="mr-2 h-4 w-4" />
+                      View Venue
+                    </Link>
+                  </Button>
                   <Button onClick={handleAddToCalendar} variant="outline" className="w-full">
                     <Calendar className="mr-2 h-4 w-4" />
                     Add to calendar
