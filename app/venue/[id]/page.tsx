@@ -1,7 +1,77 @@
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
+import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
+
+function safeStringArray(value: unknown): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string" && v.length > 0)
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === "string" && v.length > 0)
+    } catch {
+      // ignore
+    }
+  }
+  return []
+}
+
+function roundUpToNext15Minutes(date: Date): Date {
+  const result = new Date(date)
+  const minutes = result.getMinutes()
+  const remainder = minutes % 15
+  if (remainder !== 0) {
+    result.setMinutes(minutes + (15 - remainder), 0, 0)
+  } else if (result.getSeconds() > 0 || result.getMilliseconds() > 0) {
+    result.setMinutes(minutes + 15, 0, 0)
+  } else {
+    result.setSeconds(0, 0)
+  }
+  return result
+}
+
+function formatTimeLabel(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function computeAvailabilityLabel(
+  capacity: number,
+  reservations: { startAt: Date; endAt: Date; seatCount: number }[]
+): string {
+  if (capacity <= 0) return "Sold out for now"
+
+  const now = new Date()
+  const startBase = roundUpToNext15Minutes(now)
+  const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
+  const slotMs = 15 * 60 * 1000 // 15 minutes
+
+  for (let offset = 0; offset < horizonMs; offset += slotMs) {
+    const windowStart = new Date(startBase.getTime() + offset)
+    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
+
+    const bookedSeats = reservations.reduce((sum, res) => {
+      if (res.startAt < windowEnd && res.endAt > windowStart) {
+        return sum + res.seatCount
+      }
+      return sum
+    }, 0)
+
+    if (bookedSeats < capacity) {
+      if (offset === 0) {
+        return "Available now"
+      }
+      return `Next available at ${formatTimeLabel(windowStart)}`
+    }
+  }
+
+  return "Sold out for now"
+}
 
 interface VenuePageProps {
   params: { id: string }
@@ -124,103 +194,186 @@ export default async function VenuePage({ params }: VenuePageProps) {
     return mode === "individual" || mode === null || mode === undefined
   })
 
+  // Fetch reservations for availability calculation
+  const now = new Date()
+  const futureReservations = await prisma.reservation.findMany({
+    where: {
+      venueId: venue.id,
+      status: { not: "cancelled" },
+      endAt: { gte: now },
+    },
+    select: {
+      startAt: true,
+      endAt: true,
+      seatCount: true,
+    },
+  })
+
+  // Calculate availability label
+  const availabilityLabel = computeAvailabilityLabel(
+    capacity,
+    futureReservations.map((r) => ({
+      startAt: r.startAt,
+      endAt: r.endAt,
+      seatCount: r.seatCount,
+    }))
+  )
+
+  const venueHeroImages: string[] = (() => {
+    const images = new Set<string>()
+
+    // Prefer venue-level images
+    const hero = (venue as any).heroImageUrl
+    if (typeof hero === "string" && hero.length > 0) images.add(hero)
+    safeStringArray((venue as any).imageUrls).forEach((u) => images.add(u))
+
+    // Fallback to table / seat images (if present) so the page still feels alive
+    for (const t of venue.tables) {
+      safeStringArray((t as any).imageUrls).forEach((u) => images.add(u))
+      for (const s of t.seats ?? []) {
+        safeStringArray((s as any).imageUrls).forEach((u) => images.add(u))
+      }
+      if (images.size >= 8) break
+    }
+
+    return Array.from(images).slice(0, 8)
+  })()
+
+  const googleMapsHref =
+    typeof venue.address === "string" && venue.address.length > 0
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue.address)}`
+      : null
+
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="mb-2 text-3xl font-semibold tracking-tight">
-          {venue.name}
-        </h1>
-        {venue.address && (
-          <p className="text-sm text-muted-foreground">
-            {venue.address}
-          </p>
-        )}
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {venue.tags?.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-          >
-            {tag}
-          </span>
-        ))}
-      </div>
-
-      <div className="mb-6">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Pricing</CardTitle>
-              <div className="text-2xl font-semibold">
-                {minPrice === maxPrice ? (
-                  <>
-                    ${minPrice.toFixed(0)}
-                    <span className="ml-1 text-base font-normal text-muted-foreground">
-                      / seat / hour
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    ${minPrice.toFixed(0)}
-                    <span className="ml-1 text-base font-normal text-muted-foreground">
-                      / seat / hour
-                    </span>
-                    <span className="mx-2 text-base font-normal text-muted-foreground">—</span>
-                    ${maxPrice.toFixed(0)}
-                    <span className="ml-1 text-base font-normal text-muted-foreground">
-                      / table / hour
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {pricingDescription}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Capacity: {capacity} seats total
-              {groupTables.length > 0 && individualTables.length > 0 && (
-                <span className="ml-2">
-                  ({groupTables.length} group table{groupTables.length > 1 ? "s" : ""}, {individualTables.length} individual table{individualTables.length > 1 ? "s" : ""})
-                </span>
-              )}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {venue.rulesText && (
-        <div className="mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>House rules</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-line text-sm text-muted-foreground">
-                {venue.rulesText}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        {/* Photo panel */}
+        <div className="space-y-4">
+          {/* Venue header */}
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              {venue.name}
+            </h1>
+            {venue.address && (
+              <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
+                {venue.address}
               </p>
+            )}
+          </div>
+
+          {/* Photo */}
+          <div className="relative overflow-hidden rounded-2xl border bg-muted">
+            <VenueImageCarousel
+              images={venueHeroImages}
+              className="h-[260px] sm:h-[340px] lg:h-[560px]"
+            />
+            <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-black/5" />
+            
+            {/* Availability label bubble */}
+            {availabilityLabel && (
+              <span className="absolute top-3 right-3 z-10 rounded-full bg-background/90 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-primary shadow-sm">
+                {availabilityLabel}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Booking card */}
+        <div className="space-y-4">
+          {(venue.tags ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(venue.tags ?? []).slice(0, 4).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <CardTitle className="text-base">Reserve</CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    {pricingDescription}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {minPrice === maxPrice ? (
+                    <div className="text-2xl font-semibold tracking-tight">
+                      ${minPrice.toFixed(0)}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">
+                        /hr
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-2xl font-semibold tracking-tight">
+                      ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">
+                        /hr
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <VenueBookingWidget
+                venueId={venue.id}
+                tables={individualTablesForBooking as any}
+              />
             </CardContent>
           </Card>
-        </div>
-      )}
 
-      <div className="mb-24">
-        <Card>
-          <CardHeader>
-            <CardTitle>Reserve seats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <VenueBookingWidget
-              venueId={venue.id}
-              tables={individualTablesForBooking as any}
-            />
-          </CardContent>
-        </Card>
+          {/* Details directly below booking */}
+          <div className="space-y-4">
+            <div className="h-px w-full bg-border" />
+
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium tracking-tight">More details</h2>
+              {googleMapsHref && (
+                <Button asChild variant="ghost" size="sm" className="px-2">
+                  <a href={googleMapsHref} target="_blank" rel="noreferrer">
+                    Directions
+                  </a>
+                </Button>
+              )}
+            </div>
+
+            {(venue.tags ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {(venue.tags ?? []).map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {venue.rulesText && (
+              <div className="rounded-xl border bg-background p-4">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">
+                  House rules
+                </div>
+                <p className="whitespace-pre-line text-sm text-muted-foreground">
+                  {venue.rulesText}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Spacer for bottom nav */}
+      <div className="h-24" />
     </div>
   )
 }

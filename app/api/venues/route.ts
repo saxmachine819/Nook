@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const session = await auth()
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "You must be signed in to create a venue." },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
 
     // Validate required fields
@@ -93,6 +104,7 @@ export async function POST(request: NextRequest) {
         rulesText: body.rulesText?.trim() || null,
         tags: Array.isArray(body.tags) ? body.tags : [],
         description: body.description?.trim() || null,
+        ownerId: session.user.id, // Set the venue owner to the authenticated user
         // Google Places enrichment fields
         googlePlaceId: body.googlePlaceId?.trim() || null,
         googleMapsUrl: body.googleMapsUrl?.trim() || null,

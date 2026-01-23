@@ -301,7 +301,7 @@ export function MapboxMap({
       map.addControl(
         new mapboxgl.NavigationControl({
           showCompass: false,
-          showZoom: true,
+          showZoom: false,
         })
       )
 

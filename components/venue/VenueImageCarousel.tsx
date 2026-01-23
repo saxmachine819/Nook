@@ -2,17 +2,20 @@
 
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 
 interface VenueImageCarouselProps {
   images: string[]
   className?: string
+  enableGallery?: boolean // If false, clicking images won't open full-screen gallery
 }
 
-export function VenueImageCarousel({ images, className }: VenueImageCarouselProps) {
+export function VenueImageCarousel({ images, className, enableGallery = true }: VenueImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
   const [translateX, setTranslateX] = useState(0)
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false)
   const carouselRef = useRef<HTMLDivElement>(null)
 
   // If no images, show placeholder
@@ -133,64 +136,80 @@ export function VenueImageCarousel({ images, className }: VenueImageCarouselProp
   }, [images.length])
 
   return (
-    <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
-      <div
-        ref={carouselRef}
-        className="flex h-full transition-transform duration-300 ease-out"
-        style={{
-          transform: `translateX(-${currentIndex * 100}%) translateX(${translateX}px)`,
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      >
-        {images.map((image, index) => (
-          <div
-            key={index}
-            className="h-full w-full shrink-0"
-          >
-            <img
-              src={image}
-              alt={`Venue image ${index + 1}`}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                // Fallback if image fails to load
-                const target = e.target as HTMLImageElement
-                target.style.display = "none"
+    <>
+      <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
+        <div
+          ref={carouselRef}
+          className="flex h-full transition-transform duration-300 ease-out"
+          style={{
+            transform: `translateX(-${currentIndex * 100}%) translateX(${translateX}px)`,
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
+          {images.map((image, index) => (
+            <div
+              key={index}
+              className={cn("h-full w-full shrink-0", enableGallery && "cursor-pointer")}
+              onClick={enableGallery ? () => setIsGalleryOpen(true) : undefined}
+            >
+              <img
+                src={image}
+                alt={`Venue image ${index + 1}`}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  // Fallback if image fails to load
+                  const target = e.target as HTMLImageElement
+                  target.style.display = "none"
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Pagination dots - using divs instead of buttons to avoid nested button hydration error */}
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
+          {images.map((_, index) => (
+            <div
+              key={index}
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation()
+                setCurrentIndex(index)
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setCurrentIndex(index)
+                }
+              }}
+              className={cn(
+                "h-1.5 cursor-pointer rounded-full transition-all",
+                index === currentIndex
+                  ? "w-6 bg-white"
+                  : "w-1.5 bg-white/50"
+              )}
+              aria-label={`Go to image ${index + 1}`}
             />
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
-      {/* Pagination dots - using divs instead of buttons to avoid nested button hydration error */}
-      <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
-        {images.map((_, index) => (
-          <div
-            key={index}
-            role="button"
-            tabIndex={0}
-            onClick={() => setCurrentIndex(index)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                setCurrentIndex(index)
-              }
-            }}
-            className={cn(
-              "h-1.5 cursor-pointer rounded-full transition-all",
-              index === currentIndex
-                ? "w-6 bg-white"
-                : "w-1.5 bg-white/50"
-            )}
-            aria-label={`Go to image ${index + 1}`}
-          />
-        ))}
-      </div>
-    </div>
+      {/* Full-screen gallery modal - only render if gallery is enabled */}
+      {enableGallery && (
+        <ImageGalleryModal
+          images={images}
+          initialIndex={currentIndex}
+          isOpen={isGalleryOpen}
+          onClose={() => setIsGalleryOpen(false)}
+        />
+      )}
+    </>
   )
 }

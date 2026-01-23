@@ -372,6 +372,7 @@ export function GoogleMap({ venues }: GoogleMapProps) {
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: true,
+        zoomControl: false,
       })
 
       mapInstanceRef.current = map

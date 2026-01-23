@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 
 interface SeatCardProps {
   seat: {
@@ -30,6 +32,7 @@ export function SeatCard({
   isCommunal,
   onSelect,
 }: SeatCardProps) {
+  const [isImageOpen, setIsImageOpen] = useState(false)
   // Only show seat's own photos, no table fallback
   const thumbnailUrl = seat.imageUrls.length > 0 ? seat.imageUrls[0] : null
 
@@ -37,30 +40,40 @@ export function SeatCard({
   const displayLabel = seat.label || `Seat ${seat.position ?? "?"}`
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      disabled={!isAvailable}
-      className={cn(
-        "relative w-full rounded-md border p-3 text-left transition-all",
-        "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-        isSelected
-          ? "border-primary ring-2 ring-primary"
-          : isAvailable
-            ? "border-muted hover:border-primary/50"
-            : "cursor-not-allowed opacity-50"
-      )}
-    >
-      {/* Thumbnail image */}
-      {thumbnailUrl && (
-        <div className="mb-2 aspect-square w-full overflow-hidden rounded-md">
-          <img
-            src={thumbnailUrl}
-            alt={displayLabel}
-            className="h-full w-full object-cover"
-          />
-        </div>
-      )}
+    <>
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={!isAvailable}
+        className={cn(
+          "relative w-full rounded-md border p-3 text-left transition-all",
+          "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+          isSelected
+            ? "border-primary ring-2 ring-primary"
+            : isAvailable
+              ? "border-muted hover:border-primary/50"
+              : "cursor-not-allowed opacity-50"
+        )}
+      >
+        {/* Thumbnail image */}
+        {thumbnailUrl && (
+          <div
+            className="mb-2 aspect-square w-full overflow-hidden rounded-md cursor-zoom-in"
+            onClick={(e) => {
+              // Don't select the seat when user is just trying to view the photo
+              e.preventDefault()
+              e.stopPropagation()
+              if (seat.imageUrls.length > 0) setIsImageOpen(true)
+            }}
+          >
+            <img
+              src={thumbnailUrl}
+              alt={displayLabel}
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          </div>
+        )}
 
       {/* Label */}
       <div className="mb-1">
@@ -142,6 +155,14 @@ export function SeatCard({
           </div>
         </div>
       )}
-    </button>
+      </button>
+
+      <ImageGalleryModal
+        images={seat.imageUrls}
+        initialIndex={0}
+        isOpen={isImageOpen}
+        onClose={() => setIsImageOpen(false)}
+      />
+    </>
   )
 }

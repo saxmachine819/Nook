@@ -23,8 +23,10 @@ model Venue {
   longitude       Float?
   rulesText       String?
   tags            String[]
+  ownerId         String?
   reservations    Reservation[]
   tables          Table[]
+  seatBlocks      SeatBlock[]
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?
@@ -32,7 +34,9 @@ model Venue {
   googlePhotoRefs Json?
   heroImageUrl    String?
   imageUrls       Json?
+  owner           User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
+  @@index([ownerId])
   @@map("venues")
 }
 
@@ -66,6 +70,7 @@ model Seat {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   reservations Reservation[]
+  seatBlocks  SeatBlock[]
   table        Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@map("seats")
@@ -89,6 +94,23 @@ model Reservation {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@map("reservations")
+}
+
+model SeatBlock {
+  id             String   @id @default(cuid())
+  venueId        String
+  seatId         String?
+  startAt        DateTime
+  endAt          DateTime
+  reason         String?
+  createdAt      DateTime @default(now())
+  createdByUserId String?
+  venue          Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  seat           Seat?    @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  createdBy      User?    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([venueId, startAt, endAt])
+  @@map("seat_blocks")
 }
 
 // NextAuth.js required models
@@ -131,6 +153,8 @@ model User {
   accounts       Account[]
   sessions       Session[]
   reservations   Reservation[]
+  venues         Venue[]
+  createdSeatBlocks SeatBlock[]
 
   @@map("users")
 }

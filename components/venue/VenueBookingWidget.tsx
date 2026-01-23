@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
 import { SeatCard } from "@/components/venue/SeatCard"
+import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 import { cn } from "@/lib/utils"
 
 interface Table {
@@ -78,6 +79,17 @@ export function VenueBookingWidget({
   const [unavailableSeatIds, setUnavailableSeatIds] = useState<Set<string>>(
     new Set()
   )
+
+  const [isImageOpen, setIsImageOpen] = useState(false)
+  const [imageModalImages, setImageModalImages] = useState<string[]>([])
+  const [imageModalInitialIndex, setImageModalInitialIndex] = useState(0)
+
+  const openImageModal = useCallback((images: string[], initialIndex = 0) => {
+    if (!images || images.length === 0) return
+    setImageModalImages(images)
+    setImageModalInitialIndex(initialIndex)
+    setIsImageOpen(true)
+  }, [])
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,6 +121,7 @@ export function VenueBookingWidget({
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
+        console.error("Availability check failed:", response.status, data)
         setError(data?.error || "Failed to check availability.")
         setAvailableSeats([])
         setAvailableSeatGroups([])
@@ -118,6 +131,7 @@ export function VenueBookingWidget({
 
       // Check for opening hours error or capacity error
       if (data.error) {
+        console.error("Availability error:", data.error)
         setError(data.error)
         setAvailableSeats([])
         setAvailableSeatGroups([])
@@ -125,6 +139,24 @@ export function VenueBookingWidget({
         setUnavailableSeatIds(new Set())
         return
       }
+
+      // Validate response structure
+      if (!data || typeof data !== 'object') {
+        console.error("Invalid response structure:", data)
+        setError("Invalid response from server.")
+        setAvailableSeats([])
+        setAvailableSeatGroups([])
+        setAvailableGroupTables([])
+        setUnavailableSeatIds(new Set())
+        return
+      }
+
+      console.log("Availability check successful:", {
+        availableSeats: data.availableSeats?.length || 0,
+        availableSeatGroups: data.availableSeatGroups?.length || 0,
+        availableGroupTables: data.availableGroupTables?.length || 0,
+        unavailableSeatIds: data.unavailableSeatIds?.length || 0
+      })
 
       setAvailableSeats(data.availableSeats || [])
       setAvailableSeatGroups(data.availableSeatGroups || [])
@@ -324,8 +356,15 @@ export function VenueBookingWidget({
 
       if (selectedGroupTableId) {
         // Booking a group table
+        const selectedTable = availableGroupTables.find((t) => t.id === selectedGroupTableId)
+        if (!selectedTable) {
+          setError("Selected table not found. Please try again.")
+          return
+        }
         requestBody.tableId = selectedGroupTableId
-        requestBody.seatCount = seatCount
+        // IMPORTANT: seatCount for group bookings should be the table's seat count,
+        // not the current seat selector value (which is often still 1).
+        requestBody.seatCount = selectedTable.seatCount
       } else {
         // Booking individual seats
         const seatIds = seatCount === 1 
@@ -350,9 +389,12 @@ export function VenueBookingWidget({
             date: date,
             startTime: startTime.replace(":", ""),
             duration: durationHours,
+            tableId: selectedGroupTableId,
             seatId: seatCount === 1 ? selectedSeatId : null,
             seatIds: seatCount > 1 ? selectedSeatIds : null,
-            seatCount: seatCount,
+            seatCount: selectedGroupTableId
+              ? availableGroupTables.find((t) => t.id === selectedGroupTableId)?.seatCount ?? seatCount
+              : seatCount,
           }
           const bookingParam = encodeURIComponent(JSON.stringify(bookingData))
           router.push(
@@ -415,11 +457,20 @@ export function VenueBookingWidget({
                     )}
                   >
                     {table.imageUrls.length > 0 && (
-                      <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                      <div
+                        className="mb-2 aspect-video w-full overflow-hidden rounded-md cursor-zoom-in"
+                        onClick={(e) => {
+                          // Don't select the table when user is just trying to view photos
+                          e.preventDefault()
+                          e.stopPropagation()
+                          openImageModal(table.imageUrls, 0)
+                        }}
+                      >
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
                           className="h-full w-full object-cover"
+                          draggable={false}
                         />
                       </div>
                     )}
@@ -504,11 +555,19 @@ export function VenueBookingWidget({
                     {/* Table header with photo */}
                     <div className="flex items-center gap-3">
                       {table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
-                        <div className="h-12 w-12 overflow-hidden rounded-md">
+                        <div
+                          className="h-12 w-12 overflow-hidden rounded-md cursor-zoom-in"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            openImageModal(table.imageUrls as string[], 0)
+                          }}
+                        >
                           <img
                             src={table.imageUrls[0]}
                             alt={table.name || "Table"}
                             className="h-full w-full object-cover"
+                            draggable={false}
                           />
                         </div>
                       )}
@@ -615,11 +674,19 @@ export function VenueBookingWidget({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {table && table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
-                    <div className="h-12 w-12 overflow-hidden rounded-md">
+                    <div
+                      className="h-12 w-12 overflow-hidden rounded-md cursor-zoom-in"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        openImageModal(table.imageUrls as string[], 0)
+                      }}
+                    >
                       <img
                         src={table.imageUrls[0]}
                         alt={table.name || "Table"}
                         className="h-full w-full object-cover"
+                        draggable={false}
                       />
                     </div>
                   )}
@@ -866,6 +933,13 @@ export function VenueBookingWidget({
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
         reservation={confirmedReservation}
+      />
+
+      <ImageGalleryModal
+        images={imageModalImages}
+        initialIndex={imageModalInitialIndex}
+        isOpen={isImageOpen}
+        onClose={() => setIsImageOpen(false)}
       />
     </>
   )

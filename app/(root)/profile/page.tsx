@@ -2,10 +2,11 @@
 
 import { useSession, signIn, signOut } from "next-auth/react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, Mail, LogOut, LogIn } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard, Plus } from "lucide-react"
 
 function initialsFromName(name?: string | null) {
   const trimmed = (name || "").trim()
@@ -24,12 +25,13 @@ export default function ProfilePage() {
   const router = useRouter()
   const callbackUrl = searchParams.get("callbackUrl")
 
-  // Redirect to callbackUrl after successful sign-in
+  // Redirect to callbackUrl after successful sign-in (defer to avoid setState-during-render)
   useEffect(() => {
-    if (session && callbackUrl) {
-      // Preserve any booking params in the callback URL
-      router.push(callbackUrl)
-    }
+    if (!session || !callbackUrl) return
+    const t = setTimeout(() => {
+      router.replace(callbackUrl)
+    }, 0)
+    return () => clearTimeout(t)
   }, [session, callbackUrl, router])
 
   if (status === "loading") {
@@ -142,6 +144,21 @@ export default function ProfilePage() {
             >
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>My Venues</CardTitle>
+            <CardDescription>Manage your venues from the dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button size="lg" variant="outline" asChild className="w-full">
+              <Link href="/venue/dashboard">
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Open Venue Dashboard
+              </Link>
             </Button>
           </CardContent>
         </Card>

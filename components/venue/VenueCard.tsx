@@ -260,7 +260,7 @@ export function VenueCard({
         >
           {/* Image Section with Carousel */}
           <div className="relative">
-            <VenueImageCarousel images={imageUrls} />
+            <VenueImageCarousel images={imageUrls} enableGallery={false} />
             {/* Availability label overlaying top-right of image */}
             {availabilityLabel && (
               <span

@@ -226,12 +226,46 @@ export async function GET(
         },
       })
 
+      // Find overlapping seat blocks for this time window
+      const overlappingBlocks = await prisma.seatBlock.findMany({
+        where: {
+          venueId: venue.id,
+          startAt: {
+            lt: parsedEnd,
+          },
+          endAt: {
+            gt: parsedStart,
+          },
+        },
+        select: {
+          seatId: true,
+        },
+      })
+
       // Get set of unavailable seat IDs from individual seat reservations
       const unavailableSeatIds = new Set(
         overlappingReservations
           .filter((r) => r.seatId !== null)
           .map((r) => r.seatId!)
       )
+
+      // Add blocked seat IDs
+      overlappingBlocks
+        .filter((b) => b.seatId !== null)
+        .forEach((b) => {
+          unavailableSeatIds.add(b.seatId!)
+        })
+
+      // Handle venue-wide blocks (seatId === null) - block all seats
+      const hasVenueWideBlock = overlappingBlocks.some((b) => b.seatId === null)
+      if (hasVenueWideBlock) {
+        // Block all seats in the venue
+        venue.tables.forEach((table) => {
+          table.seats.forEach((seat) => {
+            unavailableSeatIds.add(seat.id)
+          })
+        })
+      }
 
       // Check for group table reservations that block individual seats
       // When a group table is booked, ALL seats in that table become unavailable for individual booking
@@ -382,9 +416,14 @@ export async function GET(
 
       // If seatCount === 1, return all individual seats AND group tables that have at least 1 seat
       if (seatCount === 1) {
+        // Filter out unavailable seats
+        const filteredAvailableSeats = allAvailableSeats.filter(
+          (seat) => !unavailableSeatIds.has(seat.id)
+        )
+        
         return NextResponse.json(
           {
-            availableSeats: allAvailableSeats,
+            availableSeats: filteredAvailableSeats,
             availableSeatGroups: [],
             availableGroupTables: availableGroupTables,
             unavailableSeatIds: Array.from(unavailableSeatIds),
@@ -394,6 +433,11 @@ export async function GET(
       }
 
       // If seatCount > 1, find groups of adjacent seats
+      // First, filter out unavailable seats
+      const filteredAvailableSeats = allAvailableSeats.filter(
+        (seat) => !unavailableSeatIds.has(seat.id)
+      )
+      
       const availableSeatGroups: Array<{
         seats: typeof allAvailableSeats
         tableId: string
@@ -402,7 +446,7 @@ export async function GET(
 
       // Group seats by table
       const seatsByTable = new Map<string, typeof allAvailableSeats>()
-      allAvailableSeats.forEach((seat) => {
+      filteredAvailableSeats.forEach((seat) => {
         if (!seatsByTable.has(seat.tableId)) {
           seatsByTable.set(seat.tableId, [])
         }
@@ -428,7 +472,7 @@ export async function GET(
       // For seatCount > 1, return groups AND group tables that match the seat count
       return NextResponse.json(
         {
-          availableSeats: allAvailableSeats, // Keep for display
+          availableSeats: filteredAvailableSeats, // Filtered to exclude unavailable seats
           availableSeatGroups,
           availableGroupTables: availableGroupTables.filter(
             (table) => table.seatCount === seatCount

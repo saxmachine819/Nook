@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { canEditVenue } from "@/lib/venue-auth"
 
 export async function PATCH(
   request: Request,
@@ -10,22 +11,25 @@ export async function PATCH(
   const reservationId = params.id
 
   try {
-    // Check authentication
     const session = await auth()
     
     if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "You must be signed in to cancel a reservation." },
+        { error: "You must be signed in to modify a reservation." },
         { status: 401 }
       )
     }
 
-    // Verify reservation exists and belongs to the user
+    // Fetch reservation with venue for authorization check
     const reservation = await prisma.reservation.findUnique({
       where: { id: reservationId },
-      select: {
-        userId: true,
-        status: true,
+      include: {
+        venue: {
+          select: {
+            id: true,
+            ownerId: true,
+          },
+        },
       },
     })
 
@@ -36,40 +40,161 @@ export async function PATCH(
       )
     }
 
-    // Only the owner can cancel their reservation
-    if (reservation.userId !== session.user.id) {
+    // Authorization: venue owner/admin OR reservation owner can edit
+    const isVenueOwnerOrAdmin = canEditVenue(session.user, reservation.venue)
+    const isReservationOwner = reservation.userId === session.user.id
+
+    if (!isVenueOwnerOrAdmin && !isReservationOwner) {
       return NextResponse.json(
-        { error: "You can only cancel your own reservations." },
+        { error: "You don't have permission to modify this reservation." },
         { status: 403 }
       )
     }
 
     const body = await request.json().catch(() => ({}))
-    const { status } = body as { status?: string }
+    const { status, startAt, endAt, seatId } = body as {
+      status?: string
+      startAt?: string
+      endAt?: string
+      seatId?: string | null
+    }
 
-    // For MVP we only support cancelling a reservation.
-    if (status && status !== "cancelled") {
+    // Handle cancellation
+    if (status === "cancelled") {
+      const updated = await prisma.reservation.update({
+        where: { id: reservationId },
+        data: { status: "cancelled" },
+        include: {
+          venue: true,
+          user: { select: { email: true } },
+          seat: { include: { table: { select: { name: true } } } },
+          table: { select: { name: true } },
+        },
+      })
+      return NextResponse.json({ reservation: updated })
+    }
+
+    // Handle editing (only venue owner/admin can edit, not reservation owner)
+    if ((startAt || endAt || seatId !== undefined) && !isVenueOwnerOrAdmin) {
       return NextResponse.json(
-        { error: "Only cancelling reservations is supported." },
-        { status: 400 }
+        { error: "Only venue owners and admins can edit reservations." },
+        { status: 403 }
       )
     }
 
-    const updated = await prisma.reservation.update({
-      where: { id: reservationId },
-      data: {
-        status: "cancelled",
-      },
-      include: {
-        venue: true,
-      },
-    })
+    if (startAt || endAt || seatId !== undefined) {
+      const newStartAt = startAt ? new Date(startAt) : reservation.startAt
+      const newEndAt = endAt ? new Date(endAt) : reservation.endAt
+      const newSeatId = seatId !== undefined ? seatId : reservation.seatId
 
-    return NextResponse.json({ reservation: updated })
-  } catch (error) {
-    console.error("Error cancelling reservation:", error)
+      // Validate dates
+      if (isNaN(newStartAt.getTime()) || isNaN(newEndAt.getTime())) {
+        return NextResponse.json(
+          { error: "Invalid date format." },
+          { status: 400 }
+        )
+      }
+
+      if (newEndAt <= newStartAt) {
+        return NextResponse.json(
+          { error: "End time must be after start time." },
+          { status: 400 }
+        )
+      }
+
+      // Check availability (exclude current reservation, include SeatBlocks)
+      const overlappingReservations = await prisma.reservation.findMany({
+        where: {
+          venueId: reservation.venueId,
+          id: { not: reservationId },
+          status: { not: "cancelled" },
+          startAt: { lt: newEndAt },
+          endAt: { gt: newStartAt },
+        },
+        select: {
+          seatId: true,
+          tableId: true,
+        },
+      })
+
+      // Check SeatBlocks
+      const overlappingBlocks = await prisma.seatBlock.findMany({
+        where: {
+          venueId: reservation.venueId,
+          startAt: { lt: newEndAt },
+          endAt: { gt: newStartAt },
+        },
+        select: {
+          seatId: true,
+        },
+      })
+
+      // If editing seat, check if new seat is available
+      if (newSeatId && newSeatId !== reservation.seatId) {
+        // Check if seat is blocked
+        const isBlocked = overlappingBlocks.some((block) => block.seatId === newSeatId)
+        if (isBlocked) {
+          return NextResponse.json(
+            { error: "This seat is blocked during the requested time." },
+            { status: 409 }
+          )
+        }
+
+        // Check if seat is reserved
+        const isReserved = overlappingReservations.some((r) => r.seatId === newSeatId)
+        if (isReserved) {
+          return NextResponse.json(
+            { error: "This seat is already reserved for the requested time." },
+            { status: 409 }
+          )
+        }
+      } else if (reservation.seatId) {
+        // If keeping same seat, check if it's available (excluding current reservation)
+        const isBlocked = overlappingBlocks.some((block) => block.seatId === reservation.seatId)
+        if (isBlocked) {
+          return NextResponse.json(
+            { error: "This seat is blocked during the requested time." },
+            { status: 409 }
+          )
+        }
+
+        const isReserved = overlappingReservations.some((r) => r.seatId === reservation.seatId)
+        if (isReserved) {
+          return NextResponse.json(
+            { error: "This seat is already reserved for the requested time." },
+            { status: 409 }
+          )
+        }
+      }
+
+      // Update reservation
+      const updated = await prisma.reservation.update({
+        where: { id: reservationId },
+        data: {
+          startAt: newStartAt,
+          endAt: newEndAt,
+          seatId: newSeatId !== undefined ? newSeatId : reservation.seatId,
+        },
+        include: {
+          venue: true,
+          user: { select: { email: true } },
+          seat: { include: { table: { select: { name: true } } } },
+          table: { select: { name: true } },
+        },
+      })
+
+      return NextResponse.json({ reservation: updated })
+    }
+
+    // No changes provided
     return NextResponse.json(
-      { error: "Failed to cancel reservation. Please try again." },
+      { error: "No valid changes provided." },
+      { status: 400 }
+    )
+  } catch (error) {
+    console.error("Error updating reservation:", error)
+    return NextResponse.json(
+      { error: "Failed to update reservation. Please try again." },
       { status: 500 }
     )
   }
