@@ -3,7 +3,6 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import GoogleProvider from "next-auth/providers/google"
 import EmailProvider from "next-auth/providers/email"
 import { prisma } from "@/lib/prisma"
-import type { NextAuthOptions } from "next-auth"
 
 // Verify required environment variables
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
@@ -18,7 +17,7 @@ if (!process.env.NEXTAUTH_URL) {
   console.error("❌ Missing NEXTAUTH_URL!")
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   debug: true, // Always debug for now
   trustHost: true, // Required for NextAuth v5
     adapter: PrismaAdapter(prisma) as any,
@@ -43,11 +42,11 @@ export const authOptions: NextAuthOptions = {
     error: "/api/auth/error",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account, profile }: any) {
       // Allow all sign-ins for now
       return true
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       // JWT callback is still called even with database sessions
       // Store user info in token for session callback
       if (user) {
@@ -58,7 +57,7 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    async session({ session, user }) {
+    async session({ session, user }: any) {
       // With database sessions, 'user' comes from the database
       if (!user) {
         return session
@@ -74,7 +73,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   session: {
-    strategy: "database", // Use database sessions with Prisma adapter
+    strategy: "database" as const, // Use database sessions with Prisma adapter
   },
 }
 

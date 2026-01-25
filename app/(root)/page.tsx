@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { ExploreClient } from "./ExploreClient"
+import { formatDealBadgeSummary } from "@/lib/deal-utils"
 
 function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
@@ -56,14 +57,39 @@ function computeAvailabilityLabel(
 }
 
 interface ExplorePageProps {
-  searchParams: { q?: string }
+  searchParams: Promise<{ 
+    q?: string
+    dealsOnly?: string
+    tags?: string
+    priceMin?: string
+    priceMax?: string
+    seatCount?: string
+    bookingMode?: string
+  }>
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   try {
+    // Add early return for testing
+    // return <ExploreClient venues={[]} />
+    
+    // Await searchParams in Next.js 14.2+
+    const params = await searchParams
+    
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
-    const q = searchParams?.q?.trim() || ""
+    const q = params?.q?.trim() || ""
+
+    // Parse filter parameters from URL
+    const dealsOnly = params?.dealsOnly === "true"
+    const tagsParam = params?.tags
+    const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : []
+    const priceMin = params?.priceMin ? parseFloat(params.priceMin) : null
+    const priceMax = params?.priceMax ? parseFloat(params.priceMax) : null
+    const seatCountParam = params?.seatCount
+    const seatCount = seatCountParam ? parseInt(seatCountParam, 10) : null
+    const bookingModeParam = params?.bookingMode
+    const bookingModes = bookingModeParam ? (bookingModeParam.split(",").filter(Boolean) as ("communal" | "full-table")[]) : []
 
     // Build where clause for search
     const whereClause: any = {}
@@ -78,6 +104,36 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       whereClause.OR = searchConditions
     }
 
+    // Add tags filter
+    if (tags.length > 0) {
+      whereClause.tags = {
+        hasSome: tags,
+      }
+    }
+
+    // Add price filter
+    if (priceMin !== null && !isNaN(priceMin)) {
+      whereClause.hourlySeatPrice = {
+        ...(whereClause.hourlySeatPrice || {}),
+        gte: priceMin,
+      }
+    }
+    if (priceMax !== null && !isNaN(priceMax)) {
+      whereClause.hourlySeatPrice = {
+        ...(whereClause.hourlySeatPrice || {}),
+        lte: priceMax,
+      }
+    }
+
+    // Add dealsOnly filter
+    if (dealsOnly) {
+      whereClause.deals = {
+        some: { 
+          isActive: true 
+        }
+      }
+    }
+
     // Fetch venues from database (with optional search filter)
     let venues = await prisma.venue.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
@@ -87,9 +143,20 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
             seats: true,
           },
         },
-      },
+        deals: {
+          where: { isActive: true },
+          orderBy: [
+            { featured: 'desc' },
+            { createdAt: 'desc' }
+          ],
+          take: 1, // Only need the primary deal
+        },
+      } as any,
       take: 100, // Limit results
       orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
+    }).catch((error) => {
+      console.error("Error fetching venues:", error)
+      return []
     })
 
     // Filter by tags if query provided (case-insensitive)
@@ -111,6 +178,36 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         }
 
         return false
+      })
+    }
+
+    // Filter by seatCount (minimum seats available)
+    if (seatCount !== null && !isNaN(seatCount)) {
+      venues = venues.filter((venue) => {
+        const totalCapacity = venue.tables.reduce((sum, table) => {
+          const tableWithSeats = table as any
+          if (tableWithSeats.seats && tableWithSeats.seats.length > 0) {
+            return sum + tableWithSeats.seats.length
+          }
+          return sum + (tableWithSeats.seatCount || 0)
+        }, 0)
+        return totalCapacity >= seatCount
+      })
+    }
+
+    // Filter by bookingMode (communal or full-table)
+    if (bookingModes.length > 0) {
+      venues = venues.filter((venue) => {
+        return venue.tables.some((table) => {
+          const tableBookingMode = (table as any).bookingMode
+          if (bookingModes.includes("communal") && tableBookingMode === "communal") {
+            return true
+          }
+          if (bookingModes.includes("full-table") && tableBookingMode === "full-table") {
+            return true
+          }
+          return false
+        })
       })
     }
 
@@ -156,11 +253,12 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     const formattedVenues = venues.map((venue) => {
       // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
       const capacity = venue.tables.reduce((sum, table) => {
-        if (table.seats.length > 0) {
-          return sum + table.seats.length
+        const tableWithSeats = table as any
+        if (tableWithSeats.seats && tableWithSeats.seats.length > 0) {
+          return sum + tableWithSeats.seats.length
         }
         // Fallback for older venues without Seat records
-        return sum + (table.seatCount || 0)
+        return sum + (tableWithSeats.seatCount || 0)
       }, 0)
       
       // Calculate price range based on booking modes
@@ -172,7 +270,10 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       // Min price: cheapest individual seat
       let minPrice = venue.hourlySeatPrice || 0
       if (individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => t.seats)
+        const individualSeats = individualTables.flatMap(t => {
+          const tableWithSeats = t as any
+          return tableWithSeats.seats || []
+        })
         const seatPrices = individualSeats
           .map(seat => (seat as any).pricePerHour)
           .filter(price => price && price > 0)
@@ -194,7 +295,10 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       
       // If no group tables, max should be the most expensive individual seat
       if (groupTables.length === 0 && individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => t.seats)
+        const individualSeats = individualTables.flatMap(t => {
+          const tableWithSeats = t as any
+          return tableWithSeats.seats || []
+        })
         const seatPrices = individualSeats
           .map(seat => (seat as any).pricePerHour)
           .filter(price => price && price > 0)
@@ -207,8 +311,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       if (individualTables.length === 0 && groupTables.length > 0) {
         const perSeatPrices = groupTables
           .map(t => {
-            const tablePrice = (t as any).tablePricePerHour
-            const seatCount = t.seats.length
+            const tableWithSeats = t as any
+            const tablePrice = tableWithSeats.tablePricePerHour
+            const seatCount = tableWithSeats.seats ? tableWithSeats.seats.length : 0
             if (tablePrice && tablePrice > 0 && seatCount > 0) {
               return tablePrice / seatCount
             }
@@ -252,6 +357,24 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         imageUrls = [venueWithImages.heroImageUrl, ...imageUrls.filter((url: string) => url !== venueWithImages.heroImageUrl)]
       }
 
+      // Compute dealBadge: use featured deal if exists, otherwise first active deal
+      let dealBadge = null
+      try {
+        const venueWithDeals = venue as any
+        const primaryDeal = venueWithDeals.deals && Array.isArray(venueWithDeals.deals) && venueWithDeals.deals.length > 0 ? venueWithDeals.deals[0] : null
+        if (primaryDeal && primaryDeal.title) {
+          dealBadge = {
+            title: primaryDeal.title || "",
+            description: primaryDeal.description || "",
+            type: primaryDeal.type || "",
+            summary: formatDealBadgeSummary(primaryDeal),
+          }
+        }
+      } catch (error) {
+        console.error("Error computing dealBadge for venue:", venue.id, error)
+        dealBadge = null
+      }
+
       return {
         id: venue.id,
         name: venue.name,
@@ -267,6 +390,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         rulesText: venue.rulesText || "",
         availabilityLabel,
         imageUrls,
+        dealBadge,
       }
     })
 

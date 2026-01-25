@@ -17,6 +17,12 @@ export interface VenuePreviewSheetVenue {
   imageUrls?: string[]
   capacity: number
   rulesText?: string
+  dealBadge?: {
+    title: string
+    description: string
+    type: string
+    summary: string
+  } | null
 }
 
 interface VenuePreviewSheetProps {
@@ -97,6 +103,7 @@ export function VenuePreviewSheet({
             rulesText={venue.rulesText}
             isExpanded={false}
             isDeemphasized={false}
+            dealBadge={venue.dealBadge}
           />
         </div>
       </div>

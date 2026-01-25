@@ -30,6 +30,12 @@ interface VenueCardProps {
   onSelect?: () => void
   onClose?: () => void
   onBookingSuccess?: () => void
+  dealBadge?: {
+    title: string
+    description: string
+    type: string
+    summary: string
+  } | null
 }
 
 interface Slot {
@@ -59,6 +65,7 @@ export function VenueCard({
   onSelect,
   onClose,
   onBookingSuccess,
+  dealBadge,
 }: VenueCardProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
@@ -261,17 +268,31 @@ export function VenueCard({
           {/* Image Section with Carousel */}
           <div className="relative">
             <VenueImageCarousel images={imageUrls} enableGallery={false} />
-            {/* Availability label overlaying top-right of image */}
-            {availabilityLabel && (
-              <span
-                className={cn(
-                  "absolute top-2 right-2 z-10 rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
-                  isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
-                )}
-              >
-                {availabilityLabel}
-              </span>
-            )}
+            {/* Badges overlaying top-right of image */}
+            <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 items-end">
+              {/* Availability label */}
+              {availabilityLabel && (
+                <span
+                  className={cn(
+                    "rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
+                    isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
+                  )}
+                >
+                  {availabilityLabel}
+                </span>
+              )}
+              {/* Deal Badge directly under availability bubble */}
+              {dealBadge && (
+                <span
+                  className={cn(
+                    "rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
+                    isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
+                  )}
+                >
+                  DEAL · {dealBadge.summary}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Text Content Below Image */}
@@ -280,7 +301,7 @@ export function VenueCard({
               {name}
             </h3>
             {locationDisplay && (
-              <div className="mt-1 flex items-center gap-1">
+              <div className={cn("mt-1 flex items-center gap-1", dealBadge ? "mt-1" : "mt-1")}>
                 <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
                 <p className={cn(isDeemphasized ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground")}>
                   {locationDisplay}

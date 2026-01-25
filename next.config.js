@@ -16,6 +16,13 @@ const nextConfig = {
   // Allow Mapbox CSS to be imported
   transpilePackages: [],
   // PWA-ready configuration (can be enhanced with next-pwa later)
+  // Temporarily disable webpack cache to fix corruption issues
+  webpack: (config, { dev, isServer }) => {
+    if (dev) {
+      config.cache = false
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig

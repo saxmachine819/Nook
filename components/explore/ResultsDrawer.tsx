@@ -22,12 +22,14 @@ interface ResultsDrawerProps {
   venues: ResultsDrawerVenue[]
   onSelectVenue: (id: string) => void
   onCenterOnVenue?: (id: string) => void
+  autoExpand?: boolean // Automatically expand when search/filters are active
 }
 
 export function ResultsDrawer({
   venues,
   onSelectVenue,
   onCenterOnVenue,
+  autoExpand = false,
 }: ResultsDrawerProps) {
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -35,6 +37,35 @@ export function ResultsDrawer({
   const dragStartYRef = useRef<number | null>(null)
   const dragStartHeightRef = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [calculatedHeight, setCalculatedHeight] = useState<number | null>(null)
+
+  // Auto-expand when search/filters are active
+  useEffect(() => {
+    if (autoExpand && !expanded) {
+      setExpanded(true)
+    }
+  }, [autoExpand, expanded])
+
+  // Calculate height needed based on content
+  useEffect(() => {
+    if (expanded && contentRef.current && !isDragging) {
+      // Measure the actual content height
+      const contentHeight = contentRef.current.scrollHeight
+      const headerHeight = 48 // COLLAPSED_HEIGHT
+      const padding = 16 + 24 // px-4 (16px) + pb-6 (24px)
+      const totalHeight = headerHeight + contentHeight + padding
+      
+      // Cap at max height (60vh)
+      const viewportHeight = window.innerHeight
+      const maxHeight = (viewportHeight * 60) / 100
+      const finalHeight = Math.min(totalHeight, maxHeight)
+      
+      setCalculatedHeight(finalHeight)
+    } else if (!expanded) {
+      setCalculatedHeight(null)
+    }
+  }, [expanded, venues.length, isDragging])
 
   const n = venues.length
   const label = n === 1 ? "1 location in this area" : `${n} locations in this area`
@@ -57,7 +88,7 @@ export function ResultsDrawer({
     dragStartYRef.current = e.clientY
     const viewportHeight = window.innerHeight
     const currentHeightPx = expanded
-      ? (viewportHeight * EXPANDED_HEIGHT_PERCENT) / 100
+      ? (calculatedHeight ?? (viewportHeight * EXPANDED_HEIGHT_PERCENT) / 100)
       : COLLAPSED_HEIGHT
     dragStartHeightRef.current = currentHeightPx
     if (e.target instanceof HTMLElement) {
@@ -112,7 +143,7 @@ export function ResultsDrawer({
   const currentHeight = dragHeight !== null
     ? dragHeight
     : expanded
-    ? undefined // Use percentage when not dragging
+    ? (calculatedHeight ?? undefined) // Use calculated height when expanded
     : COLLAPSED_HEIGHT
 
   const isExpandedOrDraggingUp = expanded || (dragHeight !== null && dragHeight > COLLAPSED_HEIGHT + 20)
@@ -124,11 +155,11 @@ export function ResultsDrawer({
         "fixed left-0 right-0 z-40 flex flex-col rounded-t-xl border-t border-border bg-background shadow-lg",
         "bottom-[5rem]",
         isDragging && "transition-none", // Disable transition during drag
-        !isDragging && "transition-[height] duration-300 ease-out"
+        !isDragging && "transition-[height] duration-300 ease-in-out" // Warmer, more premium feel
       )}
       style={{
         height: currentHeight !== undefined ? `${currentHeight}px` : undefined,
-        ...(currentHeight === undefined && expanded
+        ...(currentHeight === undefined && expanded && calculatedHeight === null
           ? { height: "60vh", maxHeight: "calc(100vh - 5rem)" }
           : {}),
       }}
@@ -164,6 +195,7 @@ export function ResultsDrawer({
         </div>
       </div>
       <div
+        ref={contentRef}
         className={cn(
           "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 min-h-0",
           !isExpandedOrDraggingUp && "hidden"

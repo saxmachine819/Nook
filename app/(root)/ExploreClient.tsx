@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { MapView } from "@/components/explore/MapView"
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls"
 import { VenuePreviewSheet } from "@/components/explore/VenuePreviewSheet"
@@ -24,6 +25,12 @@ interface Venue {
   availabilityLabel?: string
   imageUrls?: string[]
   hourlySeatPrice?: number
+  dealBadge?: {
+    title: string
+    description: string
+    type: string
+    summary: string
+  } | null
 }
 
 interface ExploreClientProps {
@@ -50,37 +57,231 @@ function normalizeVenue(v: Record<string, unknown>): Venue {
     availabilityLabel: v.availabilityLabel != null ? String(v.availabilityLabel) : undefined,
     imageUrls: Array.isArray(v.imageUrls) ? (v.imageUrls as string[]) : undefined,
     hourlySeatPrice: h,
+    dealBadge: v.dealBadge && typeof v.dealBadge === "object" && v.dealBadge !== null
+      ? (v.dealBadge as { title: string; description: string; type: string; summary: string })
+      : null,
+  }
+}
+
+const FILTER_STORAGE_KEY = "nook_explore_filters"
+
+// Helper function to load filters from localStorage (with SSR guard)
+function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState } {
+  if (typeof window === "undefined") {
+    return {
+      searchQuery: "",
+      filters: {
+        tags: [],
+        priceMin: null,
+        priceMax: null,
+        openNow: false,
+        seatCount: null,
+        bookingMode: [],
+        dealsOnly: false,
+      },
+    }
+  }
+  
+  try {
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      return {
+        searchQuery: parsed.searchQuery || "",
+        filters: {
+          tags: Array.isArray(parsed.filters?.tags) ? parsed.filters.tags : [],
+          priceMin: typeof parsed.filters?.priceMin === "number" ? parsed.filters.priceMin : null,
+          priceMax: typeof parsed.filters?.priceMax === "number" ? parsed.filters.priceMax : null,
+          openNow: parsed.filters?.openNow === true,
+          seatCount: typeof parsed.filters?.seatCount === "number" ? parsed.filters.seatCount : null,
+          bookingMode: Array.isArray(parsed.filters?.bookingMode) ? parsed.filters.bookingMode : [],
+          dealsOnly: parsed.filters?.dealsOnly === true,
+        },
+      }
+    }
+  } catch (e) {
+    console.error("Error loading filters from localStorage:", e)
+  }
+  
+  return {
+    searchQuery: "",
+    filters: {
+      tags: [],
+      priceMin: null,
+      priceMax: null,
+      openNow: false,
+      seatCount: null,
+      bookingMode: [],
+      dealsOnly: false,
+    },
+  }
+}
+
+// Helper function to save filters to localStorage
+function saveFiltersToStorage(searchQuery: string, filters: FilterState) {
+  if (typeof window === "undefined") return
+  
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+      searchQuery,
+      filters,
+    }))
+  } catch (e) {
+    console.error("Error saving filters to localStorage:", e)
   }
 }
 
 export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
+  const router = useRouter()
   const [isClient, setIsClient] = useState(false)
-  const [venues, setVenues] = useState<Venue[]>(initialVenues)
+  
+  // Initialize filters from localStorage on mount
+  const initialFilterState = loadFiltersFromStorage()
+  console.log("🚀 ExploreClient mounting, loaded filters from storage:", initialFilterState)
+  const [searchQuery, setSearchQuery] = useState(initialFilterState.searchQuery)
+  const [filters, setFilters] = useState<FilterState>(initialFilterState.filters)
+  
+  // Start with empty venues to avoid flash of wrong content
+  // They'll be populated after filters are restored and search is performed
+  const [venues, setVenues] = useState<Venue[]>([])
+  const hasInitializedVenuesRef = useRef(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
   const [isSearching, setIsSearching] = useState(false)
   const [isSearchingText, setIsSearchingText] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [filters, setFilters] = useState<FilterState>({
-    tags: [],
-    priceMin: null,
-    priceMax: null,
-    openNow: false,
-    seatCount: null,
-    bookingMode: [],
-  })
+  
+  const filtersRef = useRef<FilterState>(initialFilterState.filters)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [centerOnVenueId, setCenterOnVenueId] = useState<string | null>(null)
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
+  const [shouldFitMapBounds, setShouldFitMapBounds] = useState<boolean>(false) // Signal to map that it should fit bounds
+  const [mapRefreshTrigger, setMapRefreshTrigger] = useState<number>(0) // Increment to force map refresh
+  
+  // Keep filtersRef in sync with filters state and save to localStorage
+  useEffect(() => {
+    filtersRef.current = filters
+    // Save filters to localStorage whenever they change
+    saveFiltersToStorage(searchQuery, filters)
+    console.log("📝 Filters state updated and saved to storage:", {
+      dealsOnly: filters.dealsOnly,
+      tagsCount: filters.tags.length,
+      hasPriceFilter: filters.priceMin != null || filters.priceMax != null,
+      hasSeatCount: filters.seatCount != null,
+      bookingModeCount: filters.bookingMode.length,
+      searchQuery
+    })
+  }, [filters, searchQuery])
+
+  
+  // Store performSearch in ref for verification and initial load
+  const performSearchRef = useRef<((query: string, bounds?: { north: number; south: number; east: number; west: number } | null, currentFilters?: FilterState) => Promise<void>) | null>(null)
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
   const hasMapboxToken = !!mapboxToken
 
   useEffect(() => {
     setIsClient(true)
-    requestLocation()
+    // Location will be requested when user clicks "Center on me" button
   }, [])
+
+  // Restore filters from localStorage when component mounts (e.g., navigating back)
+  // This runs BEFORE initializing venues to avoid flash of wrong content
+  useEffect(() => {
+    if (typeof window === "undefined" || !isClient || hasInitializedVenuesRef.current) return
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:180',message:'Filter restoration useEffect triggered',data:{isClient,currentFilters:filters,currentQuery:searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
+    const stored = loadFiltersFromStorage()
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:186',message:'Loaded filters from storage',data:{stored,hasStoredFilters:stored.searchQuery.length > 0 || stored.filters.dealsOnly || stored.filters.tags.length > 0 || stored.filters.priceMin != null || stored.filters.priceMax != null || stored.filters.seatCount != null || stored.filters.bookingMode.length > 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
+    const hasStoredFilters = stored.searchQuery.length > 0 || 
+                            stored.filters.dealsOnly || 
+                            stored.filters.tags.length > 0 || 
+                            stored.filters.priceMin != null || 
+                            stored.filters.priceMax != null || 
+                            stored.filters.seatCount != null || 
+                            stored.filters.bookingMode.length > 0
+    
+    if (hasStoredFilters) {
+      const filtersMatch = 
+        filters.dealsOnly === stored.filters.dealsOnly &&
+        filters.tags.length === stored.filters.tags.length &&
+        filters.tags.every(t => stored.filters.tags.includes(t)) &&
+        filters.priceMin === stored.filters.priceMin &&
+        filters.priceMax === stored.filters.priceMax &&
+        filters.seatCount === stored.filters.seatCount &&
+        filters.bookingMode.length === stored.filters.bookingMode.length &&
+        filters.bookingMode.every(m => stored.filters.bookingMode.includes(m)) &&
+        searchQuery === stored.searchQuery
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:203',message:'Filter match check',data:{filtersMatch,stored,currentFilters:filters},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      
+      if (!filtersMatch) {
+        console.log("🔄 Restoring filters from localStorage:", stored)
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:210',message:'Restoring filters from localStorage',data:{stored,hasPerformSearchRef:!!performSearchRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        
+        setSearchQuery(stored.searchQuery)
+        setFilters(stored.filters)
+        filtersRef.current = stored.filters
+        
+        // Re-apply search with restored filters
+        if (performSearchRef.current) {
+          performSearchRef.current(stored.searchQuery, currentBoundsRef.current ?? undefined, stored.filters)
+        } else {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:220',message:'performSearchRef is null, cannot restore',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          // #endregion
+        }
+      } else {
+        // Filters match, but we still need to initialize venues
+        // If we have active filters, search will be triggered by the initialVenues useEffect
+        // Otherwise, set initial venues
+        if (!hasStoredFilters && !hasInitializedVenuesRef.current) {
+          setVenues(initialVenues)
+          hasInitializedVenuesRef.current = true
+        }
+      }
+    } else {
+      // No stored filters, use initial venues
+      if (!hasInitializedVenuesRef.current) {
+        setVenues(initialVenues)
+        hasInitializedVenuesRef.current = true
+      }
+    }
+  }, [isClient, filters, searchQuery]) // Run when client becomes true (after mount)
+
+  // Initialize venues after filters are restored (to avoid flash of wrong content)
+  useEffect(() => {
+    if (typeof window === "undefined" || hasInitializedVenuesRef.current) return
+    
+    const hasActiveFilters = filters.dealsOnly || filters.tags.length > 0 || 
+                            filters.priceMin != null || filters.priceMax != null || 
+                            filters.seatCount != null || filters.bookingMode.length > 0 ||
+                            searchQuery.length > 0
+    
+    if (hasActiveFilters && performSearchRef.current) {
+      // Filters are active, search will populate venues
+      console.log("🔄 Initializing with active filters, will search")
+      performSearchRef.current(searchQuery, currentBoundsRef.current ?? undefined, filters)
+      hasInitializedVenuesRef.current = true
+    } else if (!hasActiveFilters) {
+      // No filters, use initialVenues
+      console.log("🔄 Initializing with no filters, using initialVenues")
+      setVenues(initialVenues)
+      hasInitializedVenuesRef.current = true
+    }
+  }, [filters, searchQuery, initialVenues]) // Run when filters/searchQuery are ready
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -123,7 +324,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     }
   }
 
-  const performSearch = async (
+  const performSearch = useCallback(async (
     query: string,
     bounds?: { north: number; south: number; east: number; west: number } | null,
     currentFilters?: FilterState
@@ -138,7 +339,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         params.append("west", bounds.west.toString())
       }
       if (query.length > 0) params.append("q", query)
-      const activeFilters = currentFilters ?? filters
+      const activeFilters = currentFilters ?? filtersRef.current
       if (activeFilters.tags.length > 0)
         params.append("tags", activeFilters.tags.join(","))
       if (activeFilters.priceMin != null)
@@ -149,21 +350,54 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         params.append("seatCount", activeFilters.seatCount.toString())
       if (activeFilters.bookingMode.length > 0)
         params.append("bookingMode", activeFilters.bookingMode.join(","))
+      if (activeFilters.dealsOnly) {
+        params.append("dealsOnly", "true")
+      }
 
-      const res = await fetch(`/api/venues/search?${params.toString()}`)
+      const url = `/api/venues/search?${params.toString()}`
+      console.log("🔍 Searching with filters:", { dealsOnly: activeFilters.dealsOnly, url, currentVenueCount: venues.length })
+      const res = await fetch(url)
       const data = await res.json().catch(() => null)
       if (!res.ok) {
         console.error("Failed to search venues:", data?.error)
         return
       }
       const raw = (data.venues ?? []) as Record<string, unknown>[]
-      setVenues(raw.map(normalizeVenue))
+      const newVenues = raw.map(normalizeVenue)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:376',message:'About to set venues state',data:{newVenueCount:newVenues.length,activeFilters,venueIds:newVenues.map(v=>v.id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      console.log("✅ Received venues:", newVenues.length, "with dealsOnly:", activeFilters.dealsOnly)
+      console.log("🗺️ Setting venues state, map should update...")
+      console.log("📍 Venue IDs:", newVenues.map(v => v.id).slice(0, 5))
+      console.log("🔍 Active filters when setting venues:", {
+        dealsOnly: activeFilters.dealsOnly,
+        tags: activeFilters.tags.length,
+        priceMin: activeFilters.priceMin,
+        priceMax: activeFilters.priceMax,
+        seatCount: activeFilters.seatCount,
+        bookingMode: activeFilters.bookingMode.length
+      })
+      setVenues(newVenues)
+      // Force map refresh when search results update
+      setMapRefreshTrigger(prev => prev + 1)
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:388',message:'setVenues called',data:{newVenueCount:newVenues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
     } catch (e) {
       console.error("Error searching venues:", e)
     } finally {
       setIsSearchingText(false)
     }
-  }
+  }, []) // Empty deps - use filtersRef.current and venues.length inside
+  
+  // Store performSearch in ref for initial load
+  useEffect(() => {
+    performSearchRef.current = performSearch
+  }, [performSearch])
+  
+  // This is now handled in the URL params loading useEffect above
 
   const handleSearch = useCallback(
     async (query: string) => {
@@ -174,13 +408,18 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           filters.priceMin != null ||
           filters.priceMax != null ||
           filters.seatCount != null ||
-          filters.bookingMode.length > 0
+          filters.bookingMode.length > 0 ||
+          filters.dealsOnly
         if (!hasActive) {
           setIsSearchingText(false)
           if (currentBoundsRef.current) {
             await performSearch("", currentBoundsRef.current)
           } else {
+            // Only reset to initialVenues if we truly have no filters and no search
+            console.log("🔄 Resetting to initialVenues (no active filters, no search)")
             setVenues(initialVenues)
+            // Force map refresh when clearing search
+            setMapRefreshTrigger(prev => prev + 1)
           }
           return
         }
@@ -190,10 +429,42 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     [initialVenues, filters]
   )
 
-  const handleFiltersChange = useCallback((f: FilterState) => setFilters(f), [])
-  const handleApplyFilters = useCallback(async () => {
-    await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filters)
-  }, [searchQuery, filters])
+  const handleFiltersChange = useCallback((f: FilterState) => {
+    setFilters(f)
+  }, [])
+  
+  const handleApplyFilters = useCallback(async (appliedFilters?: FilterState) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:349',message:'handleApplyFilters called',data:{hasAppliedFilters:!!appliedFilters,appliedFilters,currentVenueCount:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
+    // Accept filters as parameter to avoid timing issues with ref updates
+    const filtersToUse = appliedFilters ?? filtersRef.current
+    console.log("🔍 Applying filters:", { appliedFilters: !!appliedFilters, filtersToUse })
+    
+    // Always update filter state if appliedFilters were passed
+    // Filters will be saved to localStorage via the useEffect that watches filters
+    if (appliedFilters) {
+      console.log("📝 Setting filter state:", appliedFilters)
+      setFilters(appliedFilters)
+      filtersRef.current = appliedFilters
+      // Signal to map that it should fit bounds (filters were actively changed)
+      setShouldFitMapBounds(true)
+      // Force map refresh by incrementing trigger
+      setMapRefreshTrigger(prev => prev + 1)
+    }
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:365',message:'About to call performSearch',data:{filtersToUse,searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
+    // Perform search with the filters - this will update venues and trigger map refresh
+    await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filtersToUse)
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:370',message:'performSearch completed',data:{venueCountAfter:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+  }, [searchQuery])
 
   const handleClearFilters = useCallback(async () => {
     const cleared: FilterState = {
@@ -203,11 +474,19 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       openNow: false,
       seatCount: null,
       bookingMode: [],
+      dealsOnly: false,
     }
     setFilters(cleared)
+    setSearchQuery("") // Also clear search query
+    // Force map refresh when clearing filters
+    setMapRefreshTrigger(prev => prev + 1)
+    // Save cleared filters to localStorage
+    saveFiltersToStorage("", cleared)
     if (searchQuery.length > 0 || currentBoundsRef.current) {
-      await performSearch(searchQuery, currentBoundsRef.current ?? undefined, cleared)
+      await performSearch("", currentBoundsRef.current ?? undefined, cleared)
     } else {
+      // Only reset to initialVenues when explicitly clearing all filters with no search/bounds
+      console.log("🔄 Resetting to initialVenues (clear filters, no search/bounds)")
       setVenues(initialVenues)
     }
   }, [searchQuery, initialVenues])
@@ -218,7 +497,115 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     (filters.priceMax != null ? 1 : 0) +
     (filters.openNow ? 1 : 0) +
     (filters.seatCount != null ? 1 : 0) +
-    filters.bookingMode.length
+    filters.bookingMode.length +
+    (filters.dealsOnly ? 1 : 0)
+
+  // Generate individual filter chips
+  const getFilterChips = () => {
+    const chips: Array<{ id: string; label: string; onRemove: () => void }> = []
+    
+    if (filters.dealsOnly) {
+      chips.push({
+        id: "dealsOnly",
+        label: "Venues with deals",
+        onRemove: async () => {
+          const newFilters = { ...filters, dealsOnly: false }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
+    
+    filters.tags.forEach((tag) => {
+      chips.push({
+        id: `tag-${tag}`,
+        label: tag,
+        onRemove: async () => {
+          const newFilters = { ...filters, tags: filters.tags.filter(t => t !== tag) }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    })
+    
+    if (filters.priceMin != null) {
+      chips.push({
+        id: "priceMin",
+        label: `Min: $${filters.priceMin}`,
+        onRemove: async () => {
+          const newFilters = { ...filters, priceMin: null }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
+    
+    if (filters.priceMax != null) {
+      chips.push({
+        id: "priceMax",
+        label: `Max: $${filters.priceMax}`,
+        onRemove: async () => {
+          const newFilters = { ...filters, priceMax: null }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
+    
+    if (filters.seatCount != null) {
+      chips.push({
+        id: "seatCount",
+        label: `${filters.seatCount}+ seats`,
+        onRemove: async () => {
+          const newFilters = { ...filters, seatCount: null }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
+    
+    filters.bookingMode.forEach((mode) => {
+      chips.push({
+        id: `bookingMode-${mode}`,
+        label: mode === "communal" ? "Communal" : "Full table",
+        onRemove: async () => {
+          const newFilters = { ...filters, bookingMode: filters.bookingMode.filter(m => m !== mode) }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    })
+    
+    if (filters.openNow) {
+      chips.push({
+        id: "openNow",
+        label: "Open now",
+        onRemove: async () => {
+          const newFilters = { ...filters, openNow: false }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
+    
+    return chips
+  }
+
+  const filterChips = getFilterChips()
 
   const venuesWithLocation = useMemo(
     () => venues.filter((v) => v.latitude != null && v.longitude != null),
@@ -244,14 +631,28 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       {isClient && (
         <>
           <MapView
+            key={`map-${mapRefreshTrigger}`}
             venues={venuesWithLocation}
             userLocation={userLocation}
-            onSelectVenue={(id) => setSelectedVenueId(id)}
-            onMapClick={() => setSelectedVenueId(null)}
+            onSelectVenue={(id) => {
+              setSelectedVenueId(id)
+              // Ensure filters persist when selecting a venue
+            }}
+            onMapClick={() => {
+              setSelectedVenueId(null)
+              // Ensure filters persist when clicking map
+            }}
             onSearchArea={handleSearchArea}
             isSearching={isSearching}
             centerOnVenueId={centerOnVenueId}
             hasMapboxToken={hasMapboxToken}
+            shouldFitBounds={shouldFitMapBounds}
+            onBoundsFitted={() => {
+              // Reset the flag after bounds are fitted
+              setShouldFitMapBounds(false)
+            }}
+            onRequestLocation={requestLocation}
+            locationState={locationState}
           />
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
             <TopOverlayControls
@@ -264,19 +665,37 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
               onClearFilters={handleClearFilters}
               activeFilterCount={activeFilterCount}
             />
-            {locationState === "denied" && (
-              <div className="mx-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-background/90 px-3 py-2 shadow-sm backdrop-blur">
-                <p className="text-xs text-muted-foreground">
-                  Enable location to see nearby workspaces
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={requestLocation}
-                  className="shrink-0 text-xs"
-                >
-                  Try again
-                </Button>
+            {/* Filter chips */}
+            {filterChips.length > 0 && (
+              <div className="mx-4 flex flex-wrap gap-2">
+                {filterChips.map((chip) => (
+                  <div
+                    key={chip.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/95 backdrop-blur-sm px-3 py-1.5 text-xs font-medium shadow-sm"
+                  >
+                    <span className="text-foreground">{chip.label}</span>
+                    <button
+                      type="button"
+                      onClick={chip.onRemove}
+                      className="ml-0.5 rounded-full hover:bg-muted p-0.5 transition-colors"
+                      aria-label={`Remove ${chip.label} filter`}
+                    >
+                      <svg
+                        className="h-3 w-3 text-muted-foreground"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -284,11 +703,40 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             venues={venues}
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
+            autoExpand={searchQuery.length > 0 || isSearchingText || activeFilterCount > 0}
           />
           <VenuePreviewSheet
             open={!!selectedVenueId && !!selectedVenue}
-            venue={selectedVenue}
-            onClose={() => setSelectedVenueId(null)}
+            venue={selectedVenue ? {
+              id: selectedVenue.id,
+              name: selectedVenue.name,
+              address: selectedVenue.address,
+              city: selectedVenue.city,
+              state: selectedVenue.state,
+              minPrice: selectedVenue.minPrice,
+              maxPrice: selectedVenue.maxPrice,
+              tags: selectedVenue.tags,
+              availabilityLabel: selectedVenue.availabilityLabel,
+              imageUrls: selectedVenue.imageUrls,
+              capacity: selectedVenue.capacity,
+              rulesText: selectedVenue.rulesText,
+              dealBadge: selectedVenue.dealBadge,
+            } : null}
+            onClose={() => {
+              console.log("🔒 Closing venue sheet, filters should persist:", filters)
+              console.log("📍 Current venues count:", venues.length)
+              console.log("🔍 Active filters:", {
+                dealsOnly: filters.dealsOnly,
+                tags: filters.tags.length,
+                priceMin: filters.priceMin,
+                priceMax: filters.priceMax,
+                seatCount: filters.seatCount,
+                bookingMode: filters.bookingMode.length
+              })
+              setSelectedVenueId(null)
+              // Filters should remain in state and URL
+              // Venues should NOT be reset - they should remain filtered
+            }}
           />
         </>
       )}

@@ -21,6 +21,10 @@ interface MapViewProps {
   isSearching: boolean
   centerOnVenueId: string | null
   hasMapboxToken: boolean
+  shouldFitBounds?: boolean
+  onBoundsFitted?: () => void
+  onRequestLocation?: () => void
+  locationState?: "idle" | "requesting" | "granted" | "denied" | "unavailable"
 }
 
 export function MapView({
@@ -32,6 +36,10 @@ export function MapView({
   isSearching,
   centerOnVenueId,
   hasMapboxToken,
+  shouldFitBounds,
+  onBoundsFitted,
+  onRequestLocation,
+  locationState,
 }: MapViewProps) {
   if (!hasMapboxToken) {
     return (
@@ -58,6 +66,10 @@ export function MapView({
         onSearchArea={onSearchArea}
         isSearching={isSearching}
         centerOnVenueId={centerOnVenueId}
+        shouldFitBounds={shouldFitBounds}
+        onBoundsFitted={onBoundsFitted}
+        onRequestLocation={onRequestLocation}
+        locationState={locationState}
       />
     </div>
   )

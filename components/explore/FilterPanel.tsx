@@ -12,6 +12,7 @@ export interface FilterState {
   openNow: boolean
   seatCount: number | null
   bookingMode: ("communal" | "full-table")[]
+  dealsOnly: boolean
 }
 
 interface FilterPanelProps {
@@ -19,7 +20,7 @@ interface FilterPanelProps {
   onOpenChange: (open: boolean) => void
   filters: FilterState
   onFiltersChange: (filters: FilterState) => void
-  onApply: () => void
+  onApply: (appliedFilters?: FilterState) => void
   onClear: () => void
 }
 
@@ -83,7 +84,8 @@ export function FilterPanel({
 
   const handleApply = () => {
     onFiltersChange(localFilters)
-    onApply()
+    // Pass localFilters directly to avoid timing issues with ref updates
+    onApply(localFilters)
     onOpenChange(false)
   }
 
@@ -95,6 +97,7 @@ export function FilterPanel({
       openNow: false,
       seatCount: null,
       bookingMode: [],
+      dealsOnly: false,
     }
     setLocalFilters(clearedFilters)
     onFiltersChange(clearedFilters)
@@ -108,7 +111,8 @@ export function FilterPanel({
     (localFilters.priceMax !== null ? 1 : 0) +
     (localFilters.openNow ? 1 : 0) +
     (localFilters.seatCount !== null ? 1 : 0) +
-    localFilters.bookingMode.length
+    localFilters.bookingMode.length +
+    (localFilters.dealsOnly ? 1 : 0)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,6 +122,27 @@ export function FilterPanel({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Deals Only */}
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={localFilters.dealsOnly}
+                onChange={() => {
+                  setLocalFilters((prev) => ({
+                    ...prev,
+                    dealsOnly: !prev.dealsOnly,
+                  }))
+                }}
+                className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+              />
+              <span className="text-sm font-medium">Deals</span>
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Show only venues with active deals
+            </p>
+          </div>
+
           {/* Tags */}
           <div>
             <h3 className="mb-3 text-sm font-medium">Tags</h3>

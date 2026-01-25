@@ -12,7 +12,7 @@ interface TopOverlayControlsProps {
   onFilterPanelOpenChange: (open: boolean) => void
   filters: FilterState
   onFiltersChange: (filters: FilterState) => void
-  onApplyFilters: () => void
+  onApplyFilters: (appliedFilters?: FilterState) => void
   onClearFilters: () => void
   activeFilterCount: number
   className?: string

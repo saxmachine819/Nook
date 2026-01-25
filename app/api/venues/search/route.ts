@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { formatDealBadgeSummary } from "@/lib/deal-utils"
 
 function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
@@ -56,8 +57,10 @@ function computeAvailabilityLabel(
 }
 
 export async function GET(request: Request) {
+  console.log("🔍 /api/venues/search route called")
   try {
     const { searchParams } = new URL(request.url)
+    console.log("📋 Search params:", Object.fromEntries(searchParams.entries()))
     const north = searchParams.get("north")
     const south = searchParams.get("south")
     const east = searchParams.get("east")
@@ -75,6 +78,7 @@ export async function GET(request: Request) {
     const seatCount = seatCountParam ? parseInt(seatCountParam, 10) : null
     const bookingModeParam = searchParams.get("bookingMode")
     const bookingModes = bookingModeParam ? (bookingModeParam.split(",").filter(Boolean) as ("communal" | "full-table")[]) : []
+    const dealsOnly = searchParams.get("dealsOnly") === "true"
     // Note: openNow is not implemented yet (coming soon)
 
     // Validate bounds if provided
@@ -164,6 +168,17 @@ export async function GET(request: Request) {
       }
     }
 
+    // Add dealsOnly filter
+    if (dealsOnly) {
+      // Filter venues that have at least one active deal
+      whereClause.deals = {
+        some: { 
+          isActive: true 
+        }
+      }
+      console.log("✅ Applied dealsOnly filter to whereClause:", JSON.stringify(whereClause.deals))
+    }
+
     // Query venues with filters
     let venues = await prisma.venue.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
@@ -173,10 +188,22 @@ export async function GET(request: Request) {
             seats: true,
           },
         },
-      },
+        deals: {
+          where: { isActive: true },
+          orderBy: [
+            { featured: 'desc' },
+            { createdAt: 'desc' }
+          ],
+          take: 1, // Only need the primary deal
+        },
+      } as any,
       take: 100, // Limit results
       orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
     })
+    
+    if (dealsOnly) {
+      console.log(`📊 Found ${venues.length} venues with deals filter applied`)
+    }
 
     // Filter by tags if query provided (case-insensitive)
     if (q.length > 0) {
@@ -203,8 +230,9 @@ export async function GET(request: Request) {
     // Apply seat count filter (requires calculating capacity)
     if (seatCount !== null && !isNaN(seatCount) && seatCount > 0) {
       venues = venues.filter((venue) => {
+        const venueWithTables = venue as any
         // Calculate total capacity
-        const capacity = venue.tables.reduce((sum, table) => {
+        const capacity = venueWithTables.tables.reduce((sum: number, table: any) => {
           if (table.seats.length > 0) {
             return sum + table.seats.length
           }
@@ -217,14 +245,15 @@ export async function GET(request: Request) {
     // Apply booking mode filter (multiple modes can be selected)
     if (bookingModes.length > 0) {
       venues = venues.filter((venue) => {
+        const venueWithTables = venue as any
         // Check if venue matches any of the selected booking modes
         return bookingModes.some((mode) => {
           if (mode === "communal") {
             // Check if venue has any communal tables
-            return venue.tables.some((table) => (table as any).isCommunal === true)
+            return venueWithTables.tables.some((table: any) => table.isCommunal === true)
           } else if (mode === "full-table") {
             // Check if venue has any group booking mode tables
-            return venue.tables.some((table) => (table as any).bookingMode === "group")
+            return venueWithTables.tables.some((table: any) => table.bookingMode === "group")
           }
           return false
         })
@@ -270,8 +299,10 @@ export async function GET(request: Request) {
 
     // Format venues for client
     const formattedVenues = venues.map((venue) => {
+      const venueWithIncludes = venue as any
+      
       // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
-      const capacity = venue.tables.reduce((sum, table) => {
+      const capacity = venueWithIncludes.tables.reduce((sum: number, table: any) => {
         if (table.seats.length > 0) {
           return sum + table.seats.length
         }
@@ -280,23 +311,23 @@ export async function GET(request: Request) {
       }, 0)
       
       // Calculate pricing based on booking modes
-      const groupTables = venue.tables.filter(t => (t as any).bookingMode === "group")
-      const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
+      const groupTables = venueWithIncludes.tables.filter((t: any) => t.bookingMode === "group")
+      const individualTables = venueWithIncludes.tables.filter((t: any) => t.bookingMode === "individual")
       
       let averageSeatPrice = venue.hourlySeatPrice
       
       if (individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => t.seats)
+        const individualSeats = individualTables.flatMap((t: any) => t.seats)
         if (individualSeats.length > 0) {
-          averageSeatPrice = individualSeats.reduce((sum, seat) => sum + (seat as any).pricePerHour, 0) / individualSeats.length
+          averageSeatPrice = individualSeats.reduce((sum: number, seat: any) => sum + (seat.pricePerHour || 0), 0) / individualSeats.length
         }
       } else if (groupTables.length > 0) {
         // Only group tables - calculate average table price per seat
         const groupPrices = groupTables
-          .filter(t => (t as any).tablePricePerHour)
-          .map(t => ({ price: (t as any).tablePricePerHour!, seatCount: t.seats.length }))
+          .filter((t: any) => t.tablePricePerHour)
+          .map((t: any) => ({ price: t.tablePricePerHour!, seatCount: t.seats.length }))
         if (groupPrices.length > 0) {
-          const totalPricePerSeat = groupPrices.reduce((sum, t) => sum + (t.price / t.seatCount), 0)
+          const totalPricePerSeat = groupPrices.reduce((sum: number, t: any) => sum + (t.price / t.seatCount), 0)
           averageSeatPrice = totalPricePerSeat / groupPrices.length
         }
       }
@@ -307,30 +338,46 @@ export async function GET(request: Request) {
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array
       let imageUrls: string[] = []
-      const venueWithImages = venue as any
       
       // Parse imageUrls JSON field (can be array, string, or null)
-      if (venueWithImages.imageUrls) {
-        if (Array.isArray(venueWithImages.imageUrls)) {
-          imageUrls = venueWithImages.imageUrls.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
-        } else if (typeof venueWithImages.imageUrls === 'string') {
+      if (venueWithIncludes.imageUrls) {
+        if (Array.isArray(venueWithIncludes.imageUrls)) {
+          imageUrls = venueWithIncludes.imageUrls.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
+        } else if (typeof venueWithIncludes.imageUrls === 'string') {
           try {
-            const parsed = JSON.parse(venueWithImages.imageUrls)
+            const parsed = JSON.parse(venueWithIncludes.imageUrls)
             if (Array.isArray(parsed)) {
               imageUrls = parsed.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
             }
           } catch {
             // If parsing fails, treat as single URL string
-            if (venueWithImages.imageUrls.length > 0) {
-              imageUrls = [venueWithImages.imageUrls]
+            if (venueWithIncludes.imageUrls.length > 0) {
+              imageUrls = [venueWithIncludes.imageUrls]
             }
           }
         }
       }
       
       // Add heroImageUrl as first image if it exists
-      if (venueWithImages.heroImageUrl && typeof venueWithImages.heroImageUrl === 'string' && venueWithImages.heroImageUrl.length > 0) {
-        imageUrls = [venueWithImages.heroImageUrl, ...imageUrls.filter((url: string) => url !== venueWithImages.heroImageUrl)]
+      if (venueWithIncludes.heroImageUrl && typeof venueWithIncludes.heroImageUrl === 'string' && venueWithIncludes.heroImageUrl.length > 0) {
+        imageUrls = [venueWithIncludes.heroImageUrl, ...imageUrls.filter((url: string) => url !== venueWithIncludes.heroImageUrl)]
+      }
+
+      // Compute dealBadge: use featured deal if exists, otherwise first active deal
+      let dealBadge = null
+      try {
+        const primaryDeal = venueWithIncludes.deals && Array.isArray(venueWithIncludes.deals) && venueWithIncludes.deals.length > 0 ? venueWithIncludes.deals[0] : null
+        if (primaryDeal && primaryDeal.title) {
+          dealBadge = {
+            title: primaryDeal.title || "",
+            description: primaryDeal.description || "",
+            type: primaryDeal.type || "",
+            summary: formatDealBadgeSummary(primaryDeal),
+          }
+        }
+      } catch (error) {
+        console.error("Error computing dealBadge for venue:", venue.id, error)
+        dealBadge = null
       }
 
       return {
@@ -348,6 +395,7 @@ export async function GET(request: Request) {
         rulesText: venue.rulesText || "",
         availabilityLabel,
         imageUrls,
+        dealBadge,
       }
     })
 

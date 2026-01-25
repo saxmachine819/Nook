@@ -7,6 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum DealType {
+  FREE_ITEM
+  PERCENT_OFF
+  AMOUNT_OFF
+  TIME_WINDOW
+}
+
 model Venue {
   id              String        @id @default(cuid())
   name            String
@@ -27,6 +34,7 @@ model Venue {
   reservations    Reservation[]
   tables          Table[]
   seatBlocks      SeatBlock[]
+  deals           Deal[]
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?
@@ -92,6 +100,7 @@ model Reservation {
   table     Table?   @relation(fields: [tableId], references: [id])
   venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  dealRedemptions DealRedemption[]
 
   @@map("reservations")
 }
@@ -155,6 +164,7 @@ model User {
   reservations   Reservation[]
   venues         Venue[]
   createdSeatBlocks SeatBlock[]
+  dealRedemptions DealRedemption[]
 
   @@map("users")
 }
@@ -166,4 +176,37 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+model Deal {
+  id             String           @id @default(cuid())
+  venueId        String
+  isActive       Boolean          @default(true)
+  type           DealType
+  title          String
+  description    String
+  featured       Boolean          @default(false)
+  eligibilityJson Json?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  venue          Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  redemptions    DealRedemption[]
+
+  @@index([venueId, isActive])
+  @@map("deals")
+}
+
+model DealRedemption {
+  id              String       @id @default(cuid())
+  dealId          String
+  reservationId   String
+  redeemedAt      DateTime     @default(now())
+  redeemedByUserId String?
+  deal            Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  reservation     Reservation  @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  redeemedBy      User?        @relation(fields: [redeemedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([reservationId])
+  @@index([dealId])
+  @@map("deal_redemptions")
 }

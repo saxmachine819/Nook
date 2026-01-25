@@ -447,6 +447,7 @@ export function VenueBookingWidget({
                     onClick={() => {
                       setSelectedGroupTableId(table.id)
                       setSelectedSeatId(null)
+                      setSelectedSeatIds([])
                     }}
                     className={cn(
                       "relative rounded-md border p-4 text-left transition-all",
@@ -634,6 +635,7 @@ export function VenueBookingWidget({
                             onSelect={() => {
                               if (isAvailable) {
                                 setSelectedSeatId(seat.id)
+                                setSelectedGroupTableId(null)
                               }
                             }}
                           />
@@ -744,6 +746,8 @@ export function VenueBookingWidget({
                       isCommunal={seat.isCommunal ?? false}
                       onSelect={() => {
                         setSelectedSeatIds(allSeatIdsInGroup)
+                        setSelectedGroupTableId(null)
+                        setSelectedSeatId(null)
                       }}
                     />
                   )

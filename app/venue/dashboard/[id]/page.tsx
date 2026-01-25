@@ -78,8 +78,8 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
 
   const now = new Date()
 
-  // Fetch all reservations and seat blocks
-  const [reservations, seatBlocks] = await Promise.all([
+  // Fetch all reservations, seat blocks, and deals
+  const [reservations, seatBlocks, dealsResult] = await Promise.all([
     prisma.reservation.findMany({
       where: {
         venueId: venue.id,
@@ -118,13 +118,28 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
         startAt: "asc",
       },
     }),
+    prisma.deal.findMany({
+      where: {
+        venueId: venue.id,
+      },
+      orderBy: [
+        { featured: "desc" },
+        { createdAt: "desc" },
+      ],
+    }).catch((error) => {
+      console.error("Error fetching deals:", error)
+      return []
+    }),
   ])
+  
+  const deals = dealsResult || []
 
   return (
     <VenueOpsConsoleClient
       venue={venue}
       reservations={reservations}
       seatBlocks={seatBlocks}
+      deals={deals}
       now={now.toISOString()}
     />
   )

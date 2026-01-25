@@ -24,6 +24,10 @@ interface MapboxMapProps {
   onSearchArea?: (bounds: { north: number; south: number; east: number; west: number }) => void
   isSearching?: boolean
   centerOnVenueId?: string | null
+  shouldFitBounds?: boolean
+  onBoundsFitted?: () => void
+  onRequestLocation?: () => void
+  locationState?: "idle" | "requesting" | "granted" | "denied" | "unavailable"
 }
 
 // NYC coordinates (default center)
@@ -37,6 +41,10 @@ export function MapboxMap({
   onSearchArea,
   isSearching = false,
   centerOnVenueId,
+  shouldFitBounds,
+  onBoundsFitted,
+  onRequestLocation,
+  locationState,
 }: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -44,6 +52,8 @@ export function MapboxMap({
   const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
   const hasFitBoundsRef = useRef<boolean>(false) // Track if we've done initial fitBounds
+  const lastVenuesCountRef = useRef<number>(0) // Track venue count to detect changes
+  const hasAutoCenteredRef = useRef<boolean>(false) // Track if we've auto-centered on user location
   const onSelectVenueRef = useRef<((id: string) => void) | undefined>(onSelectVenue) // Keep callback current
   const onMapClickRef = useRef<(() => void) | undefined>(onMapClick)
   const pinImageLoadedRef = useRef<boolean>(false) // Track if pin image has been loaded
@@ -224,11 +234,17 @@ export function MapboxMap({
 
     // Click handler for individual pins
     map.on("click", "unclustered-point", (e) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:226',message:'unclustered-point click handler called',data:{hasOnSelectVenueRef:!!onSelectVenueRef.current,onSelectVenueType:typeof onSelectVenueRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       const features = map.queryRenderedFeatures(e.point, {
         layers: ["unclustered-point"],
       })
       if (features.length > 0) {
         const venueId = features[0].properties?.id
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:232',message:'About to call onSelectVenueRef',data:{venueId,hasCallback:!!onSelectVenueRef.current,callbackType:typeof onSelectVenueRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (venueId && onSelectVenueRef.current) {
           onSelectVenueRef.current(venueId)
         }
@@ -452,6 +468,54 @@ export function MapboxMap({
           }
 
           setIsLoading(false)
+          
+          // If venues changed while map was loading, update them now
+          if (venuesRef.current.length > 0) {
+            const source = map.getSource("venues") as mapboxgl.GeoJSONSource | null
+            if (source) {
+              const venuesGeoJSON = venuesToGeoJSON(venuesRef.current)
+              console.log("🗺️ Updating map with", venuesRef.current.length, "venues (on map load)")
+              source.setData(venuesGeoJSON)
+              // Force map repaint to show updated pins immediately
+              if (mapRef.current) {
+                forceMapRepaint(mapRef.current)
+              }
+              
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:475',message:'Map loaded, checking fitBounds',data:{venueCount:venuesRef.current.length,shouldFitBounds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+              // #endregion
+              
+              // Fit bounds if shouldFitBounds is true (filters were actively changed) or if initializing
+              const shouldFit = shouldFitBounds === true || lastVenuesCountRef.current === 0
+              if (shouldFit) {
+                const venuesWithLocation = venuesRef.current.filter(v => v.latitude != null && v.longitude != null)
+                if (venuesWithLocation.length > 0) {
+                  const bounds = new mapboxgl.LngLatBounds()
+                  venuesWithLocation.forEach(venue => {
+                    bounds.extend([venue.longitude!, venue.latitude!])
+                  })
+                  if (!bounds.isEmpty()) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:488',message:'Fitting bounds on map load',data:{venueCount:venuesWithLocation.length,shouldFitBounds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    
+                    map.fitBounds(bounds, {
+                      padding: 50,
+                      maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
+                      duration: 500,
+                    })
+                    lastVenuesCountRef.current = venuesRef.current.length
+                    if (onBoundsFitted) {
+                      onBoundsFitted()
+                    }
+                  }
+                }
+              }
+            } else {
+              // Initialize venues source now that map is loaded
+              initializeVenuesSource(map)
+            }
+          }
         } catch (error) {
           console.error("❌ Error styling map:", error)
           setIsLoading(false)
@@ -494,10 +558,16 @@ export function MapboxMap({
       map.on("zoomend", handleMoveEnd)
 
       const handleMapClick = (e: mapboxgl.MapMouseEvent) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:496',message:'handleMapClick called',data:{mapLoaded:map.loaded(),hasOnMapClickRef:!!onMapClickRef.current,onMapClickType:typeof onMapClickRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (!map.loaded()) return
         const features = map.queryRenderedFeatures(e.point, {
           layers: ["clusters", "unclustered-point"],
         })
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:502',message:'About to call onMapClickRef',data:{featuresCount:features.length,hasCallback:!!onMapClickRef.current,callbackType:typeof onMapClickRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (features.length === 0 && onMapClickRef.current) {
           onMapClickRef.current()
         }
@@ -634,9 +704,168 @@ export function MapboxMap({
     })
   }, [centerOnVenueId, venues, isLoading])
 
+  // Store venues in a ref so we can access latest value in intervals/callbacks
+  const venuesRef = useRef(venues)
+  const previousVenueIdsRef = useRef<string[]>(venues.map(v => v.id).sort())
+  
+  useEffect(() => {
+    venuesRef.current = venues
+  }, [venues])
+
+  // Helper function to force map repaint after data update
+  // Called synchronously immediately after setData() to ensure instant repaint
+  const forceMapRepaint = (map: mapboxgl.Map) => {
+    // Force a repaint to ensure the map renders the updated source data immediately
+    if (!map || !map.loaded()) return
+    
+    // Try internal triggerRepaint first (fastest)
+    if (typeof (map as any).triggerRepaint === 'function') {
+      (map as any).triggerRepaint()
+      return
+    }
+    
+    // Immediate synchronous repaint - trigger a moveend event (same as panning)
+    // This forces the map to re-render the current viewport with updated data
+    map.fire('moveend')
+    
+    // Also try setting center to itself as backup (synchronous)
+    const center = map.getCenter()
+    map.setCenter([center.lng, center.lat]) // Synchronous, forces immediate render
+  }
+  
+  // Store shouldFitBounds in a ref so we can access latest value in intervals/callbacks
+  const shouldFitBoundsRef = useRef(shouldFitBounds)
+  useEffect(() => {
+    shouldFitBoundsRef.current = shouldFitBounds
+  }, [shouldFitBounds])
+
   // Update venues source when venues change
   useEffect(() => {
-    if (!mapRef.current || isLoading || !mapRef.current.loaded()) return
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:650',message:'venues useEffect triggered',data:{hasMap:!!mapRef.current,isLoading,venueCount:venues.length,mapLoaded:mapRef.current?.loaded()??false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    console.log("🗺️ Map useEffect triggered:", { 
+      hasMap: !!mapRef.current, 
+      isLoading, 
+      venueCount: venues.length,
+      mapLoaded: mapRef.current?.loaded() ?? false 
+    })
+    
+    if (!mapRef.current) {
+      console.log("⏸️ Map update skipped: map ref is null")
+      return
+    }
+    
+    // Don't skip if isLoading - we can still queue the update
+    // The map will update once it's ready
+
+    // Wait for map to be ready (use a small delay if not loaded yet)
+    if (!mapRef.current.loaded()) {
+      console.log("⏳ Map not loaded yet, waiting...")
+      
+      // Set up interval to check when map loads
+      const checkLoaded = setInterval(() => {
+        if (mapRef.current?.loaded()) {
+          clearInterval(checkLoaded)
+          const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
+          if (source) {
+            // Use latest venues from ref (which will be updated by the venuesRef useEffect)
+            const currentVenues = venuesRef.current
+            const venuesGeoJSON = venuesToGeoJSON(currentVenues)
+            console.log("🗺️ Updating map with", currentVenues.length, "venues (after wait)")
+            source.setData(venuesGeoJSON)
+            // Force map repaint to show updated pins immediately
+            if (mapRef.current) {
+              forceMapRepaint(mapRef.current)
+            }
+            
+            // Fit bounds to venues if shouldFitBounds is true (filters were actively changed) or if initializing
+            // Use ref to get latest value
+            const shouldFit = shouldFitBoundsRef.current === true || lastVenuesCountRef.current === 0
+            if (shouldFit) {
+              const venuesWithLocation = currentVenues.filter(v => v.latitude != null && v.longitude != null)
+              if (venuesWithLocation.length > 0) {
+                const bounds = new mapboxgl.LngLatBounds()
+                venuesWithLocation.forEach(venue => {
+                  bounds.extend([venue.longitude!, venue.latitude!])
+                })
+                if (!bounds.isEmpty()) {
+                  // #region agent log
+                  fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:745',message:'Fitting bounds after wait',data:{venueCount:venuesWithLocation.length,shouldFitBounds:shouldFitBoundsRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                  // #endregion
+                  
+                  mapRef.current.fitBounds(bounds, {
+                    padding: 50,
+                    maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
+                    duration: 500,
+                  })
+                  lastVenuesCountRef.current = currentVenues.length
+                  if (onBoundsFitted) {
+                    onBoundsFitted()
+                  }
+                }
+              }
+            }
+          } else {
+            // Source doesn't exist, initialize it
+            console.log("🗺️ Initializing venues source (after wait)")
+            initializeVenuesSource(mapRef.current)
+            const currentVenueIds = venuesRef.current.map(v => v.id).sort()
+            previousVenueIdsRef.current = currentVenueIds
+          }
+        }
+      }, 100)
+      
+      // Also listen for the load event as a backup
+      const handleLoad = () => {
+        clearInterval(checkLoaded)
+        const source = mapRef.current?.getSource("venues") as mapboxgl.GeoJSONSource | null
+        if (source && mapRef.current) {
+          const currentVenues = venuesRef.current
+          const venuesGeoJSON = venuesToGeoJSON(currentVenues)
+          console.log("🗺️ Updating map with", currentVenues.length, "venues (on load event)")
+          source.setData(venuesGeoJSON)
+          // Force map repaint to show updated pins immediately
+          if (mapRef.current) {
+            forceMapRepaint(mapRef.current)
+          }
+          
+          // Fit bounds to venues if shouldFitBounds is true (filters were actively changed) or if initializing
+          // Use ref to get latest value
+          const shouldFit = shouldFitBoundsRef.current === true || lastVenuesCountRef.current === 0
+          if (shouldFit) {
+            const venuesWithLocation = currentVenues.filter(v => v.latitude != null && v.longitude != null)
+            if (venuesWithLocation.length > 0) {
+              const bounds = new mapboxgl.LngLatBounds()
+              venuesWithLocation.forEach(venue => {
+                bounds.extend([venue.longitude!, venue.latitude!])
+              })
+              if (!bounds.isEmpty()) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:775',message:'Fitting bounds on load event',data:{venueCount:venuesWithLocation.length,shouldFitBounds:shouldFitBoundsRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
+                
+                mapRef.current.fitBounds(bounds, {
+                  padding: 50,
+                  maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
+                  duration: 500,
+                })
+                lastVenuesCountRef.current = currentVenues.length
+                if (onBoundsFitted) {
+                  onBoundsFitted()
+                }
+              }
+            }
+          }
+        }
+      }
+      mapRef.current.once("load", handleLoad)
+      
+      return () => {
+        clearInterval(checkLoaded)
+        mapRef.current?.off("load", handleLoad)
+      }
+    }
 
     // If pin image should be loaded but isn't in map, reload it
     if (pinImageLoadedRef.current && !mapRef.current.hasImage("venue-pin")) {
@@ -650,7 +879,12 @@ export function MapboxMap({
             const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
             if (source) {
               const venuesGeoJSON = venuesToGeoJSON(venues)
+              console.log("🗺️ Updating map with", venues.length, "venues (after pin reload)")
               source.setData(venuesGeoJSON)
+              // Force map repaint to show updated pins immediately
+              if (mapRef.current) {
+                forceMapRepaint(mapRef.current)
+              }
             } else {
               initializeVenuesSource(mapRef.current)
             }
@@ -664,9 +898,69 @@ export function MapboxMap({
     }
 
     const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
+    
+    // Detect if this is a significant change (different venue set, e.g., filter applied)
+    const currentVenueIds = venues.map(v => v.id).sort()
+    const previousVenueIds = previousVenueIdsRef.current
+    
+    // Compare current vs previous to detect significant changes
+    const isSignificantChange = 
+      previousVenueIds.length === 0 || // First load
+      currentVenueIds.length !== previousVenueIds.length ||
+      !currentVenueIds.every((id, index) => id === previousVenueIds[index])
+    
     if (source) {
-      const venuesGeoJSON = venuesToGeoJSON(venues)
-      source.setData(venuesGeoJSON)
+      if (isSignificantChange) {
+        // Significant change (e.g., filter applied) - force full refresh
+        console.log("🔄 Significant venue change detected, forcing full map refresh", {
+          previousCount: previousVenueIds.length,
+          currentCount: currentVenueIds.length,
+          previousIds: previousVenueIds.slice(0, 3),
+          currentIds: currentVenueIds.slice(0, 3)
+        })
+        
+        // Remove existing source and layers, then re-initialize
+        // This ensures a complete refresh rather than trying to update in place
+        initializeVenuesSource(mapRef.current)
+        
+        // Update the ref to track the new venue set AFTER refresh
+        previousVenueIdsRef.current = currentVenueIds
+        
+        // Fit bounds if explicitly requested (filters were actively changed)
+        const venuesWithLocation = venues.filter(v => v.latitude != null && v.longitude != null)
+        if (venuesWithLocation.length > 0 && shouldFitBounds === true) {
+          const mapLoaded = mapRef.current.loaded()
+          if (mapLoaded) {
+            const bounds = new mapboxgl.LngLatBounds()
+            venuesWithLocation.forEach(venue => {
+              bounds.extend([venue.longitude!, venue.latitude!])
+            })
+            if (!bounds.isEmpty()) {
+              mapRef.current.fitBounds(bounds, {
+                padding: 50,
+                maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
+                duration: 500,
+              })
+              if (onBoundsFitted) {
+                onBoundsFitted()
+              }
+            }
+          }
+        }
+        
+        lastVenuesCountRef.current = venues.length
+      } else {
+        // Minor update (same venues, different properties) - use setData for efficiency
+        const venuesGeoJSON = venuesToGeoJSON(venues)
+        console.log("🗺️ Minor venue update, using setData:", venues.length, "venues")
+        source.setData(venuesGeoJSON)
+        // Force map repaint to show updated pins immediately
+        forceMapRepaint(mapRef.current)
+        lastVenuesCountRef.current = venues.length
+        // Update ref to track current venue IDs
+        previousVenueIdsRef.current = currentVenueIds
+      }
+      
       
       // Ensure unclustered point layer exists if source exists but layer doesn't
       if (!mapRef.current.getLayer("unclustered-point")) {
@@ -689,10 +983,12 @@ export function MapboxMap({
       }
     } else {
       // Source doesn't exist yet, initialize it
+      console.log("🗺️ Initializing venues source (first time)")
       // initializeVenuesSource will handle adding layers even if pin image isn't loaded
       initializeVenuesSource(mapRef.current)
+      previousVenueIdsRef.current = currentVenueIds
     }
-  }, [venues, isLoading])
+  }, [venues, isLoading, shouldFitBounds, onBoundsFitted])
 
   const handleSearchArea = () => {
     if (!mapRef.current || !onSearchArea) return
@@ -712,14 +1008,41 @@ export function MapboxMap({
   }
 
   const handleCenterOnMe = () => {
-    if (!mapRef.current || !userLocation) return
+    if (!mapRef.current) return
 
-    mapRef.current.flyTo({
-      center: [userLocation.lng, userLocation.lat],
-      zoom: 14,
-      duration: 800, // Smooth animation
-    })
+    // If location is available, center on it
+    if (userLocation) {
+      mapRef.current.flyTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 14,
+        duration: 800, // Smooth animation
+      })
+    } else if (onRequestLocation) {
+      // If location is not available, request permission
+      onRequestLocation()
+    }
   }
+
+  // Auto-center on user location when it becomes available (after permission is granted)
+  useEffect(() => {
+    if (!mapRef.current || !userLocation || isLoading || !mapRef.current.loaded()) {
+      // Reset flag if location is cleared
+      if (!userLocation) {
+        hasAutoCenteredRef.current = false
+      }
+      return
+    }
+
+    // Only auto-center once when location is first granted
+    if (locationState === "granted" && !hasAutoCenteredRef.current) {
+      mapRef.current.flyTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 14,
+        duration: 800,
+      })
+      hasAutoCenteredRef.current = true
+    }
+  }, [userLocation, locationState, isLoading])
 
   if (mapError) {
     return (
@@ -741,14 +1064,15 @@ export function MapboxMap({
           </div>
         </div>
       )}
-      {userLocation && !isLoading && (
+      {!isLoading && (
         <div className="absolute right-4 top-16 z-20">
           <Button
             size="sm"
             onClick={handleCenterOnMe}
+            disabled={locationState === "requesting"}
             className="shadow-lg h-10 w-10 p-0"
             variant="secondary"
-            aria-label="Center on me"
+            aria-label={userLocation ? "Center on me" : "Enable location"}
           >
             <Navigation className="h-4 w-4" />
           </Button>

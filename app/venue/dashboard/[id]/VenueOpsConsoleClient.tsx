@@ -27,6 +27,7 @@ import {
   User,
   RefreshCw,
   Ban,
+  Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -43,6 +44,9 @@ import {
   type Reservation,
   type SeatBlock,
 } from "@/lib/venue-ops"
+import { DealList } from "@/components/venue/DealList"
+import { DealForm } from "@/components/venue/DealForm"
+import { type Deal } from "@prisma/client"
 
 interface VenueOpsConsoleClientProps {
   venue: {
@@ -84,6 +88,7 @@ interface VenueOpsConsoleClientProps {
     endAt: Date | string
     reason: string | null
   }>
+  deals: Deal[]
   now: string
 }
 
@@ -93,10 +98,14 @@ export function VenueOpsConsoleClient({
   venue,
   reservations: initialReservations,
   seatBlocks: initialSeatBlocks,
+  deals: initialDeals,
   now: initialNow,
 }: VenueOpsConsoleClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
+  const [deals, setDeals] = useState<Deal[]>(initialDeals || [])
+  const [dealFormOpen, setDealFormOpen] = useState(false)
+  const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
 
   const [reservations, setReservations] = useState(initialReservations)
   const [seatBlocks, setSeatBlocks] = useState(initialSeatBlocks)
@@ -279,20 +288,23 @@ export function VenueOpsConsoleClient({
     const showSpinner = mode === "manual"
     if (showSpinner) setIsRefreshing(true)
     try {
-      const response = await fetch(`/api/venues/${venue.id}/reservations`)
-      if (response.ok) {
-        const data = await response.json()
+      const [reservationsResponse, dealsResponse] = await Promise.all([
+        fetch(`/api/venues/${venue.id}/reservations`),
+        fetch(`/api/venues/${venue.id}/deals`),
+      ])
+      if (reservationsResponse.ok) {
+        const data = await reservationsResponse.json()
         setReservations(data.reservations)
         setSeatBlocks(data.seatBlocks)
         setLastUpdated(new Date())
-        // Only show toast for manual refreshes
-        if (showToastOnSuccess) {
-          showToast("Refreshed", "success")
-        }
-      } else {
-        if (showToastOnSuccess) {
-          showToast("Failed to refresh", "error")
-        }
+      }
+      if (dealsResponse.ok) {
+        const dealsData = await dealsResponse.json()
+        setDeals(dealsData.deals)
+      }
+      // Only show toast for manual refreshes
+      if (showToastOnSuccess) {
+        showToast("Refreshed", "success")
       }
     } catch (error) {
       console.error("Error refreshing:", error)
@@ -304,6 +316,34 @@ export function VenueOpsConsoleClient({
       if (showSpinner) setIsRefreshing(false)
     }
   }, [venue.id, showToast])
+
+  const handleDealRefresh = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/venues/${venue.id}/deals`)
+      if (response.ok) {
+        const data = await response.json()
+        setDeals(data.deals)
+      }
+    } catch (error) {
+      console.error("Error refreshing deals:", error)
+    }
+  }, [venue.id])
+
+  const handleAddDeal = () => {
+    setEditingDeal(null)
+    setDealFormOpen(true)
+  }
+
+  const handleEditDeal = (deal: Deal) => {
+    setEditingDeal(deal)
+    setDealFormOpen(true)
+  }
+
+  const handleDealFormSuccess = () => {
+    handleDealRefresh()
+    setDealFormOpen(false)
+    setEditingDeal(null)
+  }
 
   // Refresh when window regains focus
   useEffect(() => {
@@ -479,7 +519,7 @@ export function VenueOpsConsoleClient({
 
       const data = await response.json()
       // Refresh data
-      await handleRefresh(false)
+      await handleRefresh("manual")
       setEditingReservation(null)
       showToast("Reservation updated", "success")
     } catch (error: any) {
@@ -506,7 +546,7 @@ export function VenueOpsConsoleClient({
         throw new Error(data.error || "Failed to block seat")
       }
 
-      await handleRefresh(false)
+      await handleRefresh("manual")
       setBlockingSeat(null)
       showToast("Seat blocked", "success")
     } catch (error: any) {
@@ -524,7 +564,7 @@ export function VenueOpsConsoleClient({
         throw new Error("Failed to unblock")
       }
 
-      await handleRefresh(false)
+      await handleRefresh("manual")
       showToast("Seat unblocked", "success")
     } catch (error: any) {
       showToast("Failed to unblock seat", "error")
@@ -1059,6 +1099,36 @@ export function VenueOpsConsoleClient({
               </CardContent>
             </Card>
 
+            {/* Deals */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Deals</CardTitle>
+                    <CardDescription>
+                      Manage special offers and promotions. Only one deal can be active at a time.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddDeal}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    Add deal
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <DealList
+                  deals={deals}
+                  venueId={venue.id}
+                  onRefresh={handleDealRefresh}
+                  onEdit={handleEditDeal}
+                />
+              </CardContent>
+            </Card>
+
             {/* Quick Actions */}
             <Card>
               <CardHeader>
@@ -1202,6 +1272,15 @@ export function VenueOpsConsoleClient({
           </DialogContent>
         )}
       </Dialog>
+
+      {/* Deal Form Modal */}
+      <DealForm
+        open={dealFormOpen}
+        onOpenChange={setDealFormOpen}
+        venueId={venue.id}
+        deal={editingDeal}
+        onSuccess={handleDealFormSuccess}
+      />
     </div>
   )
 }

@@ -69,7 +69,7 @@ export async function uploadToSupabase(
     if (error) {
       console.error("❌ Supabase upload error:", error)
       console.error("   Error message:", error.message)
-      console.error("   Error status:", error.statusCode)
+      console.error("   Error status:", (error as any).statusCode)
       return null
     }
 
