@@ -7,6 +7,8 @@ import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
 import { parseGoogleHours, isVenueOpenNow, getTodaysHours } from "@/lib/venue-hours"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
+import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
+import { DealType } from "@prisma/client"
 
 function safeStringArray(value: unknown): string[] {
   if (!value) return []
@@ -42,6 +44,14 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
           orderBy: {
             dayOfWeek: "asc",
           },
+        },
+        deals: {
+          where: { isActive: true },
+          orderBy: [
+            { featured: "desc" },
+            { createdAt: "desc" },
+          ],
+          take: 1, // Get the primary deal (featured first, then most recent)
         },
       } as any,
     })
@@ -284,6 +294,48 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               />
             </CardContent>
           </Card>
+
+          {/* Deal display - prominent, below reservation card */}
+          {(() => {
+            const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
+              ? (venue as any).deals[0] 
+              : null
+
+            if (!primaryDeal) return null
+
+            const eligibility = (primaryDeal.eligibilityJson as any) || {}
+            const eligibilitySummary = formatEligibilitySummary(primaryDeal)
+            const dealDescription = generateDescription(primaryDeal.type, eligibility)
+
+            return (
+              <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 rounded-full bg-primary/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary-foreground">
+                        Deal
+                      </span>
+                      <div className="flex-1 space-y-1.5">
+                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                          {primaryDeal.title}
+                        </h3>
+                        {eligibilitySummary && (
+                          <p className="text-xs font-medium text-primary/90">
+                            {eligibilitySummary}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-primary/10 bg-background/60 p-3.5">
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        {primaryDeal.description || dealDescription}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
 
           {/* Details directly below booking */}
           <div className="space-y-4">

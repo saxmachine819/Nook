@@ -9,7 +9,7 @@ export interface FilterState {
   tags: string[]
   priceMin: number | null
   priceMax: number | null
-  openNow: boolean
+  availableNow: boolean
   seatCount: number | null
   bookingMode: ("communal" | "full-table")[]
   dealsOnly: boolean
@@ -75,10 +75,10 @@ export function FilterPanel({
     }))
   }
 
-  const handleOpenNowToggle = () => {
+  const handleAvailableNowToggle = () => {
     setLocalFilters((prev) => ({
       ...prev,
-      openNow: !prev.openNow,
+      availableNow: !prev.availableNow,
     }))
   }
 
@@ -94,7 +94,7 @@ export function FilterPanel({
       tags: [],
       priceMin: null,
       priceMax: null,
-      openNow: false,
+      availableNow: false,
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
@@ -109,7 +109,7 @@ export function FilterPanel({
     localFilters.tags.length +
     (localFilters.priceMin !== null ? 1 : 0) +
     (localFilters.priceMax !== null ? 1 : 0) +
-    (localFilters.openNow ? 1 : 0) +
+    (localFilters.availableNow ? 1 : 0) +
     (localFilters.seatCount !== null ? 1 : 0) +
     localFilters.bookingMode.length +
     (localFilters.dealsOnly ? 1 : 0)
@@ -206,20 +206,19 @@ export function FilterPanel({
           <div>
             <h3 className="mb-3 text-sm font-medium">Availability</h3>
             
-            {/* Open Now */}
+            {/* Available Now */}
             <div className="mb-4">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={localFilters.openNow}
-                  onChange={handleOpenNowToggle}
+                  checked={localFilters.availableNow}
+                  onChange={handleAvailableNowToggle}
                   className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
                 />
-                <span className="text-sm">Open now</span>
-                <span className="text-xs text-muted-foreground">(Coming soon)</span>
+                <span className="text-sm">Available now</span>
               </label>
               <p className="mt-1 text-xs text-muted-foreground">
-                Opening hours filtering will be available soon.
+                Show only venues that are open and have available seats right now.
               </p>
             </div>
 

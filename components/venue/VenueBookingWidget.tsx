@@ -75,10 +75,19 @@ export function VenueBookingWidget({
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
 
+  // Get initial seat count from URL params if available
+  const initialSeatCountFromUrl = searchParams.get("seats")
+  const parsedInitialSeatCount = initialSeatCountFromUrl 
+    ? parseInt(initialSeatCountFromUrl, 10) 
+    : null
+  const validInitialSeatCount = parsedInitialSeatCount && parsedInitialSeatCount > 0 
+    ? parsedInitialSeatCount 
+    : null
+
   const [date, setDate] = useState<string>("")
   const [startTime, setStartTime] = useState<string>("")
   const [durationHours, setDurationHours] = useState<number>(2)
-  const [seatCount, setSeatCount] = useState<number>(1)
+  const [seatCount, setSeatCount] = useState<number>(validInitialSeatCount ?? 1)
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
@@ -556,7 +565,7 @@ export function VenueBookingWidget({
                       )}
                     </p>
                     <p className="mt-1 text-sm font-semibold">
-                      ${table.pricePerHour.toFixed(0)}/hour
+                      ${table.pricePerHour.toFixed(0)}/hour <span className="text-xs font-normal text-muted-foreground">(total)</span>
                     </p>
                     {isSelected && (
                       <div className="absolute right-2 top-2">
@@ -637,7 +646,7 @@ export function VenueBookingWidget({
                       {table.seatCount} seat{table.seatCount > 1 ? "s" : ""}
                     </p>
                     <p className="mt-1 text-sm font-semibold">
-                      ${table.pricePerHour.toFixed(0)}/hour
+                      ${table.pricePerHour.toFixed(0)}/hour <span className="text-xs font-normal text-muted-foreground">(total)</span>
                     </p>
                     {nextAvailableTime && (
                       <p className="mt-2 text-xs text-muted-foreground">
@@ -801,17 +810,201 @@ export function VenueBookingWidget({
 
   // Helper function to render multi-seat selection
   const renderMultiSeatSelection = () => {
-    if (availableSeatGroups.length === 0) {
+    const hasAnySeatGroups = availableSeatGroups.length > 0
+    const hasAnyGroupTables = availableGroupTables.length > 0 || unavailableGroupTables.length > 0
+    const hasAnyOptions = hasAnySeatGroups || hasAnyGroupTables
+
+    if (!hasAnyOptions) {
       return (
         <p className="text-sm text-muted-foreground">
-          No groups of {seatCount} adjacent seats available for this time. Try a different time, date, or number of seats.
+          No groups of {seatCount} adjacent seats or tables available for this time. Try a different time, date, or number of seats.
         </p>
       )
     }
 
     return (
-      <div className="space-y-4">
-        {availableSeatGroups.map((group, groupIndex) => {
+      <div className="space-y-6">
+        {/* Group tables section */}
+        {hasAnyGroupTables && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-medium text-muted-foreground">
+              Book full table
+            </h4>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* Available group tables */}
+              {availableGroupTables.map((table) => {
+                const isSelected = selectedGroupTableId === table.id
+                return (
+                  <button
+                    key={table.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroupTableId(table.id)
+                      setSelectedSeatId(null)
+                      setSelectedSeatIds([])
+                    }}
+                    className={cn(
+                      "relative rounded-md border p-4 text-left transition-all",
+                      "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                      isSelected
+                        ? "border-primary ring-2 ring-primary"
+                        : "border-muted hover:border-primary/50"
+                    )}
+                  >
+                    {table.imageUrls.length > 0 && (
+                      <div
+                        className="mb-2 aspect-video w-full overflow-hidden rounded-md cursor-zoom-in"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          openImageModal(table.imageUrls, 0)
+                        }}
+                      >
+                        <img
+                          src={table.imageUrls[0]}
+                          alt={table.name || "Table"}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-medium">
+                        {table.name || "Table"}
+                      </h5>
+                      {table.isCommunal === true && (
+                        <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          <svg
+                            className="h-2.5 w-2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                          </svg>
+                          Communal
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {table.seatCount} seat{table.seatCount > 1 ? "s" : ""}
+                      {table.isCommunal === true && (
+                        <span className="block mt-1 text-[10px] italic">
+                          Note: This is a communal space. Other guests may be seated at the same table.
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      ${table.pricePerHour.toFixed(0)}/hour <span className="text-xs font-normal text-muted-foreground">(total)</span>
+                    </p>
+                    {isSelected && (
+                      <div className="absolute right-2 top-2">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <svg
+                            className="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+              {/* Unavailable group tables */}
+              {unavailableGroupTables.map((table) => {
+                const isSelected = false
+                const nextAvailableTime = table.nextAvailableAt
+                  ? new Date(table.nextAvailableAt).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : null
+                
+                return (
+                  <button
+                    key={table.id}
+                    type="button"
+                    disabled
+                    className={cn(
+                      "relative rounded-md border p-4 text-left opacity-60",
+                      "border-muted-foreground/20"
+                    )}
+                  >
+                    {table.imageUrls.length > 0 && (
+                      <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        <img
+                          src={table.imageUrls[0]}
+                          alt={table.name || "Table"}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-medium">
+                        {table.name || "Table"}
+                      </h5>
+                      {table.isCommunal === true && (
+                        <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          <svg
+                            className="h-2.5 w-2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                          </svg>
+                          Communal
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {table.seatCount} seat{table.seatCount > 1 ? "s" : ""}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      ${table.pricePerHour.toFixed(0)}/hour <span className="text-xs font-normal text-muted-foreground">(total)</span>
+                    </p>
+                    {nextAvailableTime && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Next available: {nextAvailableTime}
+                      </p>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Seat groups section */}
+        {hasAnySeatGroups && (
+          <div className={hasAnyGroupTables ? "space-y-4" : ""}>
+            {hasAnyGroupTables && (
+              <h4 className="text-xs font-medium text-muted-foreground">
+                Book {seatCount} adjacent seats
+              </h4>
+            )}
+            <div className="space-y-4">
+              {availableSeatGroups.map((group, groupIndex) => {
           const table = getTableInfo(group.tableId)
           const allSeatIdsInGroup = group.seats.map(s => s.id)
           const isGroupSelected = selectedSeatIds.length === seatCount && 
@@ -903,6 +1096,9 @@ export function VenueBookingWidget({
             </div>
           )
         })}
+            </div>
+          </div>
+        )}
       </div>
     )
   }

@@ -159,8 +159,6 @@ export async function PATCH(
           })
         }
       }
-        },
-      })
 
       // If tables are provided, update tables and seats
       if (body.tables && Array.isArray(body.tables)) {

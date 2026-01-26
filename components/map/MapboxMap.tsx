@@ -14,6 +14,7 @@ interface Venue {
   longitude: number | null
   minPrice: number
   maxPrice: number
+  availabilityLabel?: string
 }
 
 interface MapboxMapProps {
@@ -85,6 +86,8 @@ export function MapboxMap({
             id: venue.id,
             name: venue.name,
             address: venue.address,
+            minPrice: venue.minPrice,
+            availabilityLabel: venue.availabilityLabel || "",
           },
         })),
     }
@@ -147,6 +150,7 @@ export function MapboxMap({
       if (map.getLayer("clusters")) map.removeLayer("clusters")
       if (map.getLayer("cluster-count")) map.removeLayer("cluster-count")
       if (map.getLayer("unclustered-point")) map.removeLayer("unclustered-point")
+      if (map.getLayer("price-label")) map.removeLayer("price-label")
       map.removeSource("venues")
     }
 
@@ -197,19 +201,49 @@ export function MapboxMap({
       },
     })
 
-    // Add unclustered point layer (individual pins) - simple circle approach
+    // Add unclustered point layer (individual pins) - color-coded by availability
     map.addLayer({
       id: "unclustered-point",
       type: "circle",
       source: "venues",
       filter: ["!", ["has", "point_count"]],
       paint: {
-        "circle-color": "#0F5132",
+        "circle-color": [
+          "case",
+          ["==", ["get", "availabilityLabel"], "Available now"],
+          "#0F5132", // Dark green for available
+          "#991b1b", // Dark red for unavailable
+        ],
         "circle-radius": 8,
         "circle-stroke-width": 2,
         "circle-stroke-color": "#ffffff",
       },
     }, "cluster-count")
+
+    // Add price label layer above pins (only for available venues)
+    map.addLayer({
+      id: "price-label",
+      type: "symbol",
+      source: "venues",
+      filter: [
+        "all",
+        ["!", ["has", "point_count"]],
+        ["==", ["get", "availabilityLabel"], "Available now"],
+      ],
+      layout: {
+        "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+        "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+        "text-size": 11,
+        "text-anchor": "bottom",
+        "text-offset": [0, -1.5],
+      },
+      paint: {
+        "text-color": "#1f2937",
+        "text-halo-color": "#ffffff",
+        "text-halo-width": 2,
+        "text-halo-blur": 1,
+      },
+    }, "unclustered-point")
 
     // Click handler for clusters - zoom in to expand
     map.on("click", "clusters", (e) => {
@@ -402,12 +436,43 @@ export function MapboxMap({
                           source: "venues",
                           filter: ["!", ["has", "point_count"]],
                           paint: {
-                            "circle-color": "#0F5132",
+                            "circle-color": [
+                              "case",
+                              ["==", ["get", "availabilityLabel"], "Available now"],
+                              "#22c55e", // Green for available
+                              "#ef4444", // Red for unavailable
+                            ],
                             "circle-radius": 8,
                             "circle-stroke-width": 2,
                             "circle-stroke-color": "#ffffff",
                           },
                         }, "cluster-count")
+                        // Add price label layer (only for available venues)
+                        if (!map.getLayer("price-label")) {
+                          map.addLayer({
+                            id: "price-label",
+                            type: "symbol",
+                            source: "venues",
+                            filter: [
+                              "all",
+                              ["!", ["has", "point_count"]],
+                              ["==", ["get", "availabilityLabel"], "Available now"],
+                            ],
+                            layout: {
+                              "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                              "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                              "text-size": 11,
+                              "text-anchor": "bottom",
+                              "text-offset": [0, -1.5],
+                            },
+                            paint: {
+                              "text-color": "#1f2937",
+                              "text-halo-color": "#ffffff",
+                              "text-halo-width": 2,
+                              "text-halo-blur": 1,
+                            },
+                          }, "unclustered-point")
+                        }
                       } catch (error) {
                         console.error("Error adding unclustered point layer:", error)
                       }
@@ -971,12 +1036,43 @@ export function MapboxMap({
             source: "venues",
             filter: ["!", ["has", "point_count"]],
             paint: {
-              "circle-color": "#0F5132",
+              "circle-color": [
+                "case",
+                ["==", ["get", "availabilityLabel"], "Available now"],
+                "#22c55e", // Green for available
+                "#ef4444", // Red for unavailable
+              ],
               "circle-radius": 8,
               "circle-stroke-width": 2,
               "circle-stroke-color": "#ffffff",
             },
           }, "cluster-count")
+          // Add price label layer (only for available venues)
+          if (!mapRef.current.getLayer("price-label")) {
+            mapRef.current.addLayer({
+              id: "price-label",
+              type: "symbol",
+              source: "venues",
+              filter: [
+                "all",
+                ["!", ["has", "point_count"]],
+                ["==", ["get", "availabilityLabel"], "Available now"],
+              ],
+              layout: {
+                "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+                "text-size": 11,
+                "text-anchor": "bottom",
+                "text-offset": [0, -1.5],
+              },
+              paint: {
+                "text-color": "#1f2937",
+                "text-halo-color": "#ffffff",
+                "text-halo-width": 2,
+                "text-halo-blur": 1,
+              },
+            }, "unclustered-point")
+          }
         } catch (error) {
           console.error("Error adding missing unclustered point layer:", error)
         }

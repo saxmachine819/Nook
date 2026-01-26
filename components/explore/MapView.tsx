@@ -10,6 +10,7 @@ export interface MapViewVenue {
   longitude: number | null
   minPrice: number
   maxPrice: number
+  availabilityLabel?: string
 }
 
 interface MapViewProps {

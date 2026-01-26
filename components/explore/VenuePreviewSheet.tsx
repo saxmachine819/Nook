@@ -30,6 +30,7 @@ interface VenuePreviewSheetProps {
   venue: VenuePreviewSheetVenue | null
   onClose: () => void
   className?: string
+  initialSeatCount?: number
 }
 
 const SHEET_TRANSITION_MS = 200
@@ -39,6 +40,7 @@ export function VenuePreviewSheet({
   venue,
   onClose,
   className,
+  initialSeatCount,
 }: VenuePreviewSheetProps) {
   const [visible, setVisible] = useState(false)
 
@@ -89,6 +91,7 @@ export function VenuePreviewSheet({
       >
         <div className="max-h-[60vh] overflow-y-auto overscroll-contain">
           <VenueCard
+            key={`${venue.id}-${initialSeatCount ?? 'default'}`} // Force remount when venue or seat count changes
             id={venue.id}
             name={venue.name}
             address={venue.address}
@@ -104,6 +107,7 @@ export function VenuePreviewSheet({
             isExpanded={false}
             isDeemphasized={false}
             dealBadge={venue.dealBadge}
+            initialSeatCount={initialSeatCount}
           />
         </div>
       </div>

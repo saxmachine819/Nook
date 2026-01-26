@@ -74,7 +74,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
         tags: [],
         priceMin: null,
         priceMax: null,
-        openNow: false,
+        availableNow: false,
         seatCount: null,
         bookingMode: [],
         dealsOnly: false,
@@ -92,7 +92,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
           tags: Array.isArray(parsed.filters?.tags) ? parsed.filters.tags : [],
           priceMin: typeof parsed.filters?.priceMin === "number" ? parsed.filters.priceMin : null,
           priceMax: typeof parsed.filters?.priceMax === "number" ? parsed.filters.priceMax : null,
-          openNow: parsed.filters?.openNow === true,
+          availableNow: parsed.filters?.availableNow === true,
           seatCount: typeof parsed.filters?.seatCount === "number" ? parsed.filters.seatCount : null,
           bookingMode: Array.isArray(parsed.filters?.bookingMode) ? parsed.filters.bookingMode : [],
           dealsOnly: parsed.filters?.dealsOnly === true,
@@ -109,7 +109,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
       tags: [],
       priceMin: null,
       priceMax: null,
-      openNow: false,
+      availableNow: false,
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
@@ -206,7 +206,8 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
                             stored.filters.priceMin != null || 
                             stored.filters.priceMax != null || 
                             stored.filters.seatCount != null || 
-                            stored.filters.bookingMode.length > 0
+                            stored.filters.bookingMode.length > 0 ||
+                            stored.filters.availableNow
     
     if (hasStoredFilters) {
       const filtersMatch = 
@@ -218,6 +219,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         filters.seatCount === stored.filters.seatCount &&
         filters.bookingMode.length === stored.filters.bookingMode.length &&
         filters.bookingMode.every(m => stored.filters.bookingMode.includes(m)) &&
+        filters.availableNow === stored.filters.availableNow &&
         searchQuery === stored.searchQuery
       
       // #region agent log
@@ -268,7 +270,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     const hasActiveFilters = filters.dealsOnly || filters.tags.length > 0 || 
                             filters.priceMin != null || filters.priceMax != null || 
                             filters.seatCount != null || filters.bookingMode.length > 0 ||
-                            searchQuery.length > 0
+                            filters.availableNow || searchQuery.length > 0
     
     if (hasActiveFilters && performSearchRef.current) {
       // Filters are active, search will populate venues
@@ -353,6 +355,9 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       if (activeFilters.dealsOnly) {
         params.append("dealsOnly", "true")
       }
+      if (activeFilters.availableNow) {
+        params.append("availableNow", "true")
+      }
 
       const url = `/api/venues/search?${params.toString()}`
       console.log("🔍 Searching with filters:", { dealsOnly: activeFilters.dealsOnly, url, currentVenueCount: venues.length })
@@ -409,7 +414,8 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           filters.priceMax != null ||
           filters.seatCount != null ||
           filters.bookingMode.length > 0 ||
-          filters.dealsOnly
+          filters.dealsOnly ||
+          filters.availableNow
         if (!hasActive) {
           setIsSearchingText(false)
           if (currentBoundsRef.current) {
@@ -471,7 +477,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       tags: [],
       priceMin: null,
       priceMax: null,
-      openNow: false,
+      availableNow: false,
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
@@ -495,7 +501,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     filters.tags.length +
     (filters.priceMin != null ? 1 : 0) +
     (filters.priceMax != null ? 1 : 0) +
-    (filters.openNow ? 1 : 0) +
+    (filters.availableNow ? 1 : 0) +
     (filters.seatCount != null ? 1 : 0) +
     filters.bookingMode.length +
     (filters.dealsOnly ? 1 : 0)
@@ -588,12 +594,12 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       })
     })
     
-    if (filters.openNow) {
+    if (filters.availableNow) {
       chips.push({
-        id: "openNow",
-        label: "Open now",
+        id: "availableNow",
+        label: "Available now",
         onRemove: async () => {
-          const newFilters = { ...filters, openNow: false }
+          const newFilters = { ...filters, availableNow: false }
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
@@ -722,6 +728,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
               rulesText: selectedVenue.rulesText,
               dealBadge: selectedVenue.dealBadge,
             } : null}
+            initialSeatCount={filters.seatCount && filters.seatCount > 0 ? filters.seatCount : undefined}
             onClose={() => {
               console.log("🔒 Closing venue sheet, filters should persist:", filters)
               console.log("📍 Current venues count:", venues.length)

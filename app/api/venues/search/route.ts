@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
+import { isVenueOpenNow } from "@/lib/venue-hours"
 
 export async function GET(request: Request) {
   console.log("🔍 /api/venues/search route called")
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     const bookingModeParam = searchParams.get("bookingMode")
     const bookingModes = bookingModeParam ? (bookingModeParam.split(",").filter(Boolean) as ("communal" | "full-table")[]) : []
     const dealsOnly = searchParams.get("dealsOnly") === "true"
-    // Note: openNow is not implemented yet (coming soon)
+    const availableNow = searchParams.get("availableNow") === "true"
 
     // Validate bounds if provided
     const hasBounds = north && south && east && west
@@ -248,6 +249,70 @@ export async function GET(request: Request) {
       })
       return acc
     }, {})
+
+    // Helper function to round up to next 15 minutes
+    function roundUpToNext15Minutes(date: Date): Date {
+      const result = new Date(date)
+      const minutes = result.getMinutes()
+      const remainder = minutes % 15
+      if (remainder !== 0) {
+        result.setMinutes(minutes + (15 - remainder), 0, 0)
+      } else if (result.getSeconds() > 0 || result.getMilliseconds() > 0) {
+        result.setMinutes(minutes + 15, 0, 0)
+      } else {
+        result.setSeconds(0, 0)
+      }
+      return result
+    }
+
+    // Apply "Available Now" filter if requested
+    if (availableNow) {
+      venues = venues.filter((venue) => {
+        const venueWithIncludes = venue as any
+        const venueHours = venueWithIncludes.venueHours || null
+        const openingHoursJson = venueWithIncludes.openingHoursJson || null
+
+        // Check if venue is open
+        const openStatus = isVenueOpenNow(openingHoursJson, undefined, venueHours)
+        if (!openStatus.isOpen || !openStatus.canDetermine) {
+          return false
+        }
+
+        // Calculate capacity
+        const capacity = venueWithIncludes.tables.reduce((sum: number, table: any) => {
+          if (table.seats.length > 0) {
+            return sum + table.seats.length
+          }
+          return sum + (table.seatCount || 0)
+        }, 0)
+
+        if (capacity <= 0) {
+          return false
+        }
+
+        // Check available seats for current time window
+        const startBase = roundUpToNext15Minutes(now)
+        const windowStart = startBase
+        const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
+
+        const venueReservations = reservationsByVenue[venue.id] || []
+        const bookedSeats = venueReservations.reduce((sum, res) => {
+          if (res.startAt < windowEnd && res.endAt > windowStart) {
+            return sum + res.seatCount
+          }
+          return sum
+        }, 0)
+
+        const availableSeats = capacity - bookedSeats
+
+        // Respect minimum seats filter if set
+        if (seatCount !== null && !isNaN(seatCount) && seatCount > 0) {
+          return availableSeats >= seatCount
+        }
+
+        return availableSeats > 0
+      })
+    }
 
     // Format venues for client
     const formattedVenues = venues.map((venue) => {

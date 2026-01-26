@@ -36,6 +36,7 @@ interface VenueCardProps {
     type: string
     summary: string
   } | null
+  initialSeatCount?: number
 }
 
 interface Slot {
@@ -66,6 +67,7 @@ export function VenueCard({
   onClose,
   onBookingSuccess,
   dealBadge,
+  initialSeatCount,
 }: VenueCardProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
@@ -78,12 +80,19 @@ export function VenueCard({
   const [slotsError, setSlotsError] = useState<string | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [durationSlots, setDurationSlots] = useState<number>(4) // 4 * 15min = 1h
-  const [seats, setSeats] = useState<number>(1)
+  const [seats, setSeats] = useState<number>(initialSeatCount ?? 1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Format location display: prefer address, then city/state
   const locationDisplay = address || (city && state ? `${city}, ${state}` : city || "")
+
+  // Sync initialSeatCount prop with seats state when it changes or venue changes
+  useEffect(() => {
+    if (initialSeatCount !== undefined && initialSeatCount !== null && initialSeatCount > 0) {
+      setSeats(initialSeatCount)
+    }
+  }, [initialSeatCount, id]) // Reset when venue id changes or initialSeatCount changes
 
   // Initialize date to today
   useEffect(() => {
@@ -254,7 +263,11 @@ export function VenueCard({
       <button
         type="button"
         onClick={() => {
-          router.push(`/venue/${id}`)
+          // Pass initialSeatCount as URL param if set
+          const url = initialSeatCount && initialSeatCount > 0 
+            ? `/venue/${id}?seats=${initialSeatCount}`
+            : `/venue/${id}`
+          router.push(url)
         }}
         className="w-full text-left"
       >

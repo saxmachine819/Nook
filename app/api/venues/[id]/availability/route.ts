@@ -316,7 +316,18 @@ export async function GET(
         isCommunal: boolean
       }> = []
 
+      console.log(`📊 Processing ${venue.tables.length} tables for venue ${venue.id}`)
       venue.tables.forEach((table) => {
+        const bookingMode = (table as any).bookingMode || "individual"
+        const tablePricePerHour = (table as any).tablePricePerHour
+        console.log(`📋 Table "${table.name || 'unnamed'}" (id: ${table.id}): bookingMode=${bookingMode}, tablePricePerHour=${tablePricePerHour}, seats=${table.seats.length}`)
+        
+        // Skip seats from group tables - they should only appear as group table options
+        if (bookingMode === "group") {
+          console.log(`⏭️ Skipping seats from group table "${table.name || 'unnamed'}" - will be added to group tables list`)
+          return // Don't add seats from group tables to allAvailableSeats
+        }
+        
         const tableImageUrls = Array.isArray(table.imageUrls)
           ? table.imageUrls
           : table.imageUrls
@@ -369,10 +380,25 @@ export async function GET(
         isCommunal: boolean
       }> = []
 
+      console.log(`\n🔍 BUILDING GROUP TABLES - Processing ${venue.tables.length} tables`)
       venue.tables.forEach((table) => {
         const bookingMode = (table as any).bookingMode || "individual"
+        const tablePricePerHour = (table as any).tablePricePerHour
+        const rawBookingMode = (table as any).bookingMode
+        console.log(`  Table "${table.name || 'unnamed'}" (id: ${table.id}):`)
+        console.log(`    - Raw bookingMode from DB: ${rawBookingMode} (type: ${typeof rawBookingMode})`)
+        console.log(`    - Resolved bookingMode: ${bookingMode}`)
+        console.log(`    - tablePricePerHour: ${tablePricePerHour} (type: ${typeof tablePricePerHour})`)
+        console.log(`    - seatCount: ${table.seats.length}`)
+        
         if (bookingMode === "group") {
-          const tablePricePerHour = (table as any).tablePricePerHour
+          console.log(`    ✅ This is a GROUP table`)
+          // Only include group tables that have tablePricePerHour set
+          if (!tablePricePerHour || tablePricePerHour <= 0) {
+            // Skip this table - it's misconfigured as a group table without a price
+            console.log(`    ⚠️ SKIPPING - tablePricePerHour is missing or invalid: ${tablePricePerHour}`)
+            return
+          }
           const tableImageUrls = Array.isArray(table.imageUrls)
             ? table.imageUrls
             : table.imageUrls
@@ -387,12 +413,21 @@ export async function GET(
             id: table.id,
             name: table.name,
             seatCount: table.seats.length,
-            pricePerHour: tablePricePerHour || table.seats.reduce((sum, s) => sum + s.pricePerHour, 0) / table.seats.length,
+            pricePerHour: tablePricePerHour,
             imageUrls: tableImageUrls,
             isCommunal: isCommunal,
           })
+          console.log(`    ✅ ADDED to availableGroupTables array`)
+        } else {
+          console.log(`    ℹ️ Not a group table (bookingMode="${bookingMode}")`)
         }
       })
+      console.log(`\n📊 RESULT: ${availableGroupTables.length} group table(s) added to array`)
+      if (availableGroupTables.length > 0) {
+        availableGroupTables.forEach((t, i) => {
+          console.log(`  [${i}] "${t.name}" - $${t.pricePerHour}/hour (${t.seatCount} seats)`)
+        })
+      }
 
       // Helper function to round up to next 15 minutes
       function roundUpToNext15Minutes(date: Date): Date {
@@ -511,6 +546,10 @@ export async function GET(
           }))
 
         // Split group tables into available and unavailable
+        console.log(`\n🔍 FILTERING GROUP TABLES (seatCount=1):`)
+        console.log(`  - Total group tables before filtering: ${availableGroupTables.length}`)
+        console.log(`  - Unavailable group table IDs: ${Array.from(unavailableGroupTableIds).join(', ') || '(none)'}`)
+        
         const availableGroupTablesFiltered = availableGroupTables.filter(
           (table) => !unavailableGroupTableIds.has(table.id)
         )
@@ -525,6 +564,10 @@ export async function GET(
               parsedEnd
             ),
           }))
+        
+        console.log(`  - Available after filtering: ${availableGroupTablesFiltered.length}`)
+        console.log(`  - Unavailable: ${unavailableGroupTables.length}`)
+        console.log(`\n📤 RETURNING RESPONSE with availableGroupTables: ${availableGroupTablesFiltered.length}`)
         
         return NextResponse.json(
           {
@@ -577,13 +620,18 @@ export async function GET(
       })
 
       // Split group tables into available and unavailable
+      console.log(`\n🔍 FILTERING GROUP TABLES (seatCount=${seatCount}):`)
+      console.log(`  - Total group tables before filtering: ${availableGroupTables.length}`)
+      console.log(`  - Requested seatCount: ${seatCount}`)
+      console.log(`  - Unavailable group table IDs: ${Array.from(unavailableGroupTableIds).join(', ') || '(none)'}`)
+      
       const availableGroupTablesFiltered = availableGroupTables.filter(
-        (table) => table.seatCount === seatCount && !unavailableGroupTableIds.has(table.id)
+        (table) => table.seatCount >= seatCount && !unavailableGroupTableIds.has(table.id)
       )
 
       const unavailableGroupTables = availableGroupTables
         .filter(
-          (table) => table.seatCount === seatCount && unavailableGroupTableIds.has(table.id)
+          (table) => table.seatCount >= seatCount && unavailableGroupTableIds.has(table.id)
         )
         .map((table) => ({
           ...table,
@@ -593,6 +641,14 @@ export async function GET(
             parsedEnd
           ),
         }))
+      
+      console.log(`  - Available after filtering (seatCount=${seatCount}): ${availableGroupTablesFiltered.length}`)
+      console.log(`  - Unavailable: ${unavailableGroupTables.length}`)
+      if (availableGroupTables.length > 0) {
+        availableGroupTables.forEach((t) => {
+          console.log(`    - "${t.name}": ${t.seatCount} seats ${t.seatCount >= seatCount ? '✅ MATCHES (>=)' : '❌ too small'} requested ${seatCount}`)
+        })
+      }
 
       // For seatCount > 1, return groups AND group tables that match the seat count
       return NextResponse.json(
