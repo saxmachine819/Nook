@@ -1,60 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
-
-function roundUpToNext15Minutes(date: Date): Date {
-  const result = new Date(date)
-  const minutes = result.getMinutes()
-  const remainder = minutes % 15
-  if (remainder !== 0) {
-    result.setMinutes(minutes + (15 - remainder), 0, 0)
-  } else if (result.getSeconds() > 0 || result.getMilliseconds() > 0) {
-    result.setMinutes(minutes + 15, 0, 0)
-  } else {
-    result.setSeconds(0, 0)
-  }
-  return result
-}
-
-function formatTimeLabel(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
-}
-
-function computeAvailabilityLabel(
-  capacity: number,
-  reservations: { startAt: Date; endAt: Date; seatCount: number }[]
-): string {
-  if (capacity <= 0) return "Sold out for now"
-
-  const now = new Date()
-  const startBase = roundUpToNext15Minutes(now)
-  const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
-  const slotMs = 15 * 60 * 1000 // 15 minutes
-
-  for (let offset = 0; offset < horizonMs; offset += slotMs) {
-    const windowStart = new Date(startBase.getTime() + offset)
-    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
-
-    const bookedSeats = reservations.reduce((sum, res) => {
-      if (res.startAt < windowEnd && res.endAt > windowStart) {
-        return sum + res.seatCount
-      }
-      return sum
-    }, 0)
-
-    if (bookedSeats < capacity) {
-      if (offset === 0) {
-        return "Available now"
-      }
-      return `Next available at ${formatTimeLabel(windowStart)}`
-    }
-  }
-
-  return "Sold out for now"
-}
+import { computeAvailabilityLabel } from "@/lib/availability-utils"
 
 export async function GET(request: Request) {
   console.log("🔍 /api/venues/search route called")
@@ -196,6 +143,11 @@ export async function GET(request: Request) {
           ],
           take: 1, // Only need the primary deal
         },
+        venueHours: {
+          orderBy: {
+            dayOfWeek: "asc",
+          },
+        },
       } as any,
       take: 100, // Limit results
       orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
@@ -333,7 +285,15 @@ export async function GET(request: Request) {
       }
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations)
+      const venueWithHours = venue as any
+      const venueHours = venueWithHours.venueHours || null
+      const openingHoursJson = venueWithHours.openingHoursJson || null
+      const availabilityLabel = computeAvailabilityLabel(
+        capacity,
+        venueReservations,
+        venueHours,
+        openingHoursJson
+      )
 
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { isReservationWithinHours } from "@/lib/venue-hours"
 
 export async function POST(request: Request) {
   try {
@@ -85,6 +86,52 @@ export async function POST(request: Request) {
       )
     }
 
+    // Fetch venue to check hours
+    const venue = await prisma.venue.findUnique({
+      where: { id: venueId },
+      include: {
+        venueHours: {
+          orderBy: {
+            dayOfWeek: "asc",
+          },
+        },
+      },
+    })
+
+    if (!venue) {
+      return NextResponse.json(
+        { error: "Venue not found." },
+        { status: 404 }
+      )
+    }
+
+    // Check if reservation is within venue hours (only if hours data exists and is complete)
+    // IMPORTANT: Don't block reservations if hours data is incomplete or missing
+    const venueHours = (venue as any).venueHours || null
+    const openingHoursJson = (venue as any).openingHoursJson
+    
+    // Only enforce hours if we have complete hours data - be lenient to avoid blocking valid bookings
+    if (venueHours && venueHours.length === 7) {
+      // Only check if we have all 7 days of hours
+      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, venueHours, openingHoursJson)
+      if (!hoursCheck.isValid) {
+        return NextResponse.json(
+          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
+          { status: 400 }
+        )
+      }
+    } else if (openingHoursJson?.periods && Array.isArray(openingHoursJson.periods) && openingHoursJson.periods.length > 0) {
+      // Fallback to JSON hours if VenueHours not available but JSON exists
+      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, null, openingHoursJson)
+      if (!hoursCheck.isValid) {
+        return NextResponse.json(
+          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
+          { status: 400 }
+        )
+      }
+    }
+    // If no hours data or incomplete hours, allow booking (backward compatibility - don't break existing flow)
+
     let reservations: any[]
 
     if (isGroupBooking) {
@@ -92,7 +139,15 @@ export async function POST(request: Request) {
       const table = await prisma.table.findUnique({
         where: { id: tableId },
         include: {
-          venue: true,
+          venue: {
+            include: {
+              venueHours: {
+                orderBy: {
+                  dayOfWeek: "asc",
+                },
+              },
+            },
+          },
           seats: true,
         },
       })
@@ -193,7 +248,15 @@ export async function POST(request: Request) {
         include: {
           table: {
             include: {
-              venue: true,
+              venue: {
+                include: {
+                  venueHours: {
+                    orderBy: {
+                      dayOfWeek: "asc",
+                    },
+                  },
+                },
+              },
             },
           },
         },

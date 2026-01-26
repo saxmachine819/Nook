@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { Plus, Trash2, Search, Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { parseGooglePeriodsToVenueHours } from "@/lib/venue-hours"
 
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -64,6 +65,13 @@ interface VenueEditClientProps {
     googlePlaceId: string | null
     googleMapsUrl: string | null
     openingHoursJson: unknown
+    venueHours?: Array<{
+      id: string
+      dayOfWeek: number
+      isClosed: boolean
+      openTime: string | null
+      closeTime: string | null
+    }>
     tables: Array<{
       id: string
       name: string | null
@@ -160,6 +168,62 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [googlePlaceId, setGooglePlaceId] = useState<string | null>(venue.googlePlaceId)
   const [googleMapsUrl, setGoogleMapsUrl] = useState<string | null>(venue.googleMapsUrl)
   const [openingHoursJson, setOpeningHoursJson] = useState<any>(venue.openingHoursJson)
+  
+  // Initialize hours state - create 7 days if none exist
+  const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+  const initializeHours = () => {
+    // Priority 1: Manual edits (venueHours) - these take precedence
+    if (venue.venueHours && venue.venueHours.length === 7) {
+      return venue.venueHours.map(h => ({
+        dayOfWeek: h.dayOfWeek,
+        isClosed: h.isClosed,
+        openTime: h.openTime || "",
+        closeTime: h.closeTime || "",
+      }))
+    }
+    
+    // Priority 2: Google hours (openingHoursJson) - parse if available
+    if (venue.openingHoursJson?.periods && Array.isArray(venue.openingHoursJson.periods) && venue.openingHoursJson.periods.length > 0) {
+      try {
+        const hoursData = parseGooglePeriodsToVenueHours(
+          venue.openingHoursJson.periods,
+          venue.id,
+          "google"
+        )
+        // Ensure we have all 7 days
+        const hoursMap = new Map(hoursData.map(h => [h.dayOfWeek, h]))
+        return Array.from({ length: 7 }, (_, i) => {
+          const existing = hoursMap.get(i)
+          if (existing) {
+            return {
+              dayOfWeek: existing.dayOfWeek,
+              isClosed: existing.isClosed,
+              openTime: existing.openTime || "",
+              closeTime: existing.closeTime || "",
+            }
+          }
+          return {
+            dayOfWeek: i,
+            isClosed: true,
+            openTime: "",
+            closeTime: "",
+          }
+        })
+      } catch (error) {
+        console.error("Error parsing Google hours:", error)
+        // Fall through to default
+      }
+    }
+    
+    // Priority 3: Default (all closed)
+    return Array.from({ length: 7 }, (_, i) => ({
+      dayOfWeek: i,
+      isClosed: true,
+      openTime: "",
+      closeTime: "",
+    }))
+  }
+  const [hours, setHours] = useState(initializeHours())
   const [availablePhotos, setAvailablePhotos] = useState<Array<{
     photoUrl: string
     photoReference: string | null
@@ -642,6 +706,12 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           googlePlaceId: googlePlaceId || null,
           googleMapsUrl: googleMapsUrl || null,
           openingHoursJson: openingHoursJson || null,
+          venueHours: hours.map(h => ({
+            dayOfWeek: h.dayOfWeek,
+            isClosed: h.isClosed,
+            openTime: h.isClosed ? null : h.openTime || null,
+            closeTime: h.isClosed ? null : h.closeTime || null,
+          })),
           googlePhotoRefs:
             availablePhotos.length > 0
               ? availablePhotos.map((photo) => ({
@@ -909,6 +979,68 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="Enter venue rules, policies, or special instructions..."
             />
+          </CardContent>
+        </Card>
+
+        {/* Hours */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Opening Hours</CardTitle>
+            <CardDescription>Set your venue&apos;s weekly schedule</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {hours.map((day, index) => (
+                <div key={day.dayOfWeek} className="flex items-center gap-3 rounded-lg border p-3">
+                  <div className="w-24 text-sm font-medium">{DAY_NAMES[day.dayOfWeek]}</div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!day.isClosed}
+                      onChange={(e) => {
+                        const newHours = [...hours]
+                        newHours[index].isClosed = !e.target.checked
+                        if (newHours[index].isClosed) {
+                          newHours[index].openTime = ""
+                          newHours[index].closeTime = ""
+                        }
+                        setHours(newHours)
+                      }}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <span className="text-sm">Open</span>
+                  </label>
+                  {!day.isClosed && (
+                    <div className="flex flex-1 items-center gap-2">
+                      <input
+                        type="time"
+                        value={day.openTime}
+                        onChange={(e) => {
+                          const newHours = [...hours]
+                          newHours[index].openTime = e.target.value
+                          setHours(newHours)
+                        }}
+                        className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                      />
+                      <span className="text-sm text-muted-foreground">to</span>
+                      <input
+                        type="time"
+                        value={day.closeTime}
+                        onChange={(e) => {
+                          const newHours = [...hours]
+                          newHours[index].closeTime = e.target.value
+                          setHours(newHours)
+                        }}
+                        className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                  )}
+                  {day.isClosed && (
+                    <div className="flex-1 text-sm text-muted-foreground">Closed</div>
+                  )}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

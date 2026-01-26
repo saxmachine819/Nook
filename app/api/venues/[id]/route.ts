@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
+import { parseGooglePeriodsToVenueHours, upsertVenueHours } from "@/lib/venue-hours"
 
 export async function PATCH(
   request: NextRequest,
@@ -108,7 +109,7 @@ export async function PATCH(
     // Update venue and tables/seats in a transaction
     const updatedVenue = await prisma.$transaction(async (tx) => {
       // Update venue fields
-      const venue = await tx.venue.update({
+      await tx.venue.update({
         where: { id: venueId },
         data: {
           name: body.name.trim(),
@@ -128,6 +129,36 @@ export async function PATCH(
           googlePhotoRefs: body.googlePhotoRefs || null,
           heroImageUrl: body.heroImageUrl?.trim() || null,
           imageUrls: body.imageUrls || null,
+        },
+      })
+
+      // Update venue hours if provided
+      if (body.venueHours && Array.isArray(body.venueHours)) {
+        for (const hourData of body.venueHours) {
+          await tx.venueHours.upsert({
+            where: {
+              venueId_dayOfWeek: {
+                venueId: venueId,
+                dayOfWeek: hourData.dayOfWeek,
+              },
+            },
+            update: {
+              isClosed: hourData.isClosed,
+              openTime: hourData.openTime || null,
+              closeTime: hourData.closeTime || null,
+              source: "manual",
+            },
+            create: {
+              venueId: venueId,
+              dayOfWeek: hourData.dayOfWeek,
+              isClosed: hourData.isClosed,
+              openTime: hourData.openTime || null,
+              closeTime: hourData.closeTime || null,
+              source: "manual",
+            },
+          })
+        }
+      }
         },
       })
 
@@ -168,6 +199,25 @@ export async function PATCH(
               },
             },
           })
+        }
+      }
+
+      // Parse and save venue hours if openingHoursJson changed (only if manual hours not provided)
+      if (!body.venueHours && body.openingHoursJson !== undefined) {
+        try {
+          const openingHours = body.openingHoursJson as any
+          if (openingHours && openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
+            const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venueId, "google")
+            await upsertVenueHours(tx, venueId, hoursData)
+          } else if (body.openingHoursJson === null) {
+            // If openingHoursJson is explicitly set to null, clear venue hours
+            await tx.venueHours.deleteMany({
+              where: { venueId },
+            })
+          }
+        } catch (error) {
+          // Log error but don't fail venue update
+          console.error("Error parsing venue hours:", error)
         }
       }
 

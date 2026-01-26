@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VenueOpsConsoleClient } from "./VenueOpsConsoleClient"
+import { parseGooglePeriodsToVenueHours, upsertVenueHours } from "@/lib/venue-hours"
 
 interface VenueOpsConsolePageProps {
   params: { id: string }
@@ -133,6 +134,28 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
   ])
   
   const deals = dealsResult || []
+
+  // Backfill venue hours if needed (idempotent)
+  if (venue.openingHoursJson) {
+    try {
+      const openingHours = venue.openingHoursJson as any
+      if (openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
+        // Check if venueHours already exist
+        const existingHours = await prisma.venueHours.findFirst({
+          where: { venueId: venue.id },
+        })
+
+        if (!existingHours) {
+          // Parse and save hours
+          const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venue.id, "google")
+          await upsertVenueHours(prisma, venue.id, hoursData)
+        }
+      }
+    } catch (error) {
+      // Log error but don't fail page load
+      console.error("Error backfilling venue hours:", error)
+    }
+  }
 
   return (
     <VenueOpsConsoleClient

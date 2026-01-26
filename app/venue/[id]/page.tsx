@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
+import { parseGoogleHours, isVenueOpenNow, getTodaysHours } from "@/lib/venue-hours"
+import { computeAvailabilityLabel } from "@/lib/availability-utils"
 
 function safeStringArray(value: unknown): string[] {
   if (!value) return []
@@ -18,60 +20,6 @@ function safeStringArray(value: unknown): string[] {
     }
   }
   return []
-}
-
-function roundUpToNext15Minutes(date: Date): Date {
-  const result = new Date(date)
-  const minutes = result.getMinutes()
-  const remainder = minutes % 15
-  if (remainder !== 0) {
-    result.setMinutes(minutes + (15 - remainder), 0, 0)
-  } else if (result.getSeconds() > 0 || result.getMilliseconds() > 0) {
-    result.setMinutes(minutes + 15, 0, 0)
-  } else {
-    result.setSeconds(0, 0)
-  }
-  return result
-}
-
-function formatTimeLabel(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date)
-}
-
-function computeAvailabilityLabel(
-  capacity: number,
-  reservations: { startAt: Date; endAt: Date; seatCount: number }[]
-): string {
-  if (capacity <= 0) return "Sold out for now"
-
-  const now = new Date()
-  const startBase = roundUpToNext15Minutes(now)
-  const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
-  const slotMs = 15 * 60 * 1000 // 15 minutes
-
-  for (let offset = 0; offset < horizonMs; offset += slotMs) {
-    const windowStart = new Date(startBase.getTime() + offset)
-    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
-
-    const bookedSeats = reservations.reduce((sum, res) => {
-      if (res.startAt < windowEnd && res.endAt > windowStart) {
-        return sum + res.seatCount
-      }
-      return sum
-    }, 0)
-
-    if (bookedSeats < capacity) {
-      if (offset === 0) {
-        return "Available now"
-      }
-      return `Next available at ${formatTimeLabel(windowStart)}`
-    }
-  }
-
-  return "Sold out for now"
 }
 
 interface VenuePageProps {
@@ -90,7 +38,12 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             seats: true,
           },
         },
-      },
+        venueHours: {
+          orderBy: {
+            dayOfWeek: "asc",
+          },
+        },
+      } as any,
     })
   } catch (error) {
     console.error("Error fetching venue:", error)
@@ -212,13 +165,18 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   })
 
   // Calculate availability label
+  const venueWithHours = venue as any
+  const venueHours = venueWithHours.venueHours || null
+  const openingHoursJson = venueWithHours.openingHoursJson || null
   const availabilityLabel = computeAvailabilityLabel(
     capacity,
     futureReservations.map((r) => ({
       startAt: r.startAt,
       endAt: r.endAt,
       seatCount: r.seatCount,
-    }))
+    })),
+    venueHours,
+    openingHoursJson
   )
 
   const venueHeroImages: string[] = (() => {
@@ -354,6 +312,51 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                 ))}
               </div>
             )}
+
+            {/* Hours */}
+            {(() => {
+              const { formatted, hasHours } = parseGoogleHours((venue as any).openingHoursJson)
+              const { isOpen, canDetermine } = isVenueOpenNow((venue as any).openingHoursJson)
+              const todaysHours = getTodaysHours((venue as any).openingHoursJson)
+
+              if (!hasHours) {
+                return null // Don't show hours section if no hours available
+              }
+
+              return (
+                <div className="rounded-xl border bg-background p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-xs font-medium text-muted-foreground">Hours</div>
+                    {canDetermine && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          isOpen
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isOpen ? "Open now" : "Closed now"}
+                      </span>
+                    )}
+                  </div>
+                  {todaysHours && (
+                    <p className="mb-2 text-sm font-medium">{todaysHours}</p>
+                  )}
+                  <details className="group">
+                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                      View weekly hours
+                    </summary>
+                    <div className="mt-2 space-y-1">
+                      {formatted.map((dayHours, index) => (
+                        <div key={index} className="text-xs text-muted-foreground">
+                          {dayHours}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )
+            })()}
 
             {venue.rulesText && (
               <div className="rounded-xl border bg-background p-4">

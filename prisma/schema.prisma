@@ -28,13 +28,14 @@ model Venue {
   hourlySeatPrice Float
   latitude        Float?
   longitude       Float?
-  rulesText       String?
+  rulesText        String?
   tags            String[]
   ownerId         String?
   reservations    Reservation[]
   tables          Table[]
   seatBlocks      SeatBlock[]
   deals           Deal[]
+  venueHours      VenueHours[]
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?
@@ -209,4 +210,20 @@ model DealRedemption {
   @@index([reservationId])
   @@index([dealId])
   @@map("deal_redemptions")
+}
+
+model VenueHours {
+  id        String   @id @default(cuid())
+  venueId   String
+  dayOfWeek Int      // 0=Sunday, 1=Monday, ..., 6=Saturday
+  isClosed  Boolean  @default(false)
+  openTime  String?  // "HH:MM" format, nullable if closed
+  closeTime String?  // "HH:MM" format, nullable if closed
+  source    String   @default("google")
+  updatedAt DateTime @updatedAt
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, dayOfWeek])
+  @@index([venueId])
+  @@map("venue_hours")
 }

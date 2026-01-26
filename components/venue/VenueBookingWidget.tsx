@@ -54,6 +54,15 @@ interface AvailableGroupTable {
   pricePerHour: number
   imageUrls: string[]
   isCommunal?: boolean
+  nextAvailableAt?: string | null
+}
+
+interface UnavailableSeat extends AvailableSeat {
+  nextAvailableAt: string | null
+}
+
+interface UnavailableGroupTable extends AvailableGroupTable {
+  nextAvailableAt: string | null
 }
 
 export function VenueBookingWidget({
@@ -74,8 +83,10 @@ export function VenueBookingWidget({
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
   const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
+  const [unavailableSeats, setUnavailableSeats] = useState<UnavailableSeat[]>([])
   const [availableSeatGroups, setAvailableSeatGroups] = useState<AvailableSeatGroup[]>([])
   const [availableGroupTables, setAvailableGroupTables] = useState<AvailableGroupTable[]>([])
+  const [unavailableGroupTables, setUnavailableGroupTables] = useState<UnavailableGroupTable[]>([])
   const [unavailableSeatIds, setUnavailableSeatIds] = useState<Set<string>>(
     new Set()
   )
@@ -124,7 +135,10 @@ export function VenueBookingWidget({
         console.error("Availability check failed:", response.status, data)
         setError(data?.error || "Failed to check availability.")
         setAvailableSeats([])
+        setUnavailableSeats([])
         setAvailableSeatGroups([])
+        setAvailableGroupTables([])
+        setUnavailableGroupTables([])
         setUnavailableSeatIds(new Set())
         return
       }
@@ -134,8 +148,10 @@ export function VenueBookingWidget({
         console.error("Availability error:", data.error)
         setError(data.error)
         setAvailableSeats([])
+        setUnavailableSeats([])
         setAvailableSeatGroups([])
         setAvailableGroupTables([])
+        setUnavailableGroupTables([])
         setUnavailableSeatIds(new Set())
         return
       }
@@ -145,27 +161,37 @@ export function VenueBookingWidget({
         console.error("Invalid response structure:", data)
         setError("Invalid response from server.")
         setAvailableSeats([])
+        setUnavailableSeats([])
         setAvailableSeatGroups([])
         setAvailableGroupTables([])
+        setUnavailableGroupTables([])
         setUnavailableSeatIds(new Set())
         return
       }
 
       console.log("Availability check successful:", {
         availableSeats: data.availableSeats?.length || 0,
+        unavailableSeats: data.unavailableSeats?.length || 0,
         availableSeatGroups: data.availableSeatGroups?.length || 0,
         availableGroupTables: data.availableGroupTables?.length || 0,
+        unavailableGroupTables: data.unavailableGroupTables?.length || 0,
         unavailableSeatIds: data.unavailableSeatIds?.length || 0
       })
 
       setAvailableSeats(data.availableSeats || [])
+      setUnavailableSeats(data.unavailableSeats || [])
       setAvailableSeatGroups(data.availableSeatGroups || [])
       setAvailableGroupTables(data.availableGroupTables || [])
+      setUnavailableGroupTables(data.unavailableGroupTables || [])
       setUnavailableSeatIds(new Set(data.unavailableSeatIds || []))
     } catch (err) {
       console.error("Error checking availability:", err)
       setError("Something went wrong while checking availability.")
       setAvailableSeats([])
+      setUnavailableSeats([])
+      setAvailableSeatGroups([])
+      setAvailableGroupTables([])
+      setUnavailableGroupTables([])
       setUnavailableSeatIds(new Set())
     } finally {
       setIsLoadingAvailability(false)
@@ -175,6 +201,7 @@ export function VenueBookingWidget({
   // Track if we've initialized date/time to prevent re-initialization
   const hasInitialized = useRef(false)
   const handleCheckAvailabilityRef = useRef(handleCheckAvailability)
+  const hasAutoChecked = useRef(false)
 
   // Keep ref updated with latest handleCheckAvailability
   useEffect(() => {
@@ -239,20 +266,38 @@ export function VenueBookingWidget({
       setDate(`${yyyy}-${mm}-${dd}`)
       setStartTime(`${hh}:${min}`)
       hasInitialized.current = true
+      
+      // Auto-trigger availability check after setting date/time (only for default initialization, not URL params)
+      // Use a small delay to ensure state is updated
+      setTimeout(() => {
+        if (!hasAutoChecked.current && !searchParams.get("booking")) {
+          hasAutoChecked.current = true
+          handleCheckAvailabilityRef.current()
+        }
+      }, 150)
     }
   }, [searchParams, router])
 
-  // Group available seats by table
+  // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {
-    const grouped = new Map<string, AvailableSeat[]>()
+    const grouped = new Map<string, { available: AvailableSeat[]; unavailable: UnavailableSeat[] }>()
+    
     availableSeats.forEach((seat) => {
       if (!grouped.has(seat.tableId)) {
-        grouped.set(seat.tableId, [])
+        grouped.set(seat.tableId, { available: [], unavailable: [] })
       }
-      grouped.get(seat.tableId)!.push(seat)
+      grouped.get(seat.tableId)!.available.push(seat)
     })
+    
+    unavailableSeats.forEach((seat) => {
+      if (!grouped.has(seat.tableId)) {
+        grouped.set(seat.tableId, { available: [], unavailable: [] })
+      }
+      grouped.get(seat.tableId)!.unavailable.push(seat)
+    })
+    
     return grouped
-  }, [availableSeats])
+  }, [availableSeats, unavailableSeats])
 
   // Get table info for display
   const getTableInfo = (tableId: string) => {
@@ -302,8 +347,8 @@ export function VenueBookingWidget({
 
   const canCheckAvailability = date && startTime && !isLoadingAvailability;
   
-  const hasSingleSeatData = seatCount === 1 && (availableSeats.length > 0 || availableGroupTables.length > 0 || unavailableSeatIds.size > 0);
-  const hasMultiSeatData = seatCount > 1 && (availableSeatGroups.length > 0 || availableGroupTables.length > 0 || unavailableSeatIds.size > 0);
+  const hasSingleSeatData = seatCount === 1 && (availableSeats.length > 0 || unavailableSeats.length > 0 || availableGroupTables.length > 0 || unavailableGroupTables.length > 0);
+  const hasMultiSeatData = seatCount > 1 && (availableSeatGroups.length > 0 || availableGroupTables.length > 0 || unavailableGroupTables.length > 0);
   const hasAvailabilityData = hasSingleSeatData || hasMultiSeatData;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -421,7 +466,10 @@ export function VenueBookingWidget({
 
   // Helper function to render single seat selection
   const renderSingleSeatSelection = () => {
-    if (availableSeats.length === 0 && availableGroupTables.length === 0) {
+    const hasAnySeats = availableSeats.length > 0 || unavailableSeats.length > 0
+    const hasAnyTables = availableGroupTables.length > 0 || unavailableGroupTables.length > 0
+    
+    if (!hasAnySeats && !hasAnyTables) {
       return (
         <p className="text-sm text-muted-foreground">
           No seats or tables available for this time. Try a different time or date.
@@ -432,12 +480,13 @@ export function VenueBookingWidget({
     return (
       <>
         {/* Group tables section */}
-        {availableGroupTables.length > 0 && (
+        {(availableGroupTables.length > 0 || unavailableGroupTables.length > 0) && (
           <div className="mb-6 space-y-3">
             <h4 className="text-xs font-medium text-muted-foreground">
               Book full table
             </h4>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* Available group tables */}
               {availableGroupTables.map((table) => {
                 const isSelected = selectedGroupTableId === table.id
                 return (
@@ -531,12 +580,79 @@ export function VenueBookingWidget({
                   </button>
                 )
               })}
+              {/* Unavailable group tables */}
+              {unavailableGroupTables.map((table) => {
+                const isSelected = false // Unavailable tables can't be selected
+                const nextAvailableTime = table.nextAvailableAt
+                  ? new Date(table.nextAvailableAt).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : null
+                
+                return (
+                  <button
+                    key={table.id}
+                    type="button"
+                    disabled
+                    className={cn(
+                      "relative rounded-md border p-4 text-left transition-all",
+                      "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    {table.imageUrls.length > 0 && (
+                      <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        <img
+                          src={table.imageUrls[0]}
+                          alt={table.name || "Table"}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <h5 className="text-sm font-medium">
+                        {table.name || "Table"}
+                      </h5>
+                      {table.isCommunal === true && (
+                        <span className="flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          <svg
+                            className="h-2.5 w-2.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                            />
+                          </svg>
+                          Communal
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {table.seatCount} seat{table.seatCount > 1 ? "s" : ""}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      ${table.pricePerHour.toFixed(0)}/hour
+                    </p>
+                    {nextAvailableTime && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Next available: {nextAvailableTime}
+                      </p>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
 
         {/* Individual seats section */}
-        {availableSeats.length > 0 && (
+        {hasAnySeats && (
           <div className={availableGroupTables.length > 0 ? "space-y-6" : ""}>
             {availableGroupTables.length > 0 && (
               <h4 className="text-xs font-medium text-muted-foreground">
@@ -544,12 +660,16 @@ export function VenueBookingWidget({
               </h4>
             )}
             <div className="space-y-6">
-              {Array.from(seatsByTable.entries()).map(([tableId, seats]) => {
+              {Array.from(seatsByTable.entries()).map(([tableId, { available, unavailable }]) => {
                 const table = getTableInfo(tableId)
                 if (!table) return null
 
                 // Check if this table is communal (all seats should have same isCommunal flag)
-                const isCommunal = Boolean(seats.length > 0 && seats[0]?.isCommunal)
+                const isCommunal = Boolean(
+                  (available.length > 0 && available[0]?.isCommunal) ||
+                  (unavailable.length > 0 && unavailable[0]?.isCommunal)
+                )
+                const totalSeats = available.length + unavailable.length
 
                 return (
                   <div key={tableId} className="space-y-3">
@@ -597,7 +717,7 @@ export function VenueBookingWidget({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {seats.length} seat{seats.length > 1 ? "s" : ""} available
+                          {available.length} available, {unavailable.length} booked
                           {isCommunal && (
                             <span className="block mt-1 text-xs italic">
                               Note: This is a communal space. Other guests may be seated at the same table.
@@ -609,8 +729,8 @@ export function VenueBookingWidget({
 
                     {/* Seat cards grid */}
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {seats.map((seat) => {
-                        const isAvailable = !unavailableSeatIds.has(seat.id)
+                      {/* Available seats */}
+                      {available.map((seat) => {
                         const isSelected = selectedSeatId === seat.id
 
                         return (
@@ -629,14 +749,41 @@ export function VenueBookingWidget({
                               name: table.name,
                               imageUrls: (table.imageUrls as string[]) || [],
                             }}
-                            isAvailable={isAvailable}
+                            isAvailable={true}
                             isSelected={isSelected}
                             isCommunal={seat.isCommunal ?? false}
+                            nextAvailableAt={null}
                             onSelect={() => {
-                              if (isAvailable) {
-                                setSelectedSeatId(seat.id)
-                                setSelectedGroupTableId(null)
-                              }
+                              setSelectedSeatId(seat.id)
+                              setSelectedGroupTableId(null)
+                            }}
+                          />
+                        )
+                      })}
+                      {/* Unavailable seats */}
+                      {unavailable.map((seat) => {
+                        return (
+                          <SeatCard
+                            key={seat.id}
+                            seat={{
+                              id: seat.id,
+                              label: seat.label,
+                              position: seat.position,
+                              pricePerHour: seat.pricePerHour,
+                              tags: seat.tags,
+                              imageUrls: seat.imageUrls,
+                            }}
+                            table={{
+                              id: tableId,
+                              name: table.name,
+                              imageUrls: (table.imageUrls as string[]) || [],
+                            }}
+                            isAvailable={false}
+                            isSelected={false}
+                            isCommunal={seat.isCommunal ?? false}
+                            nextAvailableAt={seat.nextAvailableAt}
+                            onSelect={() => {
+                              // Unavailable seats can't be selected
                             }}
                           />
                         )
@@ -786,7 +933,10 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   setDate(e.target.value)
                   setAvailableSeats([])
+                  setUnavailableSeats([])
                   setAvailableSeatGroups([])
+                  setAvailableGroupTables([])
+                  setUnavailableGroupTables([])
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
@@ -806,7 +956,10 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   setStartTime(e.target.value)
                   setAvailableSeats([])
+                  setUnavailableSeats([])
                   setAvailableSeatGroups([])
+                  setAvailableGroupTables([])
+                  setUnavailableGroupTables([])
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
@@ -826,7 +979,10 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   setDurationHours(Number(e.target.value))
                   setAvailableSeats([])
+                  setUnavailableSeats([])
                   setAvailableSeatGroups([])
+                  setAvailableGroupTables([])
+                  setUnavailableGroupTables([])
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
@@ -849,7 +1005,10 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   setSeatCount(Number(e.target.value))
                   setAvailableSeats([])
+                  setUnavailableSeats([])
                   setAvailableSeatGroups([])
+                  setAvailableGroupTables([])
+                  setUnavailableGroupTables([])
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}

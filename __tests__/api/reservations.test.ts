@@ -184,6 +184,19 @@ describe('POST /api/reservations', () => {
       const seat = createTestSeat({ id: 'seat-1', tableId: table.id })
 
       vi.mocked(mockPrisma.user.findUnique).mockResolvedValue(user)
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.seat.findUnique).mockResolvedValue({
+        ...seat,
+        table: {
+          ...table,
+          venue,
+          venueId: venue.id,
+        },
+      })
       vi.mocked(mockPrisma.seat.findMany).mockResolvedValue([
         {
           ...seat,
@@ -209,6 +222,21 @@ describe('POST /api/reservations', () => {
     })
 
     it('creates reservation with correct seatCount=1 for single seat', async () => {
+      const venue = createTestVenue({ id: 'venue-1' })
+      const table = createTestTable({ id: 'table-1', venueId: venue.id })
+      const seat = createTestSeat({ id: 'seat-1', tableId: table.id })
+      
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.seat.findUnique).mockResolvedValue({
+        ...seat,
+        table: { ...table, venue },
+      })
+      vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue(null)
+      
       mockRequest = new Request('http://localhost/api/reservations', {
         method: 'POST',
         body: JSON.stringify({
@@ -231,6 +259,12 @@ describe('POST /api/reservations', () => {
     it('creates reservation with correct seatCount for multiple seats', async () => {
       const venue = createTestVenue({ id: 'venue-1' })
       const table = createTestTable({ id: 'table-1', venueId: venue.id })
+      
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
       vi.mocked(mockPrisma.seat.findMany).mockResolvedValue([
         {
           ...createTestSeat({ id: 'seat-1', tableId: table.id }),
@@ -245,6 +279,18 @@ describe('POST /api/reservations', () => {
           table: { ...table, venue, venueId: venue.id },
         },
       ])
+      vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue(null)
+      vi.mocked(mockPrisma.reservation.create).mockResolvedValue({
+        id: 'reservation-1',
+        venueId: venue.id,
+        userId: 'test-user-id',
+        seatId: null,
+        tableId: table.id,
+        seatCount: 3,
+        startAt: new Date(createTestDateString(60)),
+        endAt: new Date(createTestDateString(120)),
+        status: 'active',
+      })
 
       mockRequest = new Request('http://localhost/api/reservations', {
         method: 'POST',
@@ -283,6 +329,19 @@ describe('POST /api/reservations', () => {
     })
 
     it('returns 409 if seat is already reserved', async () => {
+      const venue = createTestVenue({ id: 'venue-1' })
+      const table = createTestTable({ id: 'table-1', venueId: venue.id })
+      const seat = createTestSeat({ id: 'seat-1', tableId: table.id })
+      
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.seat.findUnique).mockResolvedValue({
+        ...seat,
+        table: { ...table, venue, venueId: venue.id },
+      })
       vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue({
         id: 'existing-reservation',
       })
@@ -341,6 +400,14 @@ describe('POST /api/reservations', () => {
       // This tests the critical bug we fixed
       const tableSeatCount = 4
       const selectorSeatCount = 1 // User might have selector at 1
+      const venue = createTestVenue({ id: 'venue-1' })
+      
+      // Ensure venue.findUnique is mocked (it's set in beforeEach, but this test might need it explicitly)
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
 
       mockRequest = new Request('http://localhost/api/reservations', {
         method: 'POST',
@@ -371,10 +438,19 @@ describe('POST /api/reservations', () => {
         seatCount: 4,
         bookingMode: 'group',
       })
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
       vi.mocked(mockPrisma.table.findUnique).mockResolvedValue({
         ...table,
         venueId: venue.id,
-        venue,
+        venue: {
+          ...venue,
+          venueHours: [],
+          openingHoursJson: null,
+        },
         seats: Array.from({ length: 4 }, (_, i) => createTestSeat({ id: `seat-${i + 1}`, tableId: table.id })),
       })
 
@@ -414,6 +490,29 @@ describe('POST /api/reservations', () => {
     })
 
     it('returns 409 if table is already reserved', async () => {
+      const venue = createTestVenue({ id: 'venue-1' })
+      const table = createTestTable({
+        id: 'table-1',
+        venueId: venue.id,
+        seatCount: 4,
+        bookingMode: 'group',
+      })
+      
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.table.findUnique).mockResolvedValue({
+        ...table,
+        venueId: venue.id,
+        venue: {
+          ...venue,
+          venueHours: [],
+          openingHoursJson: null,
+        },
+        seats: Array.from({ length: 4 }, (_, i) => createTestSeat({ id: `seat-${i + 1}`, tableId: table.id })),
+      })
       vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue({
         id: 'existing-reservation',
       })

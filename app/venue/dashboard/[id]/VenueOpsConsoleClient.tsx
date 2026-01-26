@@ -52,6 +52,7 @@ interface VenueOpsConsoleClientProps {
   venue: {
     id: string
     name: string
+    openingHoursJson?: any
     tables: Array<{
       id: string
       name: string | null

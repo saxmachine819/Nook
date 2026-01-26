@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getOpenIntervalsFromVenueHours, isReservationWithinHours } from "@/lib/venue-hours"
 
 type OpeningHoursPeriod = {
   open: { day: number; hour: number; minute: number }
@@ -11,14 +12,31 @@ function minutesSinceMidnight(hour: number, minute: number) {
 }
 
 // Returns booking intervals (in minutes since midnight) for the given local date.
-// If Google hours exist, we map them; otherwise we fall back to 8:00–20:00.
+// Prefers VenueHours if available, falls back to openingHoursJson, then default 8:00–20:00.
 function getOpenIntervalsForDate(
   dateStr: string,
+  venueHours: Array<{
+    dayOfWeek: number
+    isClosed: boolean
+    openTime: string | null
+    closeTime: string | null
+  }> | null,
   openingHoursJson: any
 ): Array<{ startMin: number; endMin: number }> {
   // Fallback window (MVP)
   const fallback = [{ startMin: 8 * 60, endMin: 20 * 60 }]
 
+  // Prefer VenueHours if available
+  if (venueHours && venueHours.length > 0) {
+    const intervals = getOpenIntervalsFromVenueHours(venueHours, dateStr)
+    if (intervals.length > 0) {
+      return intervals
+    }
+    // If day is closed, return empty array (no slots available)
+    return []
+  }
+
+  // Fallback to openingHoursJson parsing
   const periods: OpeningHoursPeriod[] | undefined =
     openingHoursJson?.periods && Array.isArray(openingHoursJson.periods)
       ? openingHoursJson.periods
@@ -86,19 +104,16 @@ function getOpenIntervalsForDate(
 function isTimeWindowWithinOpeningHours(
   startAt: Date,
   endAt: Date,
+  venueHours: Array<{
+    dayOfWeek: number
+    isClosed: boolean
+    openTime: string | null
+    closeTime: string | null
+  }> | null,
   openingHoursJson: any
 ): boolean {
-  const dateStr = startAt.toISOString().split('T')[0]
-  const intervals = getOpenIntervalsForDate(dateStr, openingHoursJson)
-  
-  // Convert to local time (minutes since midnight)
-  const startMin = startAt.getHours() * 60 + startAt.getMinutes()
-  const endMin = endAt.getHours() * 60 + endAt.getMinutes()
-  
-  // Check if the time window overlaps with any open interval
-  return intervals.some(interval => 
-    startMin >= interval.startMin && endMin <= interval.endMin
-  )
+  const result = isReservationWithinHours(startAt, endAt, venueHours, openingHoursJson)
+  return result.isValid
 }
 
 export async function GET(
@@ -155,6 +170,11 @@ export async function GET(
               },
             },
           },
+          venueHours: {
+            orderBy: {
+              dayOfWeek: "asc",
+            },
+          },
         },
       })
 
@@ -186,25 +206,19 @@ export async function GET(
 
       // Check if time window is within opening hours
       const openingHoursJson = (venue as any).openingHoursJson
-      if (openingHoursJson) {
-        const isWithinHours = isTimeWindowWithinOpeningHours(
-          parsedStart,
-          parsedEnd,
-          openingHoursJson
+      const venueHours = (venue as any).venueHours || null
+      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, venueHours, openingHoursJson)
+      
+      if (!hoursCheck.isValid) {
+        return NextResponse.json(
+          {
+            availableSeats: [],
+            unavailableSeatIds: [],
+            error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours.",
+          },
+          { status: 200 }
         )
-        
-        if (!isWithinHours) {
-          return NextResponse.json(
-            {
-              availableSeats: [],
-              unavailableSeatIds: [],
-              error: "This venue is not open during the requested time. Please check opening hours.",
-            },
-            { status: 200 }
-          )
-        }
       }
-      // If no opening hours data, allow booking (fallback behavior)
 
       // Find overlapping reservations for this time window
       const overlappingReservations = await prisma.reservation.findMany({
@@ -223,6 +237,7 @@ export async function GET(
         select: {
           seatId: true,
           tableId: true,
+          endAt: true,
         },
       })
 
@@ -273,8 +288,12 @@ export async function GET(
         (r) => r.tableId !== null && r.seatId === null
       )
 
-      // For each group table reservation, mark all seats in that table as unavailable
+      // Track unavailable group table IDs
+      const unavailableGroupTableIds = new Set<string>()
       for (const groupReservation of groupTableReservations) {
+        if (groupReservation.tableId) {
+          unavailableGroupTableIds.add(groupReservation.tableId)
+        }
         const table = venue.tables.find((t) => t.id === groupReservation.tableId)
         if (table) {
           table.seats.forEach((seat) => {
@@ -375,6 +394,65 @@ export async function GET(
         }
       })
 
+      // Helper function to round up to next 15 minutes
+      function roundUpToNext15Minutes(date: Date): Date {
+        const result = new Date(date)
+        const minutes = result.getMinutes()
+        const remainder = minutes % 15
+        if (remainder !== 0) {
+          result.setMinutes(minutes + (15 - remainder), 0, 0)
+        } else {
+          result.setMinutes(minutes + 15, 0, 0)
+        }
+        return result
+      }
+
+      // Helper function to calculate next available time for a seat
+      function calculateNextAvailableTimeForSeat(
+        seatId: string,
+        requestedStart: Date,
+        requestedEnd: Date
+      ): string | null {
+        const seatReservations = overlappingReservations.filter(
+          (r) => r.seatId === seatId && r.endAt
+        )
+
+        if (seatReservations.length === 0) return null
+
+        const latestEnd = new Date(
+          Math.max(...seatReservations.map((r) => r.endAt!.getTime()))
+        )
+
+        const rounded = roundUpToNext15Minutes(latestEnd)
+
+        if (rounded <= requestedStart) return null
+
+        return rounded.toISOString()
+      }
+
+      // Helper function to calculate next available time for a group table
+      function calculateNextAvailableTimeForTable(
+        tableId: string,
+        requestedStart: Date,
+        requestedEnd: Date
+      ): string | null {
+        const tableReservations = overlappingReservations.filter(
+          (r) => r.tableId === tableId && r.seatId === null && r.endAt
+        )
+
+        if (tableReservations.length === 0) return null
+
+        const latestEnd = new Date(
+          Math.max(...tableReservations.map((r) => r.endAt!.getTime()))
+        )
+
+        const rounded = roundUpToNext15Minutes(latestEnd)
+
+        if (rounded <= requestedStart) return null
+
+        return rounded.toISOString()
+      }
+
       // Helper function to find adjacent seats within available seats array
       function findAdjacentSeats(
         seats: typeof allAvailableSeats,
@@ -416,16 +494,45 @@ export async function GET(
 
       // If seatCount === 1, return all individual seats AND group tables that have at least 1 seat
       if (seatCount === 1) {
-        // Filter out unavailable seats
-        const filteredAvailableSeats = allAvailableSeats.filter(
+        // Split seats into available and unavailable
+        const availableSeats = allAvailableSeats.filter(
           (seat) => !unavailableSeatIds.has(seat.id)
         )
         
+        const unavailableSeats = allAvailableSeats
+          .filter((seat) => unavailableSeatIds.has(seat.id))
+          .map((seat) => ({
+            ...seat,
+            nextAvailableAt: calculateNextAvailableTimeForSeat(
+              seat.id,
+              parsedStart,
+              parsedEnd
+            ),
+          }))
+
+        // Split group tables into available and unavailable
+        const availableGroupTablesFiltered = availableGroupTables.filter(
+          (table) => !unavailableGroupTableIds.has(table.id)
+        )
+
+        const unavailableGroupTables = availableGroupTables
+          .filter((table) => unavailableGroupTableIds.has(table.id))
+          .map((table) => ({
+            ...table,
+            nextAvailableAt: calculateNextAvailableTimeForTable(
+              table.id,
+              parsedStart,
+              parsedEnd
+            ),
+          }))
+        
         return NextResponse.json(
           {
-            availableSeats: filteredAvailableSeats,
+            availableSeats,
+            unavailableSeats,
             availableSeatGroups: [],
-            availableGroupTables: availableGroupTables,
+            availableGroupTables: availableGroupTablesFiltered,
+            unavailableGroupTables,
             unavailableSeatIds: Array.from(unavailableSeatIds),
           },
           { status: 200 }
@@ -433,7 +540,7 @@ export async function GET(
       }
 
       // If seatCount > 1, find groups of adjacent seats
-      // First, filter out unavailable seats
+      // First, filter out unavailable seats for grouping
       const filteredAvailableSeats = allAvailableSeats.filter(
         (seat) => !unavailableSeatIds.has(seat.id)
       )
@@ -469,14 +576,32 @@ export async function GET(
         }
       })
 
+      // Split group tables into available and unavailable
+      const availableGroupTablesFiltered = availableGroupTables.filter(
+        (table) => table.seatCount === seatCount && !unavailableGroupTableIds.has(table.id)
+      )
+
+      const unavailableGroupTables = availableGroupTables
+        .filter(
+          (table) => table.seatCount === seatCount && unavailableGroupTableIds.has(table.id)
+        )
+        .map((table) => ({
+          ...table,
+          nextAvailableAt: calculateNextAvailableTimeForTable(
+            table.id,
+            parsedStart,
+            parsedEnd
+          ),
+        }))
+
       // For seatCount > 1, return groups AND group tables that match the seat count
       return NextResponse.json(
         {
           availableSeats: filteredAvailableSeats, // Filtered to exclude unavailable seats
+          unavailableSeats: [], // No individual unavailable seats for multi-seat bookings
           availableSeatGroups,
-          availableGroupTables: availableGroupTables.filter(
-            (table) => table.seatCount === seatCount
-          ),
+          availableGroupTables: availableGroupTablesFiltered,
+          unavailableGroupTables,
           unavailableSeatIds: Array.from(unavailableSeatIds),
         },
         { status: 200 }
@@ -503,6 +628,11 @@ export async function GET(
       where: { id: venueId },
       include: {
         tables: true,
+        venueHours: {
+          orderBy: {
+            dayOfWeek: "asc",
+          },
+        },
         reservations: {
           where: {
             status: {
@@ -535,9 +665,11 @@ export async function GET(
       (r) => r.startAt < dayEnd && r.endAt > dayStart
     )
 
-    // Define booking windows for slots from Google opening hours (fallback to 8:00–20:00)
+    // Define booking windows for slots from VenueHours (prefer) or Google opening hours (fallback to 8:00–20:00)
     const slots = []
-    const openIntervals = getOpenIntervalsForDate(date, (venue as any).openingHoursJson)
+    const venueHours = (venue as any).venueHours || null
+    const openingHoursJson = (venue as any).openingHoursJson
+    const openIntervals = getOpenIntervalsForDate(date, venueHours, openingHoursJson)
 
     for (const interval of openIntervals) {
       for (let m = interval.startMin; m < interval.endMin; m += 15) {

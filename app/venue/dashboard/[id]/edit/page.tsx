@@ -50,6 +50,11 @@ export default async function VenueDashboardEditPage({ params }: VenueEditPagePr
           createdAt: "asc",
         },
       },
+      venueHours: {
+        orderBy: {
+          dayOfWeek: "asc",
+        },
+      },
     },
   })
 

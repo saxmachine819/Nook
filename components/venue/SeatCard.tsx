@@ -21,6 +21,7 @@ interface SeatCardProps {
   isAvailable: boolean
   isSelected: boolean
   isCommunal?: boolean
+  nextAvailableAt?: string | null
   onSelect: () => void
 }
 
@@ -30,6 +31,7 @@ export function SeatCard({
   isAvailable,
   isSelected,
   isCommunal,
+  nextAvailableAt,
   onSelect,
 }: SeatCardProps) {
   const [isImageOpen, setIsImageOpen] = useState(false)
@@ -112,6 +114,18 @@ export function SeatCard({
           </div>
           <p className="text-xs italic text-muted-foreground">
             Note: This is a communal space. Other guests may be seated at the same table.
+          </p>
+        </div>
+      )}
+
+      {/* Next available time for unavailable seats */}
+      {!isAvailable && nextAvailableAt && (
+        <div className="mb-2">
+          <p className="text-xs text-muted-foreground">
+            Next available: {new Date(nextAvailableAt).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
           </p>
         </div>
       )}

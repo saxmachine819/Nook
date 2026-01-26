@@ -109,6 +109,7 @@ describe('GET /api/venues/[id]/availability', () => {
         {
           seatId: 'seat-1',
           tableId: null,
+          endAt: new Date(createTestDateString(120)),
         },
       ])
       vi.mocked(mockPrisma.seatBlock.findMany).mockResolvedValue([])
