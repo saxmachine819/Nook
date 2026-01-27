@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
@@ -70,6 +70,7 @@ export function VenueCard({
   initialSeatCount,
 }: VenueCardProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
@@ -225,6 +226,11 @@ export function VenueCard({
       // Open confirmation modal (no redirect)
       setConfirmedReservation(data?.reservation || null)
       setConfirmationOpen(true)
+      
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
       
       // Call onBookingSuccess callback to refresh availability
       if (onBookingSuccess) {

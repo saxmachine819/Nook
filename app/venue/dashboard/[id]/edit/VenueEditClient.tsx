@@ -343,7 +343,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         return
       }
 
-      if (place.name) setName(place.name)
+      // Don't update name - venue name is locked after creation
+      // if (place.name) setName(place.name)
       if (place.formatted_address) setAddress(place.formatted_address)
 
       let streetNumber = ""
@@ -642,13 +643,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     
     setIsSubmitting(true)
 
-    // Validation
-    if (!name.trim()) {
-      showToast("Venue name is required", "error")
-      setIsSubmitting(false)
-      return
-    }
-
+    // Validation (name is locked, so we don't validate it)
     if (!address.trim()) {
       showToast("Address is required", "error")
       setIsSubmitting(false)
@@ -769,46 +764,6 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {apiKey && (
-                <div
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }
-                  }}
-                >
-                  <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                    Find on Google <span className="text-muted-foreground">(optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      id="place-search"
-                      ref={autocompleteInputRef}
-                      type="text"
-                      autoComplete="off"
-                      disabled={isLoadingScript || isLoadingPlaceDetails}
-                      placeholder={
-                        isLoadingScript
-                          ? "Loading..."
-                          : isLoadingPlaceDetails
-                            ? "Loading place details..."
-                            : "Search for your venue or address"
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          return false
-                        }
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    />
-                  </div>
-                </div>
-              )}
-
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium">
                   Venue Name <span className="text-destructive">*</span>
@@ -818,10 +773,14 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  readOnly
+                  disabled
+                  className="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
                   placeholder="The Cozy Corner"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Venue name cannot be changed after creation
+                </p>
               </div>
 
               <div>

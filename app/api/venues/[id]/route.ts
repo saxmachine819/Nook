@@ -44,10 +44,10 @@ export async function PATCH(
 
     const body = await request.json()
 
-    // Validate required fields
-    if (!body.name || !body.address) {
+    // Validate required fields (name is not required for updates - it's locked after creation)
+    if (!body.address) {
       return NextResponse.json(
-        { error: "Missing required fields: name and address are required" },
+        { error: "Missing required fields: address is required" },
         { status: 400 }
       )
     }
@@ -108,11 +108,11 @@ export async function PATCH(
 
     // Update venue and tables/seats in a transaction
     const updatedVenue = await prisma.$transaction(async (tx) => {
-      // Update venue fields
+      // Update venue fields (name is locked after creation, so don't update it)
       await tx.venue.update({
         where: { id: venueId },
         data: {
-          name: body.name.trim(),
+          // name: body.name.trim(), // Name cannot be changed after creation
           address: body.address.trim(),
           neighborhood: body.neighborhood?.trim() || null,
           city: body.city?.trim() || null,

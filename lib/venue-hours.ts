@@ -198,14 +198,9 @@ export function isVenueOpenNow(
 
   const hours = openingHoursJson as GoogleOpeningHours
 
-  // If we have weekdayDescriptions, we can't easily determine "now" status
-  // (would need to parse the strings, which is error-prone)
-  if (hours.weekdayDescriptions && hours.weekdayDescriptions.length > 0) {
-    return { isOpen: false, canDetermine: false }
-  }
-
-  // Use periods to determine if open now
-  if (hours.periods && Array.isArray(hours.periods)) {
+  // Prefer periods over weekdayDescriptions - periods are more reliable for determining "now" status
+  // Use periods to determine if open now (if available)
+  if (hours.periods && Array.isArray(hours.periods) && hours.periods.length > 0) {
     for (const period of hours.periods) {
       if (!period.open) continue
 
@@ -244,6 +239,15 @@ export function isVenueOpenNow(
         }
       }
     }
+    
+    // If we checked periods and didn't find a match, venue is closed
+    return { isOpen: false, canDetermine: true }
+  }
+
+  // If we have weekdayDescriptions but no periods, we can't easily determine "now" status
+  // (would need to parse the strings, which is error-prone)
+  if (hours.weekdayDescriptions && hours.weekdayDescriptions.length > 0) {
+    return { isOpen: false, canDetermine: false }
   }
 
   return { isOpen: false, canDetermine: true }
@@ -258,9 +262,23 @@ export function getTodaysHours(openingHoursJson: any): string | null {
   const hours = openingHoursJson as GoogleOpeningHours
   const today = new Date().getDay()
 
-  // Prefer weekdayDescriptions
+  // Prefer weekdayDescriptions, but verify it's actually for today
   if (hours.weekdayDescriptions && Array.isArray(hours.weekdayDescriptions) && hours.weekdayDescriptions.length > today) {
-    return hours.weekdayDescriptions[today] || null
+    const todayDescription = hours.weekdayDescriptions[today]
+    if (todayDescription) {
+      // Verify the day name in the description matches today
+      // weekdayDescriptions format: "Mon: 7:00 AM – 4:00 PM" or "Monday: 7:00 AM – 4:00 PM"
+      const todayAbbrev = DAY_ABBREVIATIONS[today]
+      const todayFull = DAY_NAMES[today]
+      // Check if the description starts with today's day name (case-insensitive)
+      const descriptionUpper = todayDescription.toUpperCase()
+      const todayAbbrevUpper = todayAbbrev.toUpperCase()
+      const todayFullUpper = todayFull.toUpperCase()
+      if (descriptionUpper.startsWith(todayAbbrevUpper) || descriptionUpper.startsWith(todayFullUpper)) {
+        return todayDescription
+      }
+      // If day name doesn't match, fall through to periods parsing
+    }
   }
 
   // Parse from periods
@@ -298,7 +316,8 @@ export function getTodaysHours(openingHoursJson: any): string | null {
     }
 
     if (todayIntervals.length === 0) {
-      return "Closed"
+      const dayName = DAY_ABBREVIATIONS[today]
+      return `${dayName}: Closed`
     }
 
     const intervalStrs = todayIntervals.map((interval) => {
@@ -308,7 +327,9 @@ export function getTodaysHours(openingHoursJson: any): string | null {
       return `${interval.open} – ${interval.close}`
     })
 
-    return intervalStrs.join(", ")
+    // Add day name prefix to match weekdayDescriptions format
+    const dayName = DAY_ABBREVIATIONS[today]
+    return `${dayName}: ${intervalStrs.join(", ")}`
   }
 
   return null

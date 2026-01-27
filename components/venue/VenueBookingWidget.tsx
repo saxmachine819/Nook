@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
@@ -71,6 +71,7 @@ export function VenueBookingWidget({
 }: VenueBookingWidgetProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
@@ -465,6 +466,11 @@ export function VenueBookingWidget({
       setConfirmedReservation(data?.reservation || null)
       setConfirmationOpen(true)
       showToast("Reservation confirmed.", "success")
+      
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")

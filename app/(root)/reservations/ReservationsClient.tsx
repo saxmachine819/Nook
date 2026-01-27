@@ -60,6 +60,7 @@ interface Reservation {
   table: {
     name: string | null
     seatCount: number | null
+    tablePricePerHour: number | null
   } | null
 }
 
@@ -89,8 +90,16 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
         throw new Error("Failed to cancel")
       }
 
+      // Wait for response to be fully processed before refreshing
+      await response.json().catch(() => null)
+      
       showToast("Reservation cancelled", "success")
-      router.refresh()
+      
+      // Refresh the page to update the reservations list
+      // Use a small delay to ensure the server has processed the cancellation
+      setTimeout(() => {
+        router.refresh()
+      }, 100)
     } catch (error) {
       showToast("Failed to cancel reservation", "error")
     } finally {
@@ -157,15 +166,19 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
     const end = new Date(reservation.endAt)
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
 
-    // If multiple seats booked, use venue price * seat count
-    if (reservation.seatCount > 1) {
-      return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
+    // GROUP table booking: tableId exists and seatId is null
+    // Use table's tablePricePerHour (total price for the table, not per-seat)
+    if (reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour) {
+      return reservation.table.tablePricePerHour * hours
     }
+
     // For single seat bookings, use seat price if available
     if (reservation.seatId && reservation.seat) {
       return reservation.seat.pricePerHour * hours
     }
-    // Fallback to venue price * seat count
+
+    // Fallback: multiple seats or individual booking without seat data
+    // Use venue price * seat count
     return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
   }
 

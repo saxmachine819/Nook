@@ -147,8 +147,10 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   const hasInitializedVenuesRef = useRef(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
+  const hasRequestedLocationRef = useRef(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isSearchingText, setIsSearchingText] = useState(false)
+  const [isSearchingArea, setIsSearchingArea] = useState(false) // Track if we're searching by area (not text)
   
   const filtersRef = useRef<FilterState>(initialFilterState.filters)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
@@ -190,15 +192,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   useEffect(() => {
     if (typeof window === "undefined" || !isClient || hasInitializedVenuesRef.current) return
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:180',message:'Filter restoration useEffect triggered',data:{isClient,currentFilters:filters,currentQuery:searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-    
     const stored = loadFiltersFromStorage()
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:186',message:'Loaded filters from storage',data:{stored,hasStoredFilters:stored.searchQuery.length > 0 || stored.filters.dealsOnly || stored.filters.tags.length > 0 || stored.filters.priceMin != null || stored.filters.priceMax != null || stored.filters.seatCount != null || stored.filters.bookingMode.length > 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     
     const hasStoredFilters = stored.searchQuery.length > 0 || 
                             stored.filters.dealsOnly || 
@@ -222,16 +216,8 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         filters.availableNow === stored.filters.availableNow &&
         searchQuery === stored.searchQuery
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:203',message:'Filter match check',data:{filtersMatch,stored,currentFilters:filters},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      
       if (!filtersMatch) {
         console.log("🔄 Restoring filters from localStorage:", stored)
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:210',message:'Restoring filters from localStorage',data:{stored,hasPerformSearchRef:!!performSearchRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         
         setSearchQuery(stored.searchQuery)
         setFilters(stored.filters)
@@ -240,10 +226,6 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         // Re-apply search with restored filters
         if (performSearchRef.current) {
           performSearchRef.current(stored.searchQuery, currentBoundsRef.current ?? undefined, stored.filters)
-        } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:220',message:'performSearchRef is null, cannot restore',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-          // #endregion
         }
       } else {
         // Filters match, but we still need to initialize venues
@@ -310,6 +292,14 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       }
     )
   }
+  
+  // Auto-request location on mount (only once)
+  useEffect(() => {
+    if (isClient && !hasRequestedLocationRef.current && locationState === "idle" && !userLocation) {
+      hasRequestedLocationRef.current = true
+      requestLocation()
+    }
+  }, [isClient, locationState, userLocation])
 
   const handleSearchArea = async (bounds: {
     north: number
@@ -318,20 +308,33 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     west: number
   }) => {
     currentBoundsRef.current = bounds
+    // Mark that we're searching by area (not text) to prevent auto-expand
+    setIsSearchingArea(true)
     setIsSearching(true)
     try {
-      await performSearch(searchQuery, bounds, filters)
+      // Use performSearch with skipSetIsSearchingText=true to prevent auto-expand
+      await performSearch(searchQuery, bounds, filters, true)
+    } catch (error) {
+      console.error("Error in handleSearchArea:", error)
     } finally {
       setIsSearching(false)
+      // Reset the flag after a longer delay to allow venues useEffect and auto-center checks to run with skipFitBounds=true
+      // Use a longer delay to ensure all map operations complete before allowing auto-center again
+      setTimeout(() => {
+        setIsSearchingArea(false)
+      }, 2000) // Increased to 2 seconds to ensure all map operations complete
     }
   }
 
   const performSearch = useCallback(async (
     query: string,
     bounds?: { north: number; south: number; east: number; west: number } | null,
-    currentFilters?: FilterState
+    currentFilters?: FilterState,
+    skipSetIsSearchingText?: boolean
   ) => {
-    setIsSearchingText(true)
+    if (!skipSetIsSearchingText) {
+      setIsSearchingText(true)
+    }
     try {
       const params = new URLSearchParams()
       if (bounds) {
@@ -369,9 +372,6 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       }
       const raw = (data.venues ?? []) as Record<string, unknown>[]
       const newVenues = raw.map(normalizeVenue)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:376',message:'About to set venues state',data:{newVenueCount:newVenues.length,activeFilters,venueIds:newVenues.map(v=>v.id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       console.log("✅ Received venues:", newVenues.length, "with dealsOnly:", activeFilters.dealsOnly)
       console.log("🗺️ Setting venues state, map should update...")
       console.log("📍 Venue IDs:", newVenues.map(v => v.id).slice(0, 5))
@@ -385,15 +385,17 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       })
       setVenues(newVenues)
       // Force map refresh when search results update
-      setMapRefreshTrigger(prev => prev + 1)
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:388',message:'setVenues called',data:{newVenueCount:newVenues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+      // CRITICAL: Don't refresh map during area search - it causes remount and zoom reset
+      if (!skipSetIsSearchingText) {
+        // Only refresh map for text searches, not area searches
+        setMapRefreshTrigger(prev => prev + 1)
+      }
     } catch (e) {
       console.error("Error searching venues:", e)
     } finally {
-      setIsSearchingText(false)
+      if (!skipSetIsSearchingText) {
+        setIsSearchingText(false)
+      }
     }
   }, []) // Empty deps - use filtersRef.current and venues.length inside
   
@@ -440,10 +442,6 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   }, [])
   
   const handleApplyFilters = useCallback(async (appliedFilters?: FilterState) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:349',message:'handleApplyFilters called',data:{hasAppliedFilters:!!appliedFilters,appliedFilters,currentVenueCount:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
     // Accept filters as parameter to avoid timing issues with ref updates
     const filtersToUse = appliedFilters ?? filtersRef.current
     console.log("🔍 Applying filters:", { appliedFilters: !!appliedFilters, filtersToUse })
@@ -460,16 +458,8 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       setMapRefreshTrigger(prev => prev + 1)
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:365',message:'About to call performSearch',data:{filtersToUse,searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
     // Perform search with the filters - this will update venues and trigger map refresh
     await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filtersToUse)
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:370',message:'performSearch completed',data:{venueCountAfter:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
   }, [searchQuery])
 
   const handleClearFilters = useCallback(async () => {
@@ -653,12 +643,14 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             centerOnVenueId={centerOnVenueId}
             hasMapboxToken={hasMapboxToken}
             shouldFitBounds={shouldFitMapBounds}
+            skipFitBounds={isSearchingArea}
             onBoundsFitted={() => {
               // Reset the flag after bounds are fitted
               setShouldFitMapBounds(false)
             }}
             onRequestLocation={requestLocation}
             locationState={locationState}
+            isSearchingArea={isSearchingArea}
           />
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
             <TopOverlayControls
@@ -709,7 +701,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             venues={venues}
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
-            autoExpand={searchQuery.length > 0 || isSearchingText || activeFilterCount > 0}
+            autoExpand={!isSearchingArea && (searchQuery.length > 0 || isSearchingText || activeFilterCount > 0)}
           />
           <VenuePreviewSheet
             open={!!selectedVenueId && !!selectedVenue}

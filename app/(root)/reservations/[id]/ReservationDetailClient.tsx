@@ -57,6 +57,7 @@ interface ReservationDetailClientProps {
     table: {
       name: string | null
       seatCount: number | null
+      tablePricePerHour: number | null
     } | null
   }
 }
@@ -143,15 +144,19 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
     const end = new Date(reservation.endAt)
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
 
-    // If multiple seats booked, use venue price * seat count
-    if (reservation.seatCount > 1) {
-      return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
+    // GROUP table booking: tableId exists and seatId is null
+    // Use table's tablePricePerHour (total price for the table, not per-seat)
+    if (reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour) {
+      return reservation.table.tablePricePerHour * hours
     }
+
     // For single seat bookings, use seat price if available
     if (reservation.seatId && reservation.seat) {
       return reservation.seat.pricePerHour * hours
     }
-    // Fallback to venue price * seat count
+
+    // Fallback: multiple seats or individual booking without seat data
+    // Use venue price * seat count
     return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
   }
 
@@ -288,18 +293,22 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      {reservation.seatCount > 1
-                        ? `${reservation.seatCount} seats (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
-                        : reservation.seatId && reservation.seat
-                          ? `Seat (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
-                          : `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`}
+                      {reservation.tableId && !reservation.seatId
+                        ? `Table${reservation.table?.name ? ` ${reservation.table.name}` : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                        : reservation.seatCount > 1
+                          ? `${reservation.seatCount} seats (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                          : reservation.seatId && reservation.seat
+                            ? `Seat (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                            : `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`}
                     </span>
                     <span className="font-medium">
-                      {reservation.seatCount > 1
-                        ? `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour × ${reservation.seatCount}`
-                        : reservation.seatId && reservation.seat
-                          ? `${reservation.seat.pricePerHour.toFixed(0)}/hour`
-                          : `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour`}
+                      {reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour
+                        ? `$${reservation.table.tablePricePerHour.toFixed(0)}/hour (total)`
+                        : reservation.seatCount > 1
+                          ? `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour × ${reservation.seatCount}`
+                          : reservation.seatId && reservation.seat
+                            ? `${reservation.seat.pricePerHour.toFixed(0)}/hour`
+                            : `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour`}
                     </span>
                   </div>
                   <div className="border-t pt-2">

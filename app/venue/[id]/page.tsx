@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
-import { parseGoogleHours, isVenueOpenNow, getTodaysHours } from "@/lib/venue-hours"
+import { VenueHoursDisplay } from "@/components/venue/VenueHoursDisplay"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
 import { DealType } from "@prisma/client"
@@ -224,7 +224,27 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             name={venue.name} 
             address={venue.address}
             returnTo={searchParams?.returnTo}
+            deal={(() => {
+              const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
+                ? (venue as any).deals[0] 
+                : null
+              return primaryDeal || null
+            })()}
           />
+
+          {/* Tags - under address */}
+          {(venue.tags ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(venue.tags ?? []).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Photo */}
           <div className="relative overflow-hidden rounded-2xl border bg-muted">
@@ -244,20 +264,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
         </div>
 
         {/* Booking card */}
-        <div className="space-y-4">
-          {(venue.tags ?? []).length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {(venue.tags ?? []).slice(0, 4).map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
+        <div className="space-y-4 lg:pt-[140px]">
           <Card className="overflow-hidden">
             <CardHeader className="pb-4">
               <div className="flex items-start justify-between gap-4">
@@ -295,48 +302,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             </CardContent>
           </Card>
 
-          {/* Deal display - prominent, below reservation card */}
-          {(() => {
-            const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
-              ? (venue as any).deals[0] 
-              : null
-
-            if (!primaryDeal) return null
-
-            const eligibility = (primaryDeal.eligibilityJson as any) || {}
-            const eligibilitySummary = formatEligibilitySummary(primaryDeal)
-            const dealDescription = generateDescription(primaryDeal.type, eligibility)
-
-            return (
-              <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm">
-                <CardContent className="p-5">
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3">
-                      <span className="flex-shrink-0 rounded-full bg-primary/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary-foreground">
-                        Deal
-                      </span>
-                      <div className="flex-1 space-y-1.5">
-                        <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                          {primaryDeal.title}
-                        </h3>
-                        {eligibilitySummary && (
-                          <p className="text-xs font-medium text-primary/90">
-                            {eligibilitySummary}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-primary/10 bg-background/60 p-3.5">
-                      <p className="text-sm leading-relaxed text-muted-foreground">
-                        {primaryDeal.description || dealDescription}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })()}
-
           {/* Details directly below booking */}
           <div className="space-y-4">
             <div className="h-px w-full bg-border" />
@@ -352,63 +317,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
             </div>
 
-            {(venue.tags ?? []).length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {(venue.tags ?? []).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* Hours */}
-            {(() => {
-              const { formatted, hasHours } = parseGoogleHours((venue as any).openingHoursJson)
-              const { isOpen, canDetermine } = isVenueOpenNow((venue as any).openingHoursJson)
-              const todaysHours = getTodaysHours((venue as any).openingHoursJson)
-
-              if (!hasHours) {
-                return null // Don't show hours section if no hours available
-              }
-
-              return (
-                <div className="rounded-xl border bg-background p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-xs font-medium text-muted-foreground">Hours</div>
-                    {canDetermine && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          isOpen
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {isOpen ? "Open now" : "Closed now"}
-                      </span>
-                    )}
-                  </div>
-                  {todaysHours && (
-                    <p className="mb-2 text-sm font-medium">{todaysHours}</p>
-                  )}
-                  <details className="group">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                      View weekly hours
-                    </summary>
-                    <div className="mt-2 space-y-1">
-                      {formatted.map((dayHours, index) => (
-                        <div key={index} className="text-xs text-muted-foreground">
-                          {dayHours}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                </div>
-              )
-            })()}
+            <VenueHoursDisplay openingHoursJson={(venue as any).openingHoursJson} />
 
             {venue.rulesText && (
               <div className="rounded-xl border bg-background p-4">

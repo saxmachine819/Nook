@@ -29,6 +29,8 @@ interface MapboxMapProps {
   onBoundsFitted?: () => void
   onRequestLocation?: () => void
   locationState?: "idle" | "requesting" | "granted" | "denied" | "unavailable"
+  skipFitBounds?: boolean // When true, don't fit bounds even if shouldFitBounds is true
+  isSearchingArea?: boolean // When true, user is searching by area (not text)
 }
 
 // NYC coordinates (default center)
@@ -46,6 +48,8 @@ export function MapboxMap({
   onBoundsFitted,
   onRequestLocation,
   locationState,
+  skipFitBounds = false,
+  isSearchingArea = false,
 }: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -55,9 +59,13 @@ export function MapboxMap({
   const hasFitBoundsRef = useRef<boolean>(false) // Track if we've done initial fitBounds
   const lastVenuesCountRef = useRef<number>(0) // Track venue count to detect changes
   const hasAutoCenteredRef = useRef<boolean>(false) // Track if we've auto-centered on user location
+  const hasUserInteractedWithMapRef = useRef<boolean>(false) // Track if user has manually moved/zoomed the map
+  const hasMapLoadedOnceRef = useRef<boolean>(false) // Track if map has loaded at least once
   const onSelectVenueRef = useRef<((id: string) => void) | undefined>(onSelectVenue) // Keep callback current
   const onMapClickRef = useRef<(() => void) | undefined>(onMapClick)
   const pinImageLoadedRef = useRef<boolean>(false) // Track if pin image has been loaded
+  const skipFitBoundsRef = useRef<boolean>(false) // Track skipFitBounds in a ref for use in closures
+  const isSearchingAreaRef = useRef<boolean>(false) // Track isSearchingArea in a ref for use in closures
   const [isLoading, setIsLoading] = useState(true)
   const [mapError, setMapError] = useState<string | null>(null)
   const [showSearchButton, setShowSearchButton] = useState(false)
@@ -69,6 +77,21 @@ export function MapboxMap({
   useEffect(() => {
     onMapClickRef.current = onMapClick
   }, [onMapClick])
+  useEffect(() => {
+    skipFitBoundsRef.current = skipFitBounds
+  }, [skipFitBounds])
+  useEffect(() => {
+    // CRITICAL: Set hasUserInteracted FIRST, synchronously, before updating isSearchingAreaRef
+    // This ensures the flag is set immediately and available for any code that checks it
+    // This must happen before isSearchingAreaRef is updated to prevent race conditions
+    if (isSearchingArea) {
+      // Set flag immediately and synchronously - no async operations
+      hasUserInteractedWithMapRef.current = true
+    }
+    // Update isSearchingAreaRef AFTER hasUserInteracted is set
+    // This ensures any code checking hasUserInteracted will see the correct value
+    isSearchingAreaRef.current = isSearchingArea
+  }, [isSearchingArea])
 
   // Convert venues array to GeoJSON FeatureCollection
   const venuesToGeoJSON = (venues: Venue[]) => {
@@ -268,17 +291,11 @@ export function MapboxMap({
 
     // Click handler for individual pins
     map.on("click", "unclustered-point", (e) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:226',message:'unclustered-point click handler called',data:{hasOnSelectVenueRef:!!onSelectVenueRef.current,onSelectVenueType:typeof onSelectVenueRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       const features = map.queryRenderedFeatures(e.point, {
         layers: ["unclustered-point"],
       })
       if (features.length > 0) {
         const venueId = features[0].properties?.id
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:232',message:'About to call onSelectVenueRef',data:{venueId,hasCallback:!!onSelectVenueRef.current,callbackType:typeof onSelectVenueRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         if (venueId && onSelectVenueRef.current) {
           onSelectVenueRef.current(venueId)
         }
@@ -317,14 +334,24 @@ export function MapboxMap({
 
     mapboxgl.accessToken = accessToken
 
-    // Determine center: prioritize user location, then first venue, then NYC
+    // Determine center: prioritize user location ONLY if user hasn't interacted, then first venue, then NYC
+    // CRITICAL: If user is searching area, preserve current map state - don't reset to default
     let center: [number, number] = [NYC_CENTER.lng, NYC_CENTER.lat]
     let zoom = 10
 
-    if (userLocation) {
+    // PRIMARY GUARD: If user is searching area, don't reset map - it should already be positioned
+    if (isSearchingAreaRef.current && mapRef.current) {
+      // Map already exists and user is searching - don't create a new one
+      // This should never happen due to the check above, but adding as safety
+      return
+    }
+
+    if (userLocation && !hasUserInteractedWithMapRef.current) {
+      // Only center on userLocation if user hasn't interacted with the map yet
       center = [userLocation.lng, userLocation.lat]
       zoom = 14
     } else {
+      // User has interacted OR no userLocation - use first venue or NYC
       const validVenues = venues.filter((v) => v.latitude !== null && v.longitude !== null)
       if (validVenues.length > 0) {
         center = [validVenues[0].longitude!, validVenues[0].latitude!]
@@ -364,6 +391,7 @@ export function MapboxMap({
       }, 10000)
 
       map.on("load", async () => {
+        hasMapLoadedOnceRef.current = true
         if (loadTimeoutRef.current) {
           clearTimeout(loadTimeoutRef.current)
           loadTimeoutRef.current = null
@@ -516,7 +544,14 @@ export function MapboxMap({
           }
 
           // Fit bounds on initial load if needed
-          if (!hasFitBoundsRef.current && venues.length > 0 && !userLocation) {
+          // PRIMARY GUARD: Never fit bounds if user is searching area
+          if (isSearchingAreaRef.current) {
+            // Skip fitBounds during area search - preserve map view
+            return
+          }
+          // Don't fit bounds if user has interacted
+          const shouldFitInitial = !hasFitBoundsRef.current && venues.length > 0 && !userLocation && !hasUserInteractedWithMapRef.current
+          if (shouldFitInitial) {
             const bounds = new mapboxgl.LngLatBounds()
             venues.forEach((venue) => {
               if (venue.latitude !== null && venue.longitude !== null) {
@@ -546,12 +581,16 @@ export function MapboxMap({
                 forceMapRepaint(mapRef.current)
               }
               
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:475',message:'Map loaded, checking fitBounds',data:{venueCount:venuesRef.current.length,shouldFitBounds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-              // #endregion
-              
               // Fit bounds if shouldFitBounds is true (filters were actively changed) or if initializing
-              const shouldFit = shouldFitBounds === true || lastVenuesCountRef.current === 0
+              // PRIMARY GUARD: Never fit bounds if user is searching area
+              if (isSearchingAreaRef.current) {
+                // Skip fitBounds during area search - preserve map view
+                return
+              }
+              // Don't fit bounds if skipFitBounds is true or user has interacted
+              // Only use lastVenuesCount === 0 for initial load if map hasn't loaded yet and user hasn't interacted
+              const isInitializing = lastVenuesCountRef.current === 0 && !hasMapLoadedOnceRef.current && !hasUserInteractedWithMapRef.current
+              const shouldFit = !skipFitBoundsRef.current && !hasUserInteractedWithMapRef.current && (shouldFitBounds === true || isInitializing)
               if (shouldFit) {
                 const venuesWithLocation = venuesRef.current.filter(v => v.latitude != null && v.longitude != null)
                 if (venuesWithLocation.length > 0) {
@@ -560,10 +599,6 @@ export function MapboxMap({
                     bounds.extend([venue.longitude!, venue.latitude!])
                   })
                   if (!bounds.isEmpty()) {
-                    // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:488',message:'Fitting bounds on map load',data:{venueCount:venuesWithLocation.length,shouldFitBounds},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                    // #endregion
-                    
                     map.fitBounds(bounds, {
                       padding: 50,
                       maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
@@ -603,36 +638,77 @@ export function MapboxMap({
         // Initialize currentBoundsRef if it doesn't exist
         if (!currentBoundsRef.current) {
           currentBoundsRef.current = newBounds
+          // Mark interaction immediately on first moveend after initialization
+          // This ensures auto-center is disabled as soon as user finishes moving the map
+          hasUserInteractedWithMapRef.current = true
           return
         }
 
-        // Check if bounds have changed significantly
-        const threshold = 0.001 // Small threshold to avoid flickering
+        // Mark that user has interacted with the map (manually moved/zoomed)
+        const threshold = 0.0001 // Very small threshold for more sensitive detection
         const hasChanged =
           Math.abs(newBounds.north - currentBoundsRef.current.north) > threshold ||
           Math.abs(newBounds.south - currentBoundsRef.current.south) > threshold ||
           Math.abs(newBounds.east - currentBoundsRef.current.east) > threshold ||
           Math.abs(newBounds.west - currentBoundsRef.current.west) > threshold
+        
+        if (hasChanged) {
+          hasUserInteractedWithMapRef.current = true
+        }
 
         if (hasChanged && onSearchArea) {
           setShowSearchButton(true)
         }
       }
 
+      // Also listen to move event (during dragging) for more responsive button appearance
+      const handleMove = () => {
+        if (!map.loaded()) return
+
+        const bounds = map.getBounds()
+        if (!bounds) return
+        const newBounds = {
+          north: bounds.getNorth(),
+          south: bounds.getSouth(),
+          east: bounds.getEast(),
+          west: bounds.getWest(),
+        }
+
+        // Initialize currentBoundsRef if it doesn't exist
+        if (!currentBoundsRef.current) {
+          currentBoundsRef.current = newBounds
+          // Mark interaction immediately on first move after initialization
+          // This ensures auto-center is disabled as soon as user starts moving the map
+          hasUserInteractedWithMapRef.current = true
+          return
+        }
+
+        // Mark that user has interacted with the map (manually moved/zoomed)
+        const threshold = 0.0001
+        const hasChanged =
+          Math.abs(newBounds.north - currentBoundsRef.current.north) > threshold ||
+          Math.abs(newBounds.south - currentBoundsRef.current.south) > threshold ||
+          Math.abs(newBounds.east - currentBoundsRef.current.east) > threshold ||
+          Math.abs(newBounds.west - currentBoundsRef.current.west) > threshold
+        
+        if (hasChanged) {
+          hasUserInteractedWithMapRef.current = true
+        }
+
+        if (hasChanged && onSearchArea) {
+          setShowSearchButton(true)
+        }
+      }
+
+      map.on("move", handleMove) // Show button during dragging
       map.on("moveend", handleMoveEnd)
       map.on("zoomend", handleMoveEnd)
 
       const handleMapClick = (e: mapboxgl.MapMouseEvent) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:496',message:'handleMapClick called',data:{mapLoaded:map.loaded(),hasOnMapClickRef:!!onMapClickRef.current,onMapClickType:typeof onMapClickRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         if (!map.loaded()) return
         const features = map.queryRenderedFeatures(e.point, {
           layers: ["clusters", "unclustered-point"],
         })
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:502',message:'About to call onMapClickRef',data:{featuresCount:features.length,hasCallback:!!onMapClickRef.current,callbackType:typeof onMapClickRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         if (features.length === 0 && onMapClickRef.current) {
           onMapClickRef.current()
         }
@@ -726,19 +802,66 @@ export function MapboxMap({
       setMapError("Failed to initialize map")
       setIsLoading(false)
     }
-  }, [accessToken, userLocation])
+  }, [accessToken]) // Map should only initialize once when accessToken is available, not when userLocation changes
 
 
   const addUserLocationMarker = (map: mapboxgl.Map, location: { lat: number; lng: number }) => {
     const el = document.createElement("div")
     el.className = "user-location-marker"
-    el.style.width = "16px"
-    el.style.height = "16px"
-    el.style.borderRadius = "50%"
-    el.style.backgroundColor = "#0F5132"
-    el.style.border = "3px solid #ffffff"
-    el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)"
+    
+    // Create outer pulsing ring
+    const outerRing = document.createElement("div")
+    outerRing.style.width = "24px"
+    outerRing.style.height = "24px"
+    outerRing.style.borderRadius = "50%"
+    outerRing.style.backgroundColor = "rgba(15, 81, 50, 0.2)" // Green with transparency (#0F5132)
+    outerRing.style.border = "2px solid rgba(15, 81, 50, 0.4)"
+    outerRing.style.position = "absolute"
+    outerRing.style.top = "50%"
+    outerRing.style.left = "50%"
+    outerRing.style.transform = "translate(-50%, -50%)"
+    outerRing.style.animation = "pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite"
+    
+    // Create inner solid dot
+    const innerDot = document.createElement("div")
+    innerDot.style.width = "12px"
+    innerDot.style.height = "12px"
+    innerDot.style.borderRadius = "50%"
+    innerDot.style.backgroundColor = "#0F5132" // Green (same as venue pins)
+    innerDot.style.border = "2px solid #ffffff"
+    innerDot.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)"
+    innerDot.style.position = "absolute"
+    innerDot.style.top = "50%"
+    innerDot.style.left = "50%"
+    innerDot.style.transform = "translate(-50%, -50%)"
+    innerDot.style.zIndex = "1"
+    
+    // Container for both elements
+    el.style.width = "24px"
+    el.style.height = "24px"
+    el.style.position = "relative"
     el.style.cursor = "default"
+    el.appendChild(outerRing)
+    el.appendChild(innerDot)
+    
+    // Add CSS animation if not already added
+    if (!document.getElementById("user-location-pulse-style")) {
+      const style = document.createElement("style")
+      style.id = "user-location-pulse-style"
+      style.textContent = `
+        @keyframes pulse-ring {
+          0%, 100% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: translate(-50%, -50%) scale(1.5);
+          }
+        }
+      `
+      document.head.appendChild(style)
+    }
 
     userLocationMarkerRef.current = new mapboxgl.Marker(el)
       .setLngLat([location.lng, location.lat])
@@ -806,9 +929,6 @@ export function MapboxMap({
 
   // Update venues source when venues change
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:650',message:'venues useEffect triggered',data:{hasMap:!!mapRef.current,isLoading,venueCount:venues.length,mapLoaded:mapRef.current?.loaded()??false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     console.log("🗺️ Map useEffect triggered:", { 
       hasMap: !!mapRef.current, 
       isLoading, 
@@ -836,6 +956,11 @@ export function MapboxMap({
           if (source) {
             // Use latest venues from ref (which will be updated by the venuesRef useEffect)
             const currentVenues = venuesRef.current
+            // PRIMARY GUARD: Don't update if user is searching area and venues are empty - preserve map view
+            // This prevents zooming out when searching areas with no results
+            if (currentVenues.length === 0 && (isSearchingAreaRef.current || hasUserInteractedWithMapRef.current)) {
+              return
+            }
             const venuesGeoJSON = venuesToGeoJSON(currentVenues)
             console.log("🗺️ Updating map with", currentVenues.length, "venues (after wait)")
             source.setData(venuesGeoJSON)
@@ -845,8 +970,16 @@ export function MapboxMap({
             }
             
             // Fit bounds to venues if shouldFitBounds is true (filters were actively changed) or if initializing
+            // PRIMARY GUARD: Never fit bounds if user is searching area
+            if (isSearchingAreaRef.current) {
+              // Skip fitBounds during area search - preserve map view
+              return
+            }
             // Use ref to get latest value
-            const shouldFit = shouldFitBoundsRef.current === true || lastVenuesCountRef.current === 0
+            // Don't fit bounds if skipFitBounds is true or user has interacted
+            // Only use lastVenuesCount === 0 for initial load if map hasn't loaded yet and user hasn't interacted
+            const isInitializing = lastVenuesCountRef.current === 0 && !hasMapLoadedOnceRef.current && !hasUserInteractedWithMapRef.current
+            const shouldFit = !skipFitBoundsRef.current && !hasUserInteractedWithMapRef.current && (shouldFitBoundsRef.current === true || isInitializing)
             if (shouldFit) {
               const venuesWithLocation = currentVenues.filter(v => v.latitude != null && v.longitude != null)
               if (venuesWithLocation.length > 0) {
@@ -855,10 +988,6 @@ export function MapboxMap({
                   bounds.extend([venue.longitude!, venue.latitude!])
                 })
                 if (!bounds.isEmpty()) {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:745',message:'Fitting bounds after wait',data:{venueCount:venuesWithLocation.length,shouldFitBounds:shouldFitBoundsRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                  // #endregion
-                  
                   mapRef.current.fitBounds(bounds, {
                     padding: 50,
                     maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
@@ -873,20 +1002,32 @@ export function MapboxMap({
             }
           } else {
             // Source doesn't exist, initialize it
-            console.log("🗺️ Initializing venues source (after wait)")
-            initializeVenuesSource(mapRef.current)
-            const currentVenueIds = venuesRef.current.map(v => v.id).sort()
-            previousVenueIdsRef.current = currentVenueIds
+            // PRIMARY GUARD: Don't initialize during area search - wait for it to complete
+            if (!isSearchingAreaRef.current) {
+              console.log("🗺️ Initializing venues source (after wait)")
+              initializeVenuesSource(mapRef.current)
+              const currentVenueIds = venuesRef.current.map(v => v.id).sort()
+              previousVenueIdsRef.current = currentVenueIds
+            } else {
+              // During area search, skip initialization to preserve map view
+              console.log("🗺️ Skipping source initialization during area search")
+            }
           }
         }
       }, 100)
       
       // Also listen for the load event as a backup
       const handleLoad = () => {
+        hasMapLoadedOnceRef.current = true
         clearInterval(checkLoaded)
         const source = mapRef.current?.getSource("venues") as mapboxgl.GeoJSONSource | null
         if (source && mapRef.current) {
           const currentVenues = venuesRef.current
+          // PRIMARY GUARD: Don't update if user is searching area and venues are empty - preserve map view
+          // This prevents zooming out when searching areas with no results
+          if (currentVenues.length === 0 && (isSearchingAreaRef.current || hasUserInteractedWithMapRef.current)) {
+            return
+          }
           const venuesGeoJSON = venuesToGeoJSON(currentVenues)
           console.log("🗺️ Updating map with", currentVenues.length, "venues (on load event)")
           source.setData(venuesGeoJSON)
@@ -896,8 +1037,18 @@ export function MapboxMap({
           }
           
           // Fit bounds to venues if shouldFitBounds is true (filters were actively changed) or if initializing
+          // PRIMARY GUARD: Never fit bounds if user is searching area
+          if (isSearchingAreaRef.current) {
+            // Skip fitBounds during area search - preserve map view
+            return
+          }
           // Use ref to get latest value
-          const shouldFit = shouldFitBoundsRef.current === true || lastVenuesCountRef.current === 0
+          // Don't fit bounds if skipFitBounds is true or user has interacted
+          // Only use lastVenuesCount === 0 for initial load if map hasn't loaded yet and user hasn't interacted
+          const isInitializing = lastVenuesCountRef.current === 0 && !hasMapLoadedOnceRef.current && !hasUserInteractedWithMapRef.current
+          const shouldFit = !skipFitBoundsRef.current && !hasUserInteractedWithMapRef.current && (shouldFitBoundsRef.current === true || isInitializing)
+          // Mark that map has loaded at least once
+          hasMapLoadedOnceRef.current = true
           if (shouldFit) {
             const venuesWithLocation = currentVenues.filter(v => v.latitude != null && v.longitude != null)
             if (venuesWithLocation.length > 0) {
@@ -906,10 +1057,6 @@ export function MapboxMap({
                 bounds.extend([venue.longitude!, venue.latitude!])
               })
               if (!bounds.isEmpty()) {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MapboxMap.tsx:775',message:'Fitting bounds on load event',data:{venueCount:venuesWithLocation.length,shouldFitBounds:shouldFitBoundsRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-                // #endregion
-                
                 mapRef.current.fitBounds(bounds, {
                   padding: 50,
                   maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
@@ -943,6 +1090,11 @@ export function MapboxMap({
             // Now initialize or update source
             const source = mapRef.current.getSource("venues") as mapboxgl.GeoJSONSource | null
             if (source) {
+              // PRIMARY GUARD: Don't update if user is searching area and venues are empty - preserve map view
+              // This prevents zooming out when searching areas with no results
+              if (venues.length === 0 && (isSearchingAreaRef.current || hasUserInteractedWithMapRef.current)) {
+                return
+              }
               const venuesGeoJSON = venuesToGeoJSON(venues)
               console.log("🗺️ Updating map with", venues.length, "venues (after pin reload)")
               source.setData(venuesGeoJSON)
@@ -951,7 +1103,13 @@ export function MapboxMap({
                 forceMapRepaint(mapRef.current)
               }
             } else {
-              initializeVenuesSource(mapRef.current)
+              // PRIMARY GUARD: Don't initialize during area search
+              if (!isSearchingAreaRef.current) {
+                initializeVenuesSource(mapRef.current)
+              } else {
+                // During area search, skip initialization to preserve map view
+                console.log("🗺️ Skipping source initialization during area search (pin reload)")
+              }
             }
           }
         }
@@ -986,28 +1144,56 @@ export function MapboxMap({
         
         // Remove existing source and layers, then re-initialize
         // This ensures a complete refresh rather than trying to update in place
-        initializeVenuesSource(mapRef.current)
+        // PRIMARY GUARD: NEVER re-initialize if user is searching area - just update the data
+        if (isSearchingAreaRef.current) {
+          // During area search, always use setData path to preserve map view
+        } else if (!hasUserInteractedWithMapRef.current) {
+          // Only re-initialize if user hasn't interacted (e.g., filter change on initial load)
+          initializeVenuesSource(mapRef.current)
+        } else {
+          // Just update the data without re-initializing to preserve map view
+          // PRIMARY GUARD: Don't update if user is searching area and venues are empty - preserve map view
+          // This prevents zooming out when searching areas with no results
+          if (venues.length === 0 && (isSearchingAreaRef.current || hasUserInteractedWithMapRef.current)) {
+            previousVenueIdsRef.current = currentVenueIds
+            lastVenuesCountRef.current = venues.length
+            return
+          }
+          const venuesGeoJSON = venuesToGeoJSON(venues)
+          source.setData(venuesGeoJSON)
+          previousVenueIdsRef.current = currentVenueIds
+          lastVenuesCountRef.current = venues.length
+          return
+        }
         
         // Update the ref to track the new venue set AFTER refresh
         previousVenueIdsRef.current = currentVenueIds
         
         // Fit bounds if explicitly requested (filters were actively changed)
-        const venuesWithLocation = venues.filter(v => v.latitude != null && v.longitude != null)
-        if (venuesWithLocation.length > 0 && shouldFitBounds === true) {
-          const mapLoaded = mapRef.current.loaded()
-          if (mapLoaded) {
-            const bounds = new mapboxgl.LngLatBounds()
-            venuesWithLocation.forEach(venue => {
-              bounds.extend([venue.longitude!, venue.latitude!])
-            })
-            if (!bounds.isEmpty()) {
-              mapRef.current.fitBounds(bounds, {
-                padding: 50,
-                maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
-                duration: 500,
+        // PRIMARY GUARD: Never fit bounds if user is searching area
+        if (isSearchingAreaRef.current) {
+          // Skip fitBounds during area search - preserve map view
+          // Continue to update venue data but don't change map view
+        } else {
+          // Don't fit bounds if skipFitBounds is true or user has interacted
+          const venuesWithLocation = venues.filter(v => v.latitude != null && v.longitude != null)
+          const shouldFitBoundsCheck = venuesWithLocation.length > 0 && shouldFitBounds === true && !skipFitBoundsRef.current && !hasUserInteractedWithMapRef.current
+          if (shouldFitBoundsCheck) {
+            const mapLoaded = mapRef.current.loaded()
+            if (mapLoaded) {
+              const bounds = new mapboxgl.LngLatBounds()
+              venuesWithLocation.forEach(venue => {
+                bounds.extend([venue.longitude!, venue.latitude!])
               })
-              if (onBoundsFitted) {
-                onBoundsFitted()
+              if (!bounds.isEmpty()) {
+                mapRef.current.fitBounds(bounds, {
+                  padding: 50,
+                  maxZoom: venuesWithLocation.length === 1 ? 15 : 16,
+                  duration: 500,
+                })
+                if (onBoundsFitted) {
+                  onBoundsFitted()
+                }
               }
             }
           }
@@ -1016,6 +1202,13 @@ export function MapboxMap({
         lastVenuesCountRef.current = venues.length
       } else {
         // Minor update (same venues, different properties) - use setData for efficiency
+        // PRIMARY GUARD: Don't update if user is searching area and venues are empty - preserve map view
+        // This prevents zooming out when searching areas with no results
+        if (venues.length === 0 && (isSearchingAreaRef.current || hasUserInteractedWithMapRef.current)) {
+          previousVenueIdsRef.current = currentVenueIds
+          lastVenuesCountRef.current = venues.length
+          return
+        }
         const venuesGeoJSON = venuesToGeoJSON(venues)
         console.log("🗺️ Minor venue update, using setData:", venues.length, "venues")
         source.setData(venuesGeoJSON)
@@ -1079,10 +1272,16 @@ export function MapboxMap({
       }
     } else {
       // Source doesn't exist yet, initialize it
-      console.log("🗺️ Initializing venues source (first time)")
-      // initializeVenuesSource will handle adding layers even if pin image isn't loaded
-      initializeVenuesSource(mapRef.current)
-      previousVenueIdsRef.current = currentVenueIds
+      // PRIMARY GUARD: Don't initialize during area search
+      if (!isSearchingAreaRef.current) {
+        console.log("🗺️ Initializing venues source (first time)")
+        // initializeVenuesSource will handle adding layers even if pin image isn't loaded
+        initializeVenuesSource(mapRef.current)
+        previousVenueIdsRef.current = currentVenueIds
+      } else {
+        // During area search, skip initialization to preserve map view
+        console.log("🗺️ Skipping source initialization during area search (first time)")
+      }
     }
   }, [venues, isLoading, shouldFitBounds, onBoundsFitted])
 
@@ -1113,6 +1312,21 @@ export function MapboxMap({
         zoom: 14,
         duration: 800, // Smooth animation
       })
+      
+      // After the animation completes, trigger a search with the new bounds
+      mapRef.current.once('moveend', () => {
+        if (mapRef.current && onSearchArea) {
+          const bounds = mapRef.current.getBounds()
+          if (bounds) {
+            onSearchArea({
+              north: bounds.getNorth(),
+              south: bounds.getSouth(),
+              east: bounds.getEast(),
+              west: bounds.getWest(),
+            })
+          }
+        }
+      })
     } else if (onRequestLocation) {
       // If location is not available, request permission
       onRequestLocation()
@@ -1120,7 +1334,14 @@ export function MapboxMap({
   }
 
   // Auto-center on user location when it becomes available (after permission is granted)
+  // Don't auto-center if skipFitBounds is true (e.g., when searching by area)
   useEffect(() => {
+    // COMPLETELY DISABLE AUTO-CENTER - Single comprehensive check at the start
+    // If user has interacted OR we've already auto-centered OR user is searching area, never run auto-center logic
+    if (hasUserInteractedWithMapRef.current || hasAutoCenteredRef.current || isSearchingArea) {
+      return
+    }
+    
     if (!mapRef.current || !userLocation || isLoading || !mapRef.current.loaded()) {
       // Reset flag if location is cleared
       if (!userLocation) {
@@ -1129,8 +1350,28 @@ export function MapboxMap({
       return
     }
 
-    // Only auto-center once when location is first granted
-    if (locationState === "granted" && !hasAutoCenteredRef.current) {
+    // Never auto-center if we've already auto-centered once
+    // This is the primary safeguard - auto-center should only happen once on initial load
+    if (hasAutoCenteredRef.current) {
+      return
+    }
+
+    // Don't auto-center if we're searching by area (skipFitBounds is true)
+    // OR if we just finished searching (skipFitBounds was true recently)
+    // This prevents auto-center immediately after an area search completes
+    if (skipFitBoundsRef.current) {
+      return
+    }
+
+    // Don't auto-center if user has manually moved/zoomed the map
+    // This is the primary safeguard - once user interacts, never auto-center again
+    if (hasUserInteractedWithMapRef.current) {
+      return
+    }
+
+    // Only auto-center once when location is first granted AND user hasn't interacted with the map
+    // This ensures we don't auto-center after the user has manually moved the map to search an area
+    if (locationState === "granted" && !hasAutoCenteredRef.current && !hasUserInteractedWithMapRef.current) {
       mapRef.current.flyTo({
         center: [userLocation.lng, userLocation.lat],
         zoom: 14,
@@ -1175,7 +1416,7 @@ export function MapboxMap({
         </div>
       )}
       {showSearchButton && !isLoading && (
-        <div className="absolute top-24 left-1/2 z-20 -translate-x-1/2">
+        <div className="absolute top-20 left-1/2 z-20 -translate-x-1/2">
           <Button
             size="sm"
             onClick={handleSearchArea}

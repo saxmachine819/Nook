@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { CheckCircle2, Clock, MapPin, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -123,6 +124,7 @@ export function BookingConfirmationModal({
   onOpenChange: (open: boolean) => void
   reservation: ReservationForConfirmation | null
 }) {
+  const router = useRouter()
   const computed = useMemo(() => {
     if (!reservation) return null
 
@@ -240,7 +242,14 @@ export function BookingConfirmationModal({
 
             <div className="grid gap-2">
               <Button asChild size="lg">
-                <Link href="/reservations" onClick={() => onOpenChange(false)}>
+                <Link 
+                  href="/reservations" 
+                  onClick={() => {
+                    onOpenChange(false)
+                    // Refresh the reservations page to show the new reservation
+                    router.refresh()
+                  }}
+                >
                   View my reservations
                 </Link>
               </Button>

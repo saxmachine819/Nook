@@ -26,6 +26,8 @@ interface MapViewProps {
   onBoundsFitted?: () => void
   onRequestLocation?: () => void
   locationState?: "idle" | "requesting" | "granted" | "denied" | "unavailable"
+  skipFitBounds?: boolean
+  isSearchingArea?: boolean
 }
 
 export function MapView({
@@ -41,6 +43,8 @@ export function MapView({
   onBoundsFitted,
   onRequestLocation,
   locationState,
+  skipFitBounds,
+  isSearchingArea,
 }: MapViewProps) {
   if (!hasMapboxToken) {
     return (
@@ -71,6 +75,8 @@ export function MapView({
         onBoundsFitted={onBoundsFitted}
         onRequestLocation={onRequestLocation}
         locationState={locationState}
+        skipFitBounds={skipFitBounds}
+        isSearchingArea={isSearchingArea}
       />
     </div>
   )

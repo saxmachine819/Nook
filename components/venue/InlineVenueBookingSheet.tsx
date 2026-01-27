@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
@@ -30,6 +31,8 @@ interface Slot {
 }
 
 export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSheetProps) {
+  const router = useRouter()
+  const pathname = usePathname()
   const { showToast, ToastComponent } = useToast()
 
   const [date, setDate] = useState<string>("")
@@ -138,6 +141,11 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       }
 
       showToast("Reservation confirmed.", "success")
+
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
 
       // Refresh slots to reflect new booking
       setTimeout(() => {
