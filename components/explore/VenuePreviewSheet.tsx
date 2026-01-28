@@ -31,6 +31,8 @@ interface VenuePreviewSheetProps {
   onClose: () => void
   className?: string
   initialSeatCount?: number
+  isFavorited?: boolean
+  onToggleFavorite?: () => void
 }
 
 const SHEET_TRANSITION_MS = 200
@@ -41,6 +43,8 @@ export function VenuePreviewSheet({
   onClose,
   className,
   initialSeatCount,
+  isFavorited = false,
+  onToggleFavorite,
 }: VenuePreviewSheetProps) {
   const [visible, setVisible] = useState(false)
 
@@ -106,6 +110,8 @@ export function VenuePreviewSheet({
             rulesText={venue.rulesText}
             isExpanded={false}
             isDeemphasized={false}
+            isFavorited={isFavorited}
+            onToggleFavorite={onToggleFavorite}
             dealBadge={venue.dealBadge}
             initialSeatCount={initialSeatCount}
           />

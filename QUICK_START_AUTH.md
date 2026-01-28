@@ -20,10 +20,12 @@ This creates the `users`, `accounts`, `sessions`, and `verification_tokens` tabl
 3. Go to "APIs & Services" → "Credentials"
 4. Click "Create Credentials" → "OAuth client ID"
 5. Choose "Web application"
-6. Add this to "Authorized redirect URIs":
+6. Add these to "Authorized redirect URIs" (click "+ ADD URI" for each):
    ```
    http://localhost:3000/api/auth/callback/google
+   http://localhost:3001/api/auth/callback/google
    ```
+   (Add both ports so it works whether you run on 3000 or 3001)
 7. Copy the "Client ID" and "Client Secret"
 
 ## Step 3: Add Environment Variables

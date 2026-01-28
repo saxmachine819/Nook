@@ -182,6 +182,7 @@ export async function PATCH(
               imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
                 ? table.imageUrls
                 : null,
+              directionsText: table.directionsText?.trim() || null,
               seats: {
                 create: (table.seats || []).map((seat: any, index: number) => ({
                   pricePerHour: Number(seat.pricePerHour),

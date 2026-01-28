@@ -19,11 +19,20 @@ function initialsFromName(name?: string | null) {
     .join("")
 }
 
+interface Venue {
+  id: string
+  name: string
+  address: string
+  thumbnail: string | null
+}
+
 export default function ProfilePage() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const router = useRouter()
   const callbackUrl = searchParams.get("callbackUrl")
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [loadingVenues, setLoadingVenues] = useState(true)
 
   // Redirect to callbackUrl after successful sign-in (defer to avoid setState-during-render)
   useEffect(() => {
@@ -33,6 +42,25 @@ export default function ProfilePage() {
     }, 0)
     return () => clearTimeout(t)
   }, [session, callbackUrl, router])
+
+  // Fetch venues when authenticated
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setLoadingVenues(false)
+      return
+    }
+    fetch("/api/users/me/venues")
+      .then((r) => (r.ok ? r.json() : { venues: [] }))
+      .then((data) => {
+        setVenues(data.venues ?? [])
+      })
+      .catch(() => {
+        setVenues([])
+      })
+      .finally(() => {
+        setLoadingVenues(false)
+      })
+  }, [session?.user?.id])
 
   if (status === "loading") {
     return (
@@ -46,8 +74,13 @@ export default function ProfilePage() {
 
   if (!session) {
     const handleSignIn = () => {
+      // Use relative URL to avoid port mismatch issues
       const redirectUrl = callbackUrl || "/"
-      signIn("google", { callbackUrl: redirectUrl })
+      // Ensure callbackUrl is relative (not absolute) so it uses current origin
+      const relativeCallbackUrl = redirectUrl.startsWith("http") 
+        ? new URL(redirectUrl).pathname + new URL(redirectUrl).search
+        : redirectUrl
+      signIn("google", { callbackUrl: relativeCallbackUrl })
     }
 
     return (
@@ -151,15 +184,37 @@ export default function ProfilePage() {
         <Card>
           <CardHeader>
             <CardTitle>My Venues</CardTitle>
-            <CardDescription>Manage your venues from the dashboard</CardDescription>
+            <CardDescription>
+              {loadingVenues
+                ? "Loading..."
+                : venues.length === 0
+                  ? "List your venue on Nook"
+                  : "Manage your venues from the dashboard"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button size="lg" variant="outline" asChild className="w-full">
-              <Link href="/venue/dashboard">
-                <LayoutDashboard className="mr-2 h-4 w-4" />
-                Open Venue Dashboard
-              </Link>
-            </Button>
+            {loadingVenues ? (
+              <p className="text-sm text-muted-foreground">Loading venues…</p>
+            ) : venues.length === 0 ? (
+              <>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nook.
+                </p>
+                <Button size="lg" asChild className="w-full">
+                  <Link href="/venue/onboard">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add your venue
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <Button size="lg" variant="outline" asChild className="w-full">
+                <Link href="/venue/dashboard">
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  Open Venue Dashboard
+                </Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

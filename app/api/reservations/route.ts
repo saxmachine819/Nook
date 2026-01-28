@@ -69,6 +69,18 @@ export async function POST(request: Request) {
       )
     }
 
+    // Validate that start time is not in the past
+    const now = new Date()
+    if (parsedStart < now) {
+      return NextResponse.json(
+        {
+          code: "PAST_TIME",
+          error: "This date/time is in the past. Please select a current or future time.",
+        },
+        { status: 400 }
+      )
+    }
+
     // Verify user exists in database
     const userExists = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -86,7 +98,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Fetch venue to check hours
+    // Fetch venue to check hours and approval status
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
       include: {
@@ -105,10 +117,18 @@ export async function POST(request: Request) {
       )
     }
 
+    // Only allow booking for APPROVED venues
+    if (venue.onboardingStatus !== "APPROVED") {
+      return NextResponse.json(
+        { error: "This venue is not available for booking." },
+        { status: 403 }
+      )
+    }
+
     // Check if reservation is within venue hours (only if hours data exists and is complete)
     // IMPORTANT: Don't block reservations if hours data is incomplete or missing
-    const venueHours = (venue as any).venueHours || null
-    const openingHoursJson = (venue as any).openingHoursJson
+    const venueHours = venue.venueHours || null
+    const openingHoursJson = venue.openingHoursJson
     
     // Only enforce hours if we have complete hours data - be lenient to avoid blocking valid bookings
     if (venueHours && venueHours.length === 7) {
@@ -227,11 +247,27 @@ export async function POST(request: Request) {
             },
           },
           table: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              seatCount: true,
+              bookingMode: true,
+              tablePricePerHour: true,
+              directionsText: true,
               seats: true,
             },
           },
-          seat: true,
+          seat: {
+            include: {
+              table: {
+                select: {
+                  id: true,
+                  name: true,
+                  directionsText: true,
+                },
+              },
+            },
+          },
         },
       })
 
@@ -332,11 +368,27 @@ export async function POST(request: Request) {
             },
           },
           table: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              seatCount: true,
+              bookingMode: true,
+              tablePricePerHour: true,
+              directionsText: true,
               seats: true,
             },
           },
-          seat: true,
+          seat: {
+            include: {
+              table: {
+                select: {
+                  id: true,
+                  name: true,
+                  directionsText: true,
+                },
+              },
+            },
+          },
         },
       })
 

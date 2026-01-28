@@ -7,6 +7,8 @@ import { ClientErrorBoundary } from "@/components/auth/ClientErrorBoundary"
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
+  fallback: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Arial", "sans-serif"],
 })
 
 export const metadata: Metadata = {

@@ -8,6 +8,7 @@ import { BookingConfirmationModal } from "@/components/reservation/BookingConfir
 import { SeatCard } from "@/components/venue/SeatCard"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 import { cn } from "@/lib/utils"
+import { roundUpToNext15Minutes } from "@/lib/availability-utils"
 
 interface Table {
   id: string
@@ -26,6 +27,8 @@ interface Table {
 interface VenueBookingWidgetProps {
   venueId: string
   tables: Table[]
+  favoritedTableIds?: Set<string>
+  favoritedSeatIds?: Set<string>
 }
 
 interface AvailableSeat {
@@ -68,6 +71,8 @@ interface UnavailableGroupTable extends AvailableGroupTable {
 export function VenueBookingWidget({
   venueId,
   tables,
+  favoritedTableIds = new Set(),
+  favoritedSeatIds = new Set(),
 }: VenueBookingWidgetProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -132,6 +137,14 @@ export function VenueBookingWidget({
       const endAtLocal = new Date(
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
+
+      // Validate that start time is not in the past
+      const now = new Date()
+      if (startAtLocal < now) {
+        setError("This date/time is in the past. Please select a current or future time.")
+        setIsLoadingAvailability(false)
+        return
+      }
 
       const response = await fetch(
         `/api/venues/${venueId}/availability?startAt=${encodeURIComponent(
@@ -256,16 +269,7 @@ export function VenueBookingWidget({
     // Default initialization - only run once on mount
     if (!hasInitialized.current && date === "" && startTime === "") {
       const now = new Date()
-      const rounded = new Date(now)
-      if (
-        rounded.getMinutes() > 0 ||
-        rounded.getSeconds() > 0 ||
-        rounded.getMilliseconds() > 0
-      ) {
-        rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
-      } else {
-        rounded.setMinutes(0, 0, 0)
-      }
+      const rounded = roundUpToNext15Minutes(now)
 
       const yyyy = rounded.getFullYear()
       const mm = String(rounded.getMonth() + 1).padStart(2, "0")
@@ -402,6 +406,14 @@ export function VenueBookingWidget({
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
 
+      // Client-side validation: check if start time is in the past
+      const now = new Date()
+      if (startAtLocal < now) {
+        setError("This date/time is in the past. Please select a current or future time.")
+        setIsSubmitting(false)
+        return
+      }
+
       // Determine what to book: group table or individual seats
       let requestBody: any = {
         venueId,
@@ -459,7 +471,12 @@ export function VenueBookingWidget({
           )
           return
         }
-        setError(data?.error || "Failed to create reservation. Please try again.")
+        // Handle PAST_TIME error code specifically
+        if (data?.code === "PAST_TIME") {
+          setError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setError(data?.error || "Failed to create reservation. Please try again.")
+        }
         return
       }
 
@@ -768,6 +785,8 @@ export function VenueBookingWidget({
                             isSelected={isSelected}
                             isCommunal={seat.isCommunal ?? false}
                             nextAvailableAt={null}
+                            isFavorited={favoritedSeatIds.has(seat.id)}
+                            venueId={venueId}
                             onSelect={() => {
                               setSelectedSeatId(seat.id)
                               setSelectedGroupTableId(null)
@@ -797,6 +816,8 @@ export function VenueBookingWidget({
                             isSelected={false}
                             isCommunal={seat.isCommunal ?? false}
                             nextAvailableAt={seat.nextAvailableAt}
+                            isFavorited={favoritedSeatIds.has(seat.id)}
+                            venueId={venueId}
                             onSelect={() => {
                               // Unavailable seats can't be selected
                             }}
@@ -1090,6 +1111,8 @@ export function VenueBookingWidget({
                       isAvailable={true}
                       isSelected={isSeatSelected}
                       isCommunal={seat.isCommunal ?? false}
+                      isFavorited={favoritedSeatIds.has(seat.id)}
+                      venueId={venueId}
                       onSelect={() => {
                         setSelectedSeatIds(allSeatIdsInGroup)
                         setSelectedGroupTableId(null)
@@ -1156,7 +1179,20 @@ export function VenueBookingWidget({
                 className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={startTime}
                 onChange={(e) => {
-                  setStartTime(e.target.value)
+                  const newTime = e.target.value
+                  setStartTime(newTime)
+                  
+                  // Validate if date is today and time is in the past
+                  if (date === new Date().toISOString().split("T")[0] && newTime) {
+                    const selectedDateTime = new Date(`${date}T${newTime}`)
+                    const now = new Date()
+                    if (selectedDateTime < now) {
+                      setError("This time is in the past. Please select a current or future time.")
+                    } else {
+                      setError(null)
+                    }
+                  }
+                  
                   setAvailableSeats([])
                   setUnavailableSeats([])
                   setAvailableSeatGroups([])
@@ -1165,6 +1201,9 @@ export function VenueBookingWidget({
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
+                min={date === new Date().toISOString().split("T")[0] 
+                  ? `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
+                  : undefined}
                 required
               />
             </div>

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
+import { FavoriteButton } from "./FavoriteButton"
 
 interface SeatCardProps {
   seat: {
@@ -22,6 +23,8 @@ interface SeatCardProps {
   isSelected: boolean
   isCommunal?: boolean
   nextAvailableAt?: string | null
+  isFavorited?: boolean
+  venueId?: string
   onSelect: () => void
 }
 
@@ -32,6 +35,8 @@ export function SeatCard({
   isSelected,
   isCommunal,
   nextAvailableAt,
+  isFavorited = false,
+  venueId,
   onSelect,
 }: SeatCardProps) {
   const [isImageOpen, setIsImageOpen] = useState(false)
@@ -149,9 +154,21 @@ export function SeatCard({
         </div>
       )}
 
-      {/* Selected indicator */}
-      {isSelected && (
-        <div className="absolute right-2 top-2">
+      {/* Favorite and selected indicators */}
+      <div className="absolute right-2 top-2 flex items-center gap-1.5">
+        {venueId && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <FavoriteButton
+              type="seat"
+              itemId={seat.id}
+              venueId={venueId}
+              initialFavorited={isFavorited}
+              size="sm"
+              className="rounded-full bg-background/90 backdrop-blur-sm p-1 shadow-sm"
+            />
+          </div>
+        )}
+        {isSelected && (
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <svg
               className="h-3 w-3"
@@ -167,8 +184,8 @@ export function SeatCard({
               />
             </svg>
           </div>
-        </div>
-      )}
+        )}
+      </div>
       </button>
 
       <ImageGalleryModal

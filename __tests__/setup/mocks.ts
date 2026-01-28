@@ -45,6 +45,57 @@ export function createMockPrisma() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    favoriteVenue: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    favoriteTable: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    favoriteSeat: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    $transaction: vi.fn((callback) => {
+      // Mock transaction: execute callback with a mock transaction client
+      const tx = {
+        favoriteVenue: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+        favoriteTable: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+        favoriteSeat: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+      }
+      return callback(tx)
+    }),
   }
 }
 

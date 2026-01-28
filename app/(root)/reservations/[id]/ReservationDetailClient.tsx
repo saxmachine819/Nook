@@ -52,12 +52,14 @@ interface ReservationDetailClientProps {
       pricePerHour: number
       table: {
         name: string | null
+        directionsText: string | null
       } | null
     } | null
     table: {
       name: string | null
       seatCount: number | null
       tablePricePerHour: number | null
+      directionsText: string | null
     } | null
   }
 }
@@ -199,6 +201,20 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
     return `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""}`
   }
 
+  // Helper function to derive directions from reservation
+  const getDirectionsText = (): string | null => {
+    // If reservation has seatId, look up the seat's table and use Table.directionsText
+    if (reservation.seatId && reservation.seat?.table?.directionsText) {
+      return reservation.seat.table.directionsText
+    }
+    // Else if reservation has tableId, use Table.directionsText
+    if (reservation.tableId && reservation.table?.directionsText) {
+      return reservation.table.directionsText
+    }
+    // Else return null
+    return null
+  }
+
   const imageUrl =
     reservation.venue.heroImageUrl ||
     (Array.isArray(reservation.venue.imageUrls) && reservation.venue.imageUrls.length > 0
@@ -272,6 +288,16 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
                 <h3 className="text-sm font-medium">Seat details</h3>
                 <p className="text-sm text-muted-foreground">{getSeatInfo()}</p>
               </div>
+
+              {/* Directions */}
+              {getDirectionsText() && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Directions to your seat</h3>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {getDirectionsText()}
+                  </p>
+                </div>
+              )}
 
               {/* Status */}
               <div className="space-y-2">

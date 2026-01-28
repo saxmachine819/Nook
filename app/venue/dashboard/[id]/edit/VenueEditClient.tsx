@@ -45,6 +45,7 @@ interface Table {
   defaultPrice: number
   tablePricePerHour?: number
   imageUrls: string[]
+  directionsText: string
   seats: Seat[]
 }
 
@@ -78,6 +79,7 @@ interface VenueEditClientProps {
       bookingMode: string
       tablePricePerHour: number | null
       imageUrls: unknown
+      directionsText: string | null
       seats: Array<{
         id: string
         label: string | null
@@ -153,6 +155,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         defaultPrice,
         tablePricePerHour: table.tablePricePerHour || undefined,
         imageUrls: parseImageUrls(table.imageUrls),
+        directionsText: table.directionsText || "",
         seats: table.seats.map((seat, seatIdx) => ({
           id: seat.id,
           label: seat.label || undefined,
@@ -424,6 +427,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         bookingMode: "individual",
         defaultPrice,
         imageUrls: [],
+        directionsText: "",
         seats: [{ id: Date.now().toString() + "-1", position: 1, pricePerHour: defaultPrice, tags: [], imageUrls: [] }],
       },
     ])
@@ -690,6 +694,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             bookingMode: table.bookingMode,
             tablePricePerHour: table.bookingMode === "group" ? table.tablePricePerHour : null,
             imageUrls: table.imageUrls.length > 0 ? table.imageUrls : null,
+            directionsText: table.directionsText.trim() || null,
             seats: table.seats.map((seat, index) => ({
               pricePerHour: seat.pricePerHour,
               position: seat.position ?? index + 1,
@@ -1027,6 +1032,22 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           placeholder="Table 1"
                         />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Directions to your seat
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={table.directionsText}
+                          onChange={(e) => updateTable(table.id, "directionsText", e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="e.g., Enter through the lobby, take the stairs to the mezzanine, table by the window."
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Help guests find their seat at this table
+                        </p>
                       </div>
 
                       <div>

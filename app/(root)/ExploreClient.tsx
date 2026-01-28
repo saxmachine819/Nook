@@ -35,6 +35,7 @@ interface Venue {
 
 interface ExploreClientProps {
   venues: Venue[]
+  favoritedVenueIds?: Set<string>
 }
 
 type LocationState = "idle" | "requesting" | "granted" | "denied" | "unavailable"
@@ -78,6 +79,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
         seatCount: null,
         bookingMode: [],
         dealsOnly: false,
+        favoritesOnly: false,
       },
     }
   }
@@ -96,6 +98,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
           seatCount: typeof parsed.filters?.seatCount === "number" ? parsed.filters.seatCount : null,
           bookingMode: Array.isArray(parsed.filters?.bookingMode) ? parsed.filters.bookingMode : [],
           dealsOnly: parsed.filters?.dealsOnly === true,
+          favoritesOnly: parsed.filters?.favoritesOnly === true,
         },
       }
     }
@@ -113,6 +116,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
+      favoritesOnly: false,
     },
   }
 }
@@ -131,7 +135,7 @@ function saveFiltersToStorage(searchQuery: string, filters: FilterState) {
   }
 }
 
-export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
+export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new Set() }: ExploreClientProps) {
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
   
@@ -144,6 +148,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   // Start with empty venues to avoid flash of wrong content
   // They'll be populated after filters are restored and search is performed
   const [venues, setVenues] = useState<Venue[]>([])
+  const [favoritedVenueIdsState, setFavoritedVenueIdsState] = useState<Set<string>>(favoritedVenueIds)
   const hasInitializedVenuesRef = useRef(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
@@ -196,6 +201,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     
     const hasStoredFilters = stored.searchQuery.length > 0 || 
                             stored.filters.dealsOnly || 
+                            stored.filters.favoritesOnly ||
                             stored.filters.tags.length > 0 || 
                             stored.filters.priceMin != null || 
                             stored.filters.priceMax != null || 
@@ -206,6 +212,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     if (hasStoredFilters) {
       const filtersMatch = 
         filters.dealsOnly === stored.filters.dealsOnly &&
+        filters.favoritesOnly === stored.filters.favoritesOnly &&
         filters.tags.length === stored.filters.tags.length &&
         filters.tags.every(t => stored.filters.tags.includes(t)) &&
         filters.priceMin === stored.filters.priceMin &&
@@ -233,6 +240,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         // Otherwise, set initial venues
         if (!hasStoredFilters && !hasInitializedVenuesRef.current) {
           setVenues(initialVenues)
+          setFavoritedVenueIdsState(favoritedVenueIds)
           hasInitializedVenuesRef.current = true
         }
       }
@@ -240,6 +248,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       // No stored filters, use initial venues
       if (!hasInitializedVenuesRef.current) {
         setVenues(initialVenues)
+        setFavoritedVenueIdsState(favoritedVenueIds)
         hasInitializedVenuesRef.current = true
       }
     }
@@ -249,7 +258,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   useEffect(() => {
     if (typeof window === "undefined" || hasInitializedVenuesRef.current) return
     
-    const hasActiveFilters = filters.dealsOnly || filters.tags.length > 0 || 
+    const hasActiveFilters = filters.dealsOnly || filters.favoritesOnly || filters.tags.length > 0 || 
                             filters.priceMin != null || filters.priceMax != null || 
                             filters.seatCount != null || filters.bookingMode.length > 0 ||
                             filters.availableNow || searchQuery.length > 0
@@ -263,6 +272,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       // No filters, use initialVenues
       console.log("🔄 Initializing with no filters, using initialVenues")
       setVenues(initialVenues)
+      setFavoritedVenueIdsState(favoritedVenueIds)
       hasInitializedVenuesRef.current = true
     }
   }, [filters, searchQuery, initialVenues]) // Run when filters/searchQuery are ready
@@ -358,6 +368,9 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       if (activeFilters.dealsOnly) {
         params.append("dealsOnly", "true")
       }
+      if (activeFilters.favoritesOnly) {
+        params.append("favoritesOnly", "true")
+      }
       if (activeFilters.availableNow) {
         params.append("availableNow", "true")
       }
@@ -372,6 +385,9 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       }
       const raw = (data.venues ?? []) as Record<string, unknown>[]
       const newVenues = raw.map(normalizeVenue)
+      const favoritedIds = Array.isArray(data.favoritedVenueIds) 
+        ? new Set(data.favoritedVenueIds as string[])
+        : new Set<string>()
       console.log("✅ Received venues:", newVenues.length, "with dealsOnly:", activeFilters.dealsOnly)
       console.log("🗺️ Setting venues state, map should update...")
       console.log("📍 Venue IDs:", newVenues.map(v => v.id).slice(0, 5))
@@ -384,6 +400,12 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         bookingMode: activeFilters.bookingMode.length
       })
       setVenues(newVenues)
+      // Update favorite states from search results
+      // Merge with existing favorites to preserve favorites from initial page load
+      setFavoritedVenueIdsState(prev => {
+        const merged = new Set([...prev, ...favoritedIds])
+        return merged
+      })
       // Force map refresh when search results update
       // CRITICAL: Don't refresh map during area search - it causes remount and zoom reset
       if (!skipSetIsSearchingText) {
@@ -417,6 +439,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           filters.seatCount != null ||
           filters.bookingMode.length > 0 ||
           filters.dealsOnly ||
+          filters.favoritesOnly ||
           filters.availableNow
         if (!hasActive) {
           setIsSearchingText(false)
@@ -426,6 +449,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             // Only reset to initialVenues if we truly have no filters and no search
             console.log("🔄 Resetting to initialVenues (no active filters, no search)")
             setVenues(initialVenues)
+            setFavoritedVenueIdsState(favoritedVenueIds)
             // Force map refresh when clearing search
             setMapRefreshTrigger(prev => prev + 1)
           }
@@ -471,6 +495,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
+      favoritesOnly: false,
     }
     setFilters(cleared)
     setSearchQuery("") // Also clear search query
@@ -484,6 +509,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       // Only reset to initialVenues when explicitly clearing all filters with no search/bounds
       console.log("🔄 Resetting to initialVenues (clear filters, no search/bounds)")
       setVenues(initialVenues)
+      setFavoritedVenueIdsState(favoritedVenueIds)
     }
   }, [searchQuery, initialVenues])
 
@@ -494,11 +520,26 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     (filters.availableNow ? 1 : 0) +
     (filters.seatCount != null ? 1 : 0) +
     filters.bookingMode.length +
-    (filters.dealsOnly ? 1 : 0)
+    (filters.dealsOnly ? 1 : 0) +
+    (filters.favoritesOnly ? 1 : 0)
 
   // Generate individual filter chips
   const getFilterChips = () => {
     const chips: Array<{ id: string; label: string; onRemove: () => void }> = []
+    
+    if (filters.favoritesOnly) {
+      chips.push({
+        id: "favoritesOnly",
+        label: "Favorites",
+        onRemove: async () => {
+          const newFilters = { ...filters, favoritesOnly: false }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+        }
+      })
+    }
     
     if (filters.dealsOnly) {
       chips.push({
@@ -702,6 +743,34 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
             autoExpand={!isSearchingArea && (searchQuery.length > 0 || isSearchingText || activeFilterCount > 0)}
+            favoritesOnly={filters.favoritesOnly}
+            favoritedVenueIds={favoritedVenueIdsState}
+            onToggleFavorite={async (venueId, favorited) => {
+              // Update favorite state
+              setFavoritedVenueIdsState(prev => {
+                const newSet = new Set(prev)
+                if (favorited) {
+                  newSet.add(venueId)
+                } else {
+                  newSet.delete(venueId)
+                }
+                return newSet
+              })
+              
+              // If favoritesOnly filter is active and venue was unfavorited, remove it from list
+              if (filters.favoritesOnly && !favorited) {
+                setVenues(prev => prev.filter(v => v.id !== venueId))
+                // Refresh search to sync with server
+                await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filters)
+              }
+            }}
+            onClearFavoritesFilter={async () => {
+              const newFilters = { ...filters, favoritesOnly: false }
+              setFilters(newFilters)
+              filtersRef.current = newFilters
+              setMapRefreshTrigger(prev => prev + 1)
+              await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+            }}
           />
           <VenuePreviewSheet
             open={!!selectedVenueId && !!selectedVenue}
@@ -721,6 +790,30 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
               dealBadge: selectedVenue.dealBadge,
             } : null}
             initialSeatCount={filters.seatCount && filters.seatCount > 0 ? filters.seatCount : undefined}
+            isFavorited={selectedVenue ? favoritedVenueIdsState.has(selectedVenue.id) : false}
+            onToggleFavorite={async () => {
+              // Optimistically update favorite state
+              if (selectedVenue) {
+                const wasFavorited = favoritedVenueIdsState.has(selectedVenue.id)
+                setFavoritedVenueIdsState(prev => {
+                  const newSet = new Set(prev)
+                  if (wasFavorited) {
+                    newSet.delete(selectedVenue.id)
+                  } else {
+                    newSet.add(selectedVenue.id)
+                  }
+                  return newSet
+                })
+                
+                // If favoritesOnly filter is active and venue was unfavorited, refresh search
+                if (filters.favoritesOnly && wasFavorited) {
+                  // Remove venue from list immediately
+                  setVenues(prev => prev.filter(v => v.id !== selectedVenue.id))
+                  // Refresh search to get updated results
+                  await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filters)
+                }
+              }
+            }}
             onClose={() => {
               console.log("🔒 Closing venue sheet, filters should persist:", filters)
               console.log("📍 Current venues count:", venues.length)

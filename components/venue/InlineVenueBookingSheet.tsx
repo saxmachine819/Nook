@@ -136,7 +136,12 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        setSubmitError(data?.error || "Failed to create reservation.")
+        // Handle PAST_TIME error code specifically
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setSubmitError(data?.error || "Failed to create reservation.")
+        }
         return
       }
 
@@ -204,6 +209,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
                 className="mt-0.5 w-full rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
               />
             </div>
             <div className="flex flex-col">

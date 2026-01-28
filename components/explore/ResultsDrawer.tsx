@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import { FavoriteButton } from "@/components/venue/FavoriteButton"
 
 export interface ResultsDrawerVenue {
   id: string
@@ -23,6 +24,10 @@ interface ResultsDrawerProps {
   onSelectVenue: (id: string) => void
   onCenterOnVenue?: (id: string) => void
   autoExpand?: boolean // Automatically expand when search/filters are active
+  favoritesOnly?: boolean
+  onClearFavoritesFilter?: () => void
+  favoritedVenueIds?: Set<string>
+  onToggleFavorite?: (venueId: string, favorited: boolean) => void
 }
 
 export function ResultsDrawer({
@@ -30,6 +35,10 @@ export function ResultsDrawer({
   onSelectVenue,
   onCenterOnVenue,
   autoExpand = false,
+  favoritesOnly = false,
+  onClearFavoritesFilter,
+  favoritedVenueIds = new Set(),
+  onToggleFavorite,
 }: ResultsDrawerProps) {
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -289,43 +298,84 @@ export function ResultsDrawer({
         )}
         style={{ touchAction: "pan-y" }}
       >
-        <ul className="space-y-2">
-          {venues.map((venue) => (
-            <li key={venue.id}>
+        {venues.length === 0 && favoritesOnly ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-sm font-medium text-foreground mb-2">No favorites yet.</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Start favoriting venues to see them here.
+            </p>
+            {onClearFavoritesFilter && (
               <button
                 type="button"
-                onClick={() => handleVenueTap(venue.id)}
-                className="flex w-full gap-3 rounded-lg border border-border bg-card p-3 text-left shadow-sm transition-colors hover:bg-accent/50 active:bg-accent"
+                onClick={onClearFavoritesFilter}
+                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
               >
-                {venue.imageUrls && venue.imageUrls.length > 0 && (
-                  <img
-                    src={venue.imageUrls[0]}
-                    alt={venue.name}
-                    className="h-16 w-16 shrink-0 rounded-md object-cover"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold leading-tight text-foreground">{venue.name}</p>
-                  {(venue.address || (venue.city && venue.state)) && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {venue.address || `${venue.city}, ${venue.state}`}
-                    </p>
-                  )}
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {venue.minPrice === venue.maxPrice
-                      ? `$${venue.minPrice.toFixed(0)} / seat / hour`
-                      : `$${venue.minPrice.toFixed(0)}–$${venue.maxPrice.toFixed(0)} / seat / hour`}
-                  </p>
-                  {venue.availabilityLabel && (
-                    <p className="mt-1 text-xs font-medium text-primary">
-                      {venue.availabilityLabel}
-                    </p>
-                  )}
-                </div>
+                Browse venues
               </button>
-            </li>
-          ))}
-        </ul>
+            )}
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {venues.map((venue) => {
+              const isFavorited = favoritedVenueIds.has(venue.id)
+              return (
+                <li key={venue.id}>
+                  <div className="relative flex w-full gap-3 rounded-lg border border-border bg-card p-3 shadow-sm transition-colors hover:bg-accent/50">
+                    <button
+                      type="button"
+                      onClick={() => handleVenueTap(venue.id)}
+                      className="flex flex-1 gap-3 text-left"
+                    >
+                      {venue.imageUrls && venue.imageUrls.length > 0 && (
+                        <img
+                          src={venue.imageUrls[0]}
+                          alt={venue.name}
+                          className="h-16 w-16 shrink-0 rounded-md object-cover"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold leading-tight text-foreground">{venue.name}</p>
+                        {(venue.address || (venue.city && venue.state)) && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {venue.address || `${venue.city}, ${venue.state}`}
+                          </p>
+                        )}
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {venue.minPrice === venue.maxPrice
+                            ? `$${venue.minPrice.toFixed(0)} / seat / hour`
+                            : `$${venue.minPrice.toFixed(0)}–$${venue.maxPrice.toFixed(0)} / seat / hour`}
+                        </p>
+                        {venue.availabilityLabel && (
+                          <p className="mt-1 text-xs font-medium text-primary">
+                            {venue.availabilityLabel}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                    {/* Heart icon */}
+                    <div 
+                      className="flex items-start pt-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <FavoriteButton
+                        type="venue"
+                        itemId={venue.id}
+                        initialFavorited={isFavorited}
+                        size="sm"
+                        className="shrink-0"
+                        onToggle={(favorited) => {
+                          if (onToggleFavorite) {
+                            onToggleFavorite(venue.id, favorited)
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
     </div>
   )

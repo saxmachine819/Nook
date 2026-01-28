@@ -11,6 +11,18 @@ interface Venue {
   name: string
   address: string
   thumbnail: string | null
+  onboardingStatus: string
+}
+
+function getStatusPill(status: string) {
+  const config: Record<string, { label: string; className: string }> = {
+    DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
+    SUBMITTED: { label: "Pending Review", className: "bg-yellow-100 text-yellow-800" },
+    APPROVED: { label: "Approved", className: "bg-green-100 text-green-800" },
+    REJECTED: { label: "Rejected", className: "bg-red-100 text-red-800" },
+  }
+  const { label, className } = config[status] || config.DRAFT
+  return { label, className }
 }
 
 export function VenueDashboardClient() {
@@ -71,9 +83,14 @@ export function VenueDashboardClient() {
                     <p className="line-clamp-1 text-sm text-muted-foreground">
                       {v.address || "No address"}
                     </p>
-                    <span className="inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      Published
-                    </span>
+                    {(() => {
+                      const { label, className } = getStatusPill(v.onboardingStatus)
+                      return (
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
+                          {label}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -83,12 +100,20 @@ export function VenueDashboardClient() {
                       View
                     </Link>
                   </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/venue/dashboard/${v.id}/edit`}>
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit
-                    </Link>
-                  </Button>
+                  {v.onboardingStatus === "DRAFT" ? (
+                    <Button size="sm" asChild>
+                      <Link href={`/venue/onboard/stripe?venueId=${v.id}`}>
+                        Continue onboarding
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/venue/dashboard/${v.id}/edit`}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" asChild>
                     <Link href={`/venue/dashboard/${v.id}`}>
                       <Settings className="mr-1.5 h-3.5 w-3.5" />

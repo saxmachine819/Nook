@@ -44,6 +44,7 @@ interface Table {
   defaultPrice: number
   tablePricePerHour?: number // For group bookings
   imageUrls: string[]
+  directionsText: string
   seats: Seat[]
 }
 
@@ -78,6 +79,7 @@ export function VenueOnboardClient() {
       bookingMode: "individual",
       defaultPrice: 0,
       imageUrls: [],
+      directionsText: "",
       seats: [{ id: "1", position: 1, pricePerHour: 0, tags: [], imageUrls: [] }],
     },
   ])
@@ -236,6 +238,7 @@ export function VenueOnboardClient() {
         bookingMode: "individual",
         defaultPrice,
         imageUrls: [],
+        directionsText: "",
         seats: [{ id: Date.now().toString() + "-1", position: 1, pricePerHour: defaultPrice, tags: [], imageUrls: [] }],
       },
     ])
@@ -454,24 +457,17 @@ export function VenueOnboardClient() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    // Validation
+  // Validation helper function
+  const validateForm = (): boolean => {
     if (!name.trim()) {
       showToast("Venue name is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
 
     if (!address.trim()) {
       showToast("Address is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
-
-    // Pricing validation is now done per table/seat, not at venue level
 
     // Validate tables based on booking mode
     const validTables = tables.filter((t) => {
@@ -488,11 +484,30 @@ export function VenueOnboardClient() {
 
     if (validTables.length === 0) {
       showToast("At least one table with name and valid pricing is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
 
+    return true
+  }
+
+  const saveDraft = async (): Promise<string | null> => {
+    if (!validateForm()) {
+      return null
+    }
+
+    setIsSubmitting(true)
+
     try {
+      const validTables = tables.filter((t) => {
+        if (!t.name.trim() || t.seats.length === 0) return false
+        
+        if (t.bookingMode === "group") {
+          return t.tablePricePerHour && t.tablePricePerHour > 0
+        } else {
+          return t.seats.every((s) => s.pricePerHour > 0)
+        }
+      })
+
       const response = await fetch("/api/venues", {
         method: "POST",
         headers: {
@@ -510,15 +525,17 @@ export function VenueOnboardClient() {
           hourlySeatPrice: 0, // Deprecated - pricing is now per table/seat
           tags,
           rulesText: rulesText.trim() || null,
+          onboardingStatus: "DRAFT", // Save as draft
           tables: validTables.map((table) => ({
             name: table.name.trim(),
             seatCount: table.seats.length,
             bookingMode: table.bookingMode,
             tablePricePerHour: table.bookingMode === "group" ? table.tablePricePerHour : null,
             imageUrls: table.imageUrls.length > 0 ? table.imageUrls : null,
+            directionsText: table.directionsText.trim() || null,
             seats: table.seats.map((seat, index) => ({
               pricePerHour: seat.pricePerHour,
-              position: seat.position ?? index + 1, // Auto-assign position if missing
+              position: seat.position ?? index + 1,
               label: seat.label?.trim() || null,
               tags: seat.tags.length > 0 ? seat.tags : null,
               imageUrls: seat.imageUrls.length > 0 ? seat.imageUrls : null,
@@ -550,22 +567,34 @@ export function VenueOnboardClient() {
       const data = await response.json()
 
       if (!response.ok) {
-        const errorMessage = data.error || "Failed to create venue. Please try again."
+        const errorMessage = data.error || "Failed to save venue. Please try again."
         console.error("API Error:", data)
         showToast(errorMessage, "error")
         setIsSubmitting(false)
-        return
+        return null
       }
 
-      showToast("Venue created successfully!", "success")
-      setTimeout(() => {
-        router.push(`/venue/${data.venue.id}`)
-      }, 1000)
+      setIsSubmitting(false)
+      return data.venue.id
     } catch (error) {
-      console.error("Error creating venue:", error)
+      console.error("Error saving venue:", error)
       showToast("An error occurred. Please try again.", "error")
       setIsSubmitting(false)
+      return null
     }
+  }
+
+  const handleNext = async () => {
+    const venueId = await saveDraft()
+    if (venueId) {
+      router.push(`/venue/onboard/stripe?venueId=${venueId}`)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    // This is kept for form submission compatibility, but Next button is primary action
+    await handleNext()
   }
 
   return (
@@ -805,6 +834,22 @@ export function VenueOnboardClient() {
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           placeholder="Table 1"
                         />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Directions to your seat
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={table.directionsText}
+                          onChange={(e) => updateTable(table.id, "directionsText", e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="e.g., Enter through the lobby, take the stairs to the mezzanine, table by the window."
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Help guests find their seat at this table
+                        </p>
                       </div>
 
                       {/* Booking Mode Selector */}
@@ -1116,12 +1161,24 @@ export function VenueOnboardClient() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end gap-4 pb-8">
-          <Button type="submit" disabled={isSubmitting} size="lg">
-            {isSubmitting ? "Creating..." : "Publish venue"}
+      </form>
+
+      {/* Sticky Next Button */}
+      <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
+        <div className="container mx-auto flex justify-end">
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={isSubmitting}
+            size="lg"
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? "Saving..." : "Next"}
           </Button>
         </div>
-      </form>
+      </div>
+      {/* Add padding to bottom of content to prevent overlap with sticky button */}
+      <div className="h-20" />
     </div>
   )
 }

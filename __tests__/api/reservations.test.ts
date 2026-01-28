@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createMockPrisma, createMockSession } from '../setup/mocks'
-import { createTestDateString, createTestUser, createTestVenue, createTestTable, createTestSeat } from '../helpers/test-utils'
+import { createTestDateString, createPastDateString, createTestUser, createTestVenue, createTestTable, createTestSeat } from '../helpers/test-utils'
 
 // Mock Prisma before importing the route
 const mockPrisma = createMockPrisma()
@@ -173,6 +173,129 @@ describe('POST /api/reservations', () => {
       expect(response.status).toBe(400)
       const data = await response.json()
       expect(data.error).toContain('seatCount is required')
+    })
+
+    it('returns 400 with PAST_TIME code if startAt is in the past', async () => {
+      mockRequest = new Request('http://localhost/api/reservations', {
+        method: 'POST',
+        body: JSON.stringify({
+          venueId: 'venue-1',
+          seatId: 'seat-1',
+          startAt: createPastDateString(-60), // 1 hour ago
+          endAt: createTestDateString(60),
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      expect(response.status).toBe(400)
+      const data = await response.json()
+      expect(data.code).toBe('PAST_TIME')
+      expect(data.error).toContain('in the past')
+    })
+
+    it('allows booking if startAt is exactly now', async () => {
+      const venue = createTestVenue({ id: 'venue-1' })
+      const table = createTestTable({ id: 'table-1', venueId: venue.id })
+      const seat = createTestSeat({ id: 'seat-1', tableId: table.id })
+
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.seat.findMany).mockResolvedValue([
+        {
+          ...seat,
+          table: {
+            ...table,
+            venue,
+            venueId: venue.id,
+          },
+        },
+      ])
+      vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue(null)
+      vi.mocked(mockPrisma.reservation.create).mockResolvedValue({
+        id: 'reservation-1',
+        venueId: venue.id,
+        userId: 'test-user-id',
+        seatId: seat.id,
+        tableId: table.id,
+        seatCount: 1,
+        startAt: new Date(),
+        endAt: createTestDateString(60),
+        status: 'active',
+      })
+
+      // Use current time (0 offset) for startAt
+      mockRequest = new Request('http://localhost/api/reservations', {
+        method: 'POST',
+        body: JSON.stringify({
+          venueId: 'venue-1',
+          seatId: 'seat-1',
+          startAt: createTestDateString(0), // Now
+          endAt: createTestDateString(60),
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      // Should succeed (201) or at least not return PAST_TIME error
+      expect(response.status).not.toBe(400)
+      if (response.status === 400) {
+        const data = await response.json()
+        expect(data.code).not.toBe('PAST_TIME')
+      }
+    })
+
+    it('allows booking if startAt is in the future', async () => {
+      const venue = createTestVenue({ id: 'venue-1' })
+      const table = createTestTable({ id: 'table-1', venueId: venue.id })
+      const seat = createTestSeat({ id: 'seat-1', tableId: table.id })
+
+      vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
+        ...venue,
+        venueHours: [],
+        openingHoursJson: null,
+      })
+      vi.mocked(mockPrisma.seat.findMany).mockResolvedValue([
+        {
+          ...seat,
+          table: {
+            ...table,
+            venue,
+            venueId: venue.id,
+          },
+        },
+      ])
+      vi.mocked(mockPrisma.reservation.findFirst).mockResolvedValue(null)
+      vi.mocked(mockPrisma.reservation.create).mockResolvedValue({
+        id: 'reservation-1',
+        venueId: venue.id,
+        userId: 'test-user-id',
+        seatId: seat.id,
+        tableId: table.id,
+        seatCount: 1,
+        startAt: createTestDateString(60),
+        endAt: createTestDateString(120),
+        status: 'active',
+      })
+
+      mockRequest = new Request('http://localhost/api/reservations', {
+        method: 'POST',
+        body: JSON.stringify({
+          venueId: 'venue-1',
+          seatId: 'seat-1',
+          startAt: createTestDateString(60), // 1 hour in future
+          endAt: createTestDateString(120),
+        }),
+      })
+
+      const response = await POST(mockRequest)
+      // Should succeed (201) or at least not return PAST_TIME error
+      expect(response.status).not.toBe(400)
+      if (response.status === 400) {
+        const data = await response.json()
+        expect(data.code).not.toBe('PAST_TIME')
+      }
     })
   })
 

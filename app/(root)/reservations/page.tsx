@@ -30,6 +30,7 @@ async function getReservations(userId: string) {
           table: {
             select: {
               name: true,
+              directionsText: true,
             },
           },
         },
@@ -39,6 +40,7 @@ async function getReservations(userId: string) {
           name: true,
           seatCount: true,
           tablePricePerHour: true,
+          directionsText: true,
         },
       },
     },

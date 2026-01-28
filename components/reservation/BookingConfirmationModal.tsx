@@ -24,6 +24,12 @@ type ReservationForConfirmation = {
     id: string
     label: string | null
     pricePerHour: number
+    table?: {
+      directionsText: string | null
+    } | null
+  } | null
+  table?: {
+    directionsText: string | null
   } | null
 }
 
@@ -125,6 +131,22 @@ export function BookingConfirmationModal({
   reservation: ReservationForConfirmation | null
 }) {
   const router = useRouter()
+  
+  // Helper function to derive directions from reservation
+  const getDirectionsText = (res: ReservationForConfirmation | null): string | null => {
+    if (!res) return null
+    // If reservation has seatId, look up the seat's table and use Table.directionsText
+    if (res.seat?.table?.directionsText) {
+      return res.seat.table.directionsText
+    }
+    // Else if reservation has tableId, use Table.directionsText
+    if (res.table?.directionsText) {
+      return res.table.directionsText
+    }
+    // Else return null
+    return null
+  }
+
   const computed = useMemo(() => {
     if (!reservation) return null
 
@@ -162,7 +184,9 @@ export function BookingConfirmationModal({
     const ics = buildICS(reservation)
     const icsDataUrl = `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
 
-    return { date, timeRange, estimated, googleUrl, icsDataUrl }
+    const directionsText = getDirectionsText(reservation)
+
+    return { date, timeRange, estimated, googleUrl, icsDataUrl, directionsText }
   }, [reservation])
 
   return (
@@ -217,6 +241,15 @@ export function BookingConfirmationModal({
                       </div>
                     </div>
                   </div>
+
+                  {computed.directionsText && (
+                    <div className="border-t pt-3">
+                      <p className="text-sm font-medium">Directions to your seat</p>
+                      <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                        {computed.directionsText}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="border-t pt-3">
                     <div className="flex items-baseline justify-between">

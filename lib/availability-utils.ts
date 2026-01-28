@@ -1,6 +1,6 @@
 import { isVenueOpenNow, getNextOpenTime } from "./venue-hours"
 
-function roundUpToNext15Minutes(date: Date): Date {
+export function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
   const minutes = result.getMinutes()
   const remainder = minutes % 15

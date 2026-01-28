@@ -47,8 +47,9 @@ npx prisma db push
 3. Enable the Google+ API
 4. Go to "Credentials" → "Create Credentials" → "OAuth client ID"
 5. Choose "Web application"
-6. Add authorized redirect URIs:
-   - `http://localhost:3000/api/auth/callback/google` (for development)
+6. Add authorized redirect URIs (click "+ ADD URI" for each):
+   - `http://localhost:3000/api/auth/callback/google` (for development on port 3000)
+   - `http://localhost:3001/api/auth/callback/google` (for development on port 3001)
    - `https://yourdomain.com/api/auth/callback/google` (for production)
 7. Copy the Client ID and Client Secret to your `.env` file
 

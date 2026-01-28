@@ -12,6 +12,11 @@ export function createTestDateString(offsetMinutes = 0): string {
   return createTestDate(offsetMinutes).toISOString()
 }
 
+export function createPastDateString(offsetMinutes: number): string {
+  // offsetMinutes should be negative to create a past date
+  return createTestDate(offsetMinutes).toISOString()
+}
+
 export function createTestUser(overrides?: Partial<any>) {
   return {
     id: 'test-user-id',
@@ -70,6 +75,38 @@ export function createTestReservation(overrides?: Partial<any>) {
     endAt,
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteVenue(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-venue-id',
+    userId: 'test-user-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteTable(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-table-id',
+    userId: 'test-user-id',
+    tableId: 'test-table-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteSeat(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-seat-id',
+    userId: 'test-user-id',
+    seatId: 'test-seat-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
     ...overrides,
   }
 }

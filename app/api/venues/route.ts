@@ -18,9 +18,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     // Validate required fields
-    if (!body.name || !body.address || !body.hourlySeatPrice) {
+    // Allow onboardingStatus field (defaults to "DRAFT" for new venues)
+    const onboardingStatus = body.onboardingStatus || "DRAFT"
+    
+    // For draft status, relax hourlySeatPrice requirement (it's deprecated anyway)
+    if (!body.name || !body.address) {
       return NextResponse.json(
-        { error: "Missing required fields: name, address, and hourlySeatPrice are required" },
+        { error: "Missing required fields: name and address are required" },
+        { status: 400 }
+      )
+    }
+
+    // For non-draft venues, still validate hourlySeatPrice for backward compatibility
+    if (onboardingStatus !== "DRAFT" && (!body.hourlySeatPrice || parseFloat(body.hourlySeatPrice) <= 0)) {
+      return NextResponse.json(
+        { error: "hourlySeatPrice is required for non-draft venues" },
         { status: 400 }
       )
     }
@@ -75,10 +87,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate numeric fields
-    const parsedHourlyPrice = parseFloat(body.hourlySeatPrice)
-    if (isNaN(parsedHourlyPrice) || parsedHourlyPrice <= 0) {
+    // For draft venues, use 0 as default hourlySeatPrice (deprecated field)
+    const parsedHourlyPrice = body.hourlySeatPrice 
+      ? parseFloat(body.hourlySeatPrice)
+      : 0
+    if (isNaN(parsedHourlyPrice) || (onboardingStatus !== "DRAFT" && parsedHourlyPrice <= 0)) {
       return NextResponse.json(
-        { error: "hourlySeatPrice must be a valid number greater than 0" },
+        { error: "hourlySeatPrice must be a valid number greater than 0 for non-draft venues" },
         { status: 400 }
       )
     }
@@ -105,6 +120,7 @@ export async function POST(request: NextRequest) {
         rulesText: body.rulesText?.trim() || null,
         tags: Array.isArray(body.tags) ? body.tags : [],
         description: body.description?.trim() || null,
+        onboardingStatus: onboardingStatus,
         ownerId: session.user.id, // Set the venue owner to the authenticated user
         // Google Places enrichment fields
         googlePlaceId: body.googlePlaceId?.trim() || null,
@@ -126,6 +142,7 @@ export async function POST(request: NextRequest) {
               imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
                 ? table.imageUrls
                 : null,
+              directionsText: table.directionsText?.trim() || null,
               seats: {
                 create: table.seats.map((seat: any, index: number) => ({
                   pricePerHour: Number(seat.pricePerHour),

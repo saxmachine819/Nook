@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { MapPin, X } from "lucide-react"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
 import { VenueImageCarousel } from "./VenueImageCarousel"
+import { FavoriteButton } from "./FavoriteButton"
 
 interface VenueCardProps {
   id: string
@@ -27,9 +28,11 @@ interface VenueCardProps {
   imageUrls?: string[]
   isExpanded?: boolean
   isDeemphasized?: boolean
+  isFavorited?: boolean
   onSelect?: () => void
   onClose?: () => void
   onBookingSuccess?: () => void
+  onToggleFavorite?: () => void
   dealBadge?: {
     title: string
     description: string
@@ -63,9 +66,11 @@ export function VenueCard({
   imageUrls = [],
   isExpanded = false,
   isDeemphasized = false,
+  isFavorited = false,
   onSelect,
   onClose,
   onBookingSuccess,
+  onToggleFavorite,
   dealBadge,
   initialSeatCount,
 }: VenueCardProps) {
@@ -208,6 +213,12 @@ export function VenueCard({
           return
         }
         
+        // Handle PAST_TIME error code specifically
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+          return
+        }
+        
         // Log error details for debugging
         console.error("Reservation creation failed:", {
           status: response.status,
@@ -289,6 +300,17 @@ export function VenueCard({
             <VenueImageCarousel images={imageUrls} enableGallery={false} />
             {/* Badges overlaying top-right of image */}
             <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 items-end">
+              {/* Favorite button */}
+              <div onClick={(e) => e.stopPropagation()}>
+                <FavoriteButton
+                  type="venue"
+                  itemId={id}
+                  initialFavorited={isFavorited}
+                  size="sm"
+                  className="rounded-full bg-background/90 backdrop-blur-sm p-1 shadow-sm"
+                  onToggle={onToggleFavorite}
+                />
+              </div>
               {/* Availability label */}
               {availabilityLabel && (
                 <span

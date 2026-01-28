@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 import { ExploreClient } from "./ExploreClient"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { isVenueOpenNow, getNextOpenTime } from "@/lib/venue-hours"
@@ -9,6 +10,7 @@ interface ExplorePageProps {
   searchParams: Promise<{ 
     q?: string
     dealsOnly?: string
+    favoritesOnly?: string
     tags?: string
     priceMin?: string
     priceMax?: string
@@ -19,6 +21,9 @@ interface ExplorePageProps {
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   try {
+    // Get session for favorite state fetching
+    const session = await auth()
+    
     // Add early return for testing
     // return <ExploreClient venues={[]} />
     
@@ -31,6 +36,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
     // Parse filter parameters from URL
     const dealsOnly = params?.dealsOnly === "true"
+    const favoritesOnly = params?.favoritesOnly === "true"
     const tagsParam = params?.tags
     const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : []
     const priceMin = params?.priceMin ? parseFloat(params.priceMin) : null
@@ -82,6 +88,21 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         }
       }
     }
+
+    // Add favoritesOnly filter (only if user is authenticated)
+    if (favoritesOnly && session?.user?.id) {
+      whereClause.favoriteVenues = {
+        some: {
+          userId: session.user.id,
+        },
+      }
+    } else if (favoritesOnly && !session?.user?.id) {
+      // If favoritesOnly is requested but user is not signed in, return empty results
+      return <ExploreClient venues={[]} favoritedVenueIds={new Set()} />
+    }
+
+    // Only show APPROVED venues in Explore
+    whereClause.onboardingStatus = "APPROVED"
 
     // Fetch venues from database (with optional search filter)
     let venues = await prisma.venue.findMany({
@@ -356,7 +377,23 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       }
     })
 
-    return <ExploreClient venues={formattedVenues} />
+    // Fetch favorite states for all venues in batch
+    let favoritedVenueIds = new Set<string>()
+    if (session?.user?.id && formattedVenues.length > 0) {
+      const venueIds = formattedVenues.map((v) => v.id)
+      const favorites = await prisma.favoriteVenue.findMany({
+        where: {
+          userId: session.user.id,
+          venueId: { in: venueIds },
+        },
+        select: {
+          venueId: true,
+        },
+      })
+      favoritedVenueIds = new Set(favorites.map((f) => f.venueId))
+    }
+
+    return <ExploreClient venues={formattedVenues} favoritedVenueIds={favoritedVenueIds} />
   } catch (error) {
     console.error("Error fetching venues:", error)
     return <ExploreClient venues={[]} />

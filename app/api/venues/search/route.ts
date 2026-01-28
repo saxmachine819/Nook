@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 import { isVenueOpenNow } from "@/lib/venue-hours"
@@ -7,6 +8,9 @@ import { isVenueOpenNow } from "@/lib/venue-hours"
 export async function GET(request: Request) {
   console.log("🔍 /api/venues/search route called")
   try {
+    // Get session for favorite state fetching
+    const session = await auth()
+    
     const { searchParams } = new URL(request.url)
     console.log("📋 Search params:", Object.fromEntries(searchParams.entries()))
     const north = searchParams.get("north")
@@ -27,6 +31,7 @@ export async function GET(request: Request) {
     const bookingModeParam = searchParams.get("bookingMode")
     const bookingModes = bookingModeParam ? (bookingModeParam.split(",").filter(Boolean) as ("communal" | "full-table")[]) : []
     const dealsOnly = searchParams.get("dealsOnly") === "true"
+    const favoritesOnly = searchParams.get("favoritesOnly") === "true"
     const availableNow = searchParams.get("availableNow") === "true"
 
     // Validate bounds if provided
@@ -126,6 +131,22 @@ export async function GET(request: Request) {
       }
       console.log("✅ Applied dealsOnly filter to whereClause:", JSON.stringify(whereClause.deals))
     }
+
+    // Add favoritesOnly filter (only if user is authenticated)
+    if (favoritesOnly && session?.user?.id) {
+      whereClause.favoriteVenues = {
+        some: {
+          userId: session.user.id,
+        },
+      }
+      console.log("✅ Applied favoritesOnly filter to whereClause")
+    } else if (favoritesOnly && !session?.user?.id) {
+      // If favoritesOnly is requested but user is not signed in, return empty results
+      return NextResponse.json({ venues: [], favoritedVenueIds: [] })
+    }
+
+    // Only show APPROVED venues in search results
+    whereClause.onboardingStatus = "APPROVED"
 
     // Query venues with filters
     let venues = await prisma.venue.findMany({
@@ -424,7 +445,26 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ venues: formattedVenues })
+    // Fetch favorite states for all venues in batch
+    let favoritedVenueIds: string[] = []
+    if (session?.user?.id && formattedVenues.length > 0) {
+      const venueIds = formattedVenues.map((v) => v.id)
+      const favorites = await prisma.favoriteVenue.findMany({
+        where: {
+          userId: session.user.id,
+          venueId: { in: venueIds },
+        },
+        select: {
+          venueId: true,
+        },
+      })
+      favoritedVenueIds = favorites.map((f: { venueId: string }) => f.venueId)
+    }
+
+    return NextResponse.json({ 
+      venues: formattedVenues,
+      favoritedVenueIds,
+    })
   } catch (error) {
     console.error("Error searching venues by bounds:", error)
     return NextResponse.json(

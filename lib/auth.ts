@@ -13,8 +13,10 @@ if (!process.env.NEXTAUTH_SECRET) {
   console.error("❌ Missing NEXTAUTH_SECRET!")
 }
 
+// NEXTAUTH_URL is optional when trustHost is true - NextAuth will use the request origin
+// But it's still recommended to set it for production
 if (!process.env.NEXTAUTH_URL) {
-  console.error("❌ Missing NEXTAUTH_URL!")
+  console.warn("⚠️ NEXTAUTH_URL not set - NextAuth will use request origin (OK for dev)")
 }
 
 export const authOptions = {

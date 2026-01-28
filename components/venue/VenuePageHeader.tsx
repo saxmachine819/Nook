@@ -4,11 +4,14 @@ import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
+import { FavoriteButton } from "./FavoriteButton"
 
 interface VenuePageHeaderProps {
   name: string
   address?: string | null
   returnTo?: string
+  isFavorited?: boolean
+  venueId?: string
   deal?: {
     title: string
     description?: string | null
@@ -17,7 +20,7 @@ interface VenuePageHeaderProps {
   } | null
 }
 
-export function VenuePageHeader({ name, address, returnTo, deal }: VenuePageHeaderProps) {
+export function VenuePageHeader({ name, address, returnTo, isFavorited = false, venueId, deal }: VenuePageHeaderProps) {
   const router = useRouter()
 
   const eligibility = deal?.eligibilityJson || {}
@@ -26,14 +29,25 @@ export function VenuePageHeader({ name, address, returnTo, deal }: VenuePageHead
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => router.push(returnTo || "/")}
-        className="absolute -top-2 -right-2 z-10 rounded-full p-1 text-muted-foreground hover:bg-muted transition-colors"
-        aria-label={returnTo ? "Close and return to reservation" : "Close and return to explore"}
-      >
-        <X className="h-5 w-5" />
-      </button>
+      <div className="absolute -top-2 -right-2 z-10 flex items-center gap-2">
+        {venueId && (
+          <FavoriteButton
+            type="venue"
+            itemId={venueId}
+            initialFavorited={isFavorited}
+            size="md"
+            className="rounded-full bg-background/90 backdrop-blur-sm p-1.5 shadow-sm"
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => router.push(returnTo || "/")}
+          className="rounded-full p-1 text-muted-foreground hover:bg-muted transition-colors"
+          aria-label={returnTo ? "Close and return to reservation" : "Close and return to explore"}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
       <div className="flex items-start justify-between gap-4 pr-8">
         <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">

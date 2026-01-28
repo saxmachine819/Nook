@@ -1,5 +1,7 @@
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
+import { isAdmin } from "@/lib/venue-auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
@@ -30,6 +32,9 @@ interface VenuePageProps {
 }
 
 export default async function VenuePage({ params, searchParams }: VenuePageProps) {
+  // Get session for favorite state fetching
+  const session = await auth()
+  
   let venue
   try {
     venue = await prisma.venue.findUnique({
@@ -62,6 +67,63 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
   if (!venue) {
     notFound()
+  }
+
+  // Check if venue is approved - if not, only owner/admin can view
+  const isOwner = session?.user?.id === venue.ownerId
+  const userIsAdmin = session?.user ? isAdmin(session.user) : false
+  const canView = venue.onboardingStatus === "APPROVED" || isOwner || userIsAdmin
+
+  if (!canView) {
+    // Redirect non-owners to Explore page
+    redirect("/")
+  }
+
+  // Fetch favorite states in batch
+  let favoriteStates = {
+    venue: false,
+    tables: new Set<string>(),
+    seats: new Set<string>(),
+  }
+
+  if (session?.user?.id) {
+    const userId = session.user.id
+    const venueId = venue.id
+    const tableIds = venue.tables.map((t) => t.id)
+    const seatIds = venue.tables.flatMap((t) => t.seats.map((s) => s.id))
+
+    const [venueFav, tableFavs, seatFavs] = await Promise.all([
+      prisma.favoriteVenue.findUnique({
+        where: {
+          userId_venueId: {
+            userId,
+            venueId,
+          },
+        },
+      }),
+      tableIds.length > 0
+        ? prisma.favoriteTable.findMany({
+            where: {
+              userId,
+              venueId,
+              tableId: { in: tableIds },
+            },
+          })
+        : Promise.resolve([]),
+      seatIds.length > 0
+        ? prisma.favoriteSeat.findMany({
+            where: {
+              userId,
+              venueId,
+              seatId: { in: seatIds },
+            },
+          })
+        : Promise.resolve([]),
+    ])
+
+    favoriteStates.venue = !!venueFav
+    favoriteStates.tables = new Set(tableFavs.map((t) => t.tableId))
+    favoriteStates.seats = new Set(seatFavs.map((s) => s.seatId))
   }
   
   // Ensure tables and seats arrays exist
@@ -224,6 +286,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             name={venue.name} 
             address={venue.address}
             returnTo={searchParams?.returnTo}
+            isFavorited={favoriteStates.venue}
+            venueId={venue.id}
             deal={(() => {
               const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
                 ? (venue as any).deals[0] 
@@ -298,6 +362,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               <VenueBookingWidget
                 venueId={venue.id}
                 tables={individualTablesForBooking as any}
+                favoritedTableIds={favoriteStates.tables}
+                favoritedSeatIds={favoriteStates.seats}
               />
             </CardContent>
           </Card>
