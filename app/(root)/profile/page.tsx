@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, LogOut, LogIn, LayoutDashboard, Plus } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield } from "lucide-react"
 
 function initialsFromName(name?: string | null) {
   const trimmed = (name || "").trim()
@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const callbackUrl = searchParams.get("callbackUrl")
   const [venues, setVenues] = useState<Venue[]>([])
   const [loadingVenues, setLoadingVenues] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Redirect to callbackUrl after successful sign-in (defer to avoid setState-during-render)
   useEffect(() => {
@@ -50,12 +51,14 @@ export default function ProfilePage() {
       return
     }
     fetch("/api/users/me/venues")
-      .then((r) => (r.ok ? r.json() : { venues: [] }))
+      .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
       .then((data) => {
         setVenues(data.venues ?? [])
+        setIsAdmin(data.isAdmin ?? false)
       })
       .catch(() => {
         setVenues([])
+        setIsAdmin(false)
       })
       .finally(() => {
         setLoadingVenues(false)
@@ -180,6 +183,25 @@ export default function ProfilePage() {
             </Button>
           </CardContent>
         </Card>
+
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin</CardTitle>
+              <CardDescription>
+                Access the admin panel to manage approvals, venues, and users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="lg" asChild className="w-full">
+                <Link href="/admin">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Go to Admin Panel
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

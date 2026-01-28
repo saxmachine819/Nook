@@ -167,6 +167,45 @@ describe('ProfilePage', () => {
 
       expect(screen.getByText('Loading venues…')).toBeInTheDocument()
     })
+
+    it('shows admin button when user is admin', async () => {
+      // Mock fetch to return isAdmin: true
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ venues: [], isAdmin: true }),
+      } as Response)
+
+      render(<ProfilePage />)
+
+      // Wait for admin button to appear
+      await waitFor(() => {
+        expect(screen.getByText('Go to Admin Panel')).toBeInTheDocument()
+      })
+
+      const adminButton = screen.getByText('Go to Admin Panel')
+      expect(adminButton).toBeInTheDocument()
+      expect(adminButton.closest('a')).toHaveAttribute('href', '/admin')
+      expect(screen.getByText('Admin')).toBeInTheDocument()
+    })
+
+    it('does not show admin button when user is not admin', async () => {
+      // Mock fetch to return isAdmin: false
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ venues: [], isAdmin: false }),
+      } as Response)
+
+      render(<ProfilePage />)
+
+      // Wait for venues to load
+      await waitFor(() => {
+        expect(screen.getByText('List your venue on Nook')).toBeInTheDocument()
+      })
+
+      // Admin button should not be present
+      expect(screen.queryByText('Go to Admin Panel')).not.toBeInTheDocument()
+      expect(screen.queryByText('Admin')).not.toBeInTheDocument()
+    })
   })
 
   describe('when session is loading', () => {

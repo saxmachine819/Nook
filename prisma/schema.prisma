@@ -43,6 +43,8 @@ model Venue {
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
+  approvedByUserId String?
+  rejectedByUserId String?
   reservations    Reservation[]
   tables          Table[]
   seatBlocks      SeatBlock[]
@@ -59,6 +61,8 @@ model Venue {
   heroImageUrl    String?
   imageUrls       Json?
   owner           User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  approvedBy      User?         @relation("ApprovedVenues", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  rejectedBy      User?         @relation("RejectedVenues", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
   @@index([onboardingStatus])
@@ -188,6 +192,8 @@ model User {
   favoriteVenues  FavoriteVenue[]
   favoriteTables  FavoriteTable[]
   favoriteSeats   FavoriteSeat[]
+  approvedVenues  Venue[]  @relation("ApprovedVenues")
+  rejectedVenues  Venue[]  @relation("RejectedVenues")
 
   @@map("users")
 }

@@ -14,7 +14,7 @@ import { isAdmin } from "@/lib/venue-auth"
 export async function setVenueApprovalStatus(
   venueId: string,
   status: "APPROVED" | "REJECTED",
-  user: { email?: string | null },
+  user: { email?: string | null; id?: string | null },
   rejectionReason?: string
 ): Promise<{ success: boolean; error?: string }> {
   // Check admin access
@@ -39,12 +39,16 @@ export async function setVenueApprovalStatus(
 
   if (status === "APPROVED") {
     updateData.approvedAt = new Date()
+    updateData.approvedByUserId = user.id || null
     updateData.rejectedAt = null
     updateData.rejectionReason = null
+    updateData.rejectedByUserId = null
   } else if (status === "REJECTED") {
     updateData.rejectedAt = new Date()
+    updateData.rejectedByUserId = user.id || null
     updateData.rejectionReason = rejectionReason || null
     updateData.approvedAt = null
+    updateData.approvedByUserId = null
   }
 
   try {
