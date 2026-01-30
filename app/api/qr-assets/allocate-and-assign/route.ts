@@ -2,37 +2,33 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { canEditVenue, isAdmin } from "@/lib/venue-auth"
+import { allocateOneQrAsset } from "@/lib/qr-asset-allocator"
 
 export async function POST(request: NextRequest) {
   try {
-    // Require authentication
     const session = await auth()
 
     if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "You must be signed in to reassign QR assets." },
+        { error: "You must be signed in to allocate and assign QR assets." },
         { status: 401 }
       )
     }
 
-    // Parse request body
     const body = await request.json().catch(() => ({}))
-    const { token, venueId, resourceType, resourceId } = body as {
-      token?: string
+    const { venueId, resourceType, resourceId } = body as {
       venueId?: string
       resourceType?: string
       resourceId?: string
     }
 
-    // Validate required fields
-    if (!token || !venueId || !resourceType) {
+    if (!venueId || !resourceType) {
       return NextResponse.json(
-        { error: "Missing required fields: token, venueId, and resourceType are required" },
+        { error: "Missing required fields: venueId and resourceType are required" },
         { status: 400 }
       )
     }
 
-    // Validate resourceType
     if (!["seat", "table", "area"].includes(resourceType)) {
       return NextResponse.json(
         { error: "resourceType must be 'seat', 'table', or 'area'" },
@@ -40,7 +36,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate resourceId (required for seat and table, optional for area)
     if (resourceType !== "area" && !resourceId) {
       return NextResponse.json(
         { error: `resourceId is required for resourceType '${resourceType}'` },
@@ -48,38 +43,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify QR asset exists and is ACTIVE (allow reassignment)
-    const qrAsset = await prisma.qRAsset.findUnique({
-      where: { token: token.trim() },
-      select: {
-        id: true,
-        token: true,
-        status: true,
-        venueId: true,
-      },
-    })
-
-    if (!qrAsset) {
-      return NextResponse.json(
-        { error: "QR asset not found" },
-        { status: 404 }
-      )
-    }
-
-    if (qrAsset.status !== "ACTIVE") {
-      return NextResponse.json(
-        { error: `QR asset must be ACTIVE to reassign (current status: ${qrAsset.status})` },
-        { status: 409 }
-      )
-    }
-
-    // Verify venue exists
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
-      select: {
-        id: true,
-        ownerId: true,
-      },
+      select: { id: true, ownerId: true },
     })
 
     if (!venue) {
@@ -89,7 +55,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify user has permission to manage this venue
     if (!isAdmin(session.user) && !canEditVenue(session.user, venue)) {
       return NextResponse.json(
         { error: "You do not have permission to manage this venue" },
@@ -97,27 +62,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify resource exists and belongs to venue (if not area)
     if (resourceType === "seat" && resourceId) {
       const seat = await prisma.seat.findUnique({
         where: { id: resourceId },
         include: {
-          table: {
-            select: {
-              id: true,
-              venueId: true,
-            },
-          },
+          table: { select: { id: true, venueId: true } },
         },
       })
-
       if (!seat) {
         return NextResponse.json(
           { error: "Seat not found" },
           { status: 404 }
         )
       }
-
       if (seat.table.venueId !== venueId) {
         return NextResponse.json(
           { error: "Seat does not belong to this venue" },
@@ -127,19 +84,14 @@ export async function POST(request: NextRequest) {
     } else if (resourceType === "table" && resourceId) {
       const table = await prisma.table.findUnique({
         where: { id: resourceId },
-        select: {
-          id: true,
-          venueId: true,
-        },
+        select: { id: true, venueId: true },
       })
-
       if (!table) {
         return NextResponse.json(
           { error: "Table not found" },
           { status: 404 }
         )
       }
-
       if (table.venueId !== venueId) {
         return NextResponse.json(
           { error: "Table does not belong to this venue" },
@@ -147,58 +99,60 @@ export async function POST(request: NextRequest) {
         )
       }
     }
-    // For "area", no validation needed (just a string identifier)
 
-    // Update QR asset (reassign)
-    const activatedBy = session.user?.id ?? session.user?.email ?? null
-    const updatedQRAsset = await prisma.qRAsset.update({
-      where: { token: token.trim() },
-      data: {
+    const existing = await prisma.qRAsset.findFirst({
+      where: {
         venueId,
         resourceType,
-        resourceId: resourceId || null,
+        resourceId: resourceId ?? null,
+        status: "ACTIVE",
+      },
+      select: { id: true, token: true, status: true },
+    })
+
+    if (existing) {
+      return NextResponse.json(
+        {
+          token: existing.token,
+          qrAssetId: existing.id,
+          status: existing.status,
+          alreadyExisted: true,
+        },
+        { status: 200 }
+      )
+    }
+
+    const allocated = await allocateOneQrAsset()
+    const activatedBy = session.user?.id ?? session.user?.email ?? null
+    const updated = await prisma.qRAsset.update({
+      where: { id: allocated.id },
+      data: {
+        status: "ACTIVE",
+        venueId,
+        resourceType,
+        resourceId: resourceId ?? null,
         activatedAt: new Date(),
         activatedBy,
+        activationSource: "venue_print",
+        reservedOrderId: null,
       },
-      include: {
-        venue: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-          },
-        },
-      },
+      select: { id: true, token: true, status: true },
     })
 
     return NextResponse.json(
       {
-        success: true,
-        qrAsset: {
-          id: updatedQRAsset.id,
-          token: updatedQRAsset.token,
-          status: updatedQRAsset.status,
-          venueId: updatedQRAsset.venueId,
-          resourceType: updatedQRAsset.resourceType,
-          resourceId: updatedQRAsset.resourceId,
-          activatedAt: updatedQRAsset.activatedAt?.toISOString(),
-          venue: updatedQRAsset.venue,
-        },
+        token: updated.token,
+        qrAssetId: updated.id,
+        status: updated.status,
+        alreadyExisted: false,
       },
       { status: 200 }
     )
-  } catch (error: any) {
-    console.error("Error reassigning QR asset:", error)
-
-    const errorMessage =
-      error?.message || "Failed to reassign QR asset. Please try again."
-
+  } catch (error: unknown) {
+    console.error("Error allocating and assigning QR asset:", error)
+    const message = error instanceof Error ? error.message : "Failed to allocate and assign QR asset."
     return NextResponse.json(
-      {
-        error: errorMessage,
-        details:
-          process.env.NODE_ENV === "development" ? error?.message : undefined,
-      },
+      { error: message },
       { status: 500 }
     )
   }

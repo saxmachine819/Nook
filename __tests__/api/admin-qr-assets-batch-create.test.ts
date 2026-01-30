@@ -118,10 +118,22 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
       const data = await response.json()
 
       expect(response.status).toBe(400)
-      expect(data.error).toContain('positive integer')
+      expect(data.error).toContain('between 10 and 5000')
     })
 
-    it('returns 400 if count is less than 1', async () => {
+    it('returns 400 if count is less than 10', async () => {
+      const request = new Request('http://localhost/api/admin/qr-assets/batch-create', {
+        method: 'POST',
+        body: JSON.stringify({ count: 5 }),
+      })
+      const response = await POST(request)
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toContain('between 10 and 5000')
+    })
+
+    it('returns 400 if count is 0', async () => {
       const request = new Request('http://localhost/api/admin/qr-assets/batch-create', {
         method: 'POST',
         body: JSON.stringify({ count: 0 }),
@@ -130,7 +142,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
       const data = await response.json()
 
       expect(response.status).toBe(400)
-      expect(data.error).toContain('positive integer')
+      expect(data.error).toContain('between 10 and 5000')
     })
 
     it('returns 400 if count exceeds 5000', async () => {
@@ -170,7 +182,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
       expect(callArgs.skipDuplicates).toBe(true)
     })
 
-    it('returns created count and sample tokens', async () => {
+    it('returns created count, batchId, and sample tokens', async () => {
       mockPrisma.qRAsset.createMany.mockResolvedValue({ count: 10 })
 
       const request = new Request('http://localhost/api/admin/qr-assets/batch-create', {
@@ -182,10 +194,13 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
 
       expect(response.status).toBe(200)
       expect(data.created).toBe(10)
+      expect(data.batchId).toBeDefined()
+      expect(data.batchId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      )
       expect(data.sampleTokens).toBeDefined()
       expect(Array.isArray(data.sampleTokens)).toBe(true)
       expect(data.sampleTokens.length).toBeLessThanOrEqual(5)
-      expect(data.batchId).toBeDefined()
     })
 
     it('checks for existing tokens before creating', async () => {

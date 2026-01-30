@@ -79,8 +79,8 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
 
   const now = new Date()
 
-  // Fetch all reservations, seat blocks, and deals
-  const [reservations, seatBlocks, dealsResult] = await Promise.all([
+  // Fetch reservations, seat blocks, deals, and QR assets assigned to this venue
+  const [reservations, seatBlocks, dealsResult, qrAssets] = await Promise.all([
     prisma.reservation.findMany({
       where: {
         venueId: venue.id,
@@ -131,9 +131,25 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       console.error("Error fetching deals:", error)
       return []
     }),
+    prisma.qRAsset.findMany({
+      where: {
+        venueId: venue.id,
+        status: "ACTIVE",
+        resourceType: { not: null },
+        resourceId: { not: null },
+      },
+      select: { resourceType: true, resourceId: true, token: true },
+    }),
   ])
-  
+
   const deals = dealsResult || []
+  const assignedQrByResourceKey: Record<string, string> = {}
+  for (const a of qrAssets || []) {
+    if (!a.resourceType || !a.resourceId || !a.token) continue
+    if (a.resourceType === "seat" || a.resourceType === "table") {
+      assignedQrByResourceKey[`${a.resourceType}:${a.resourceId}`] = a.token
+    }
+  }
 
   // Backfill venue hours if needed (idempotent)
   if (venue.openingHoursJson) {
@@ -164,6 +180,7 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       seatBlocks={seatBlocks}
       deals={deals}
       now={now.toISOString()}
+      assignedQrByResourceKey={assignedQrByResourceKey}
     />
   )
 }

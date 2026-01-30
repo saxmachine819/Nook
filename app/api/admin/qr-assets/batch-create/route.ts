@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { isAdmin } from "@/lib/venue-auth"
-import { randomBytes } from "crypto"
+import { randomBytes, randomUUID } from "crypto"
 
 /**
  * Generates a random URL-safe token of length between 8-12 characters.
@@ -121,9 +121,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!Number.isInteger(count) || count < 1) {
+    if (!Number.isInteger(count) || count < 10) {
       return NextResponse.json(
-        { error: "count must be a positive integer" },
+        { error: "count must be an integer between 10 and 5000" },
         { status: 400 }
       )
     }
@@ -138,8 +138,8 @@ export async function POST(request: NextRequest) {
     // Generate unique tokens
     const tokens = await generateUniqueTokens(count)
 
-    // Generate batch ID (timestamp-based for tracking)
-    const batchId = new Date().toISOString()
+    // Generate batch ID (UUID for tracking)
+    const batchId = randomUUID()
 
     // Batch insert into database
     const result = await prisma.qRAsset.createMany({
@@ -155,8 +155,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         created: result.count,
-        sampleTokens: tokens.slice(0, 5),
         batchId,
+        sampleTokens: tokens.slice(0, 5),
       },
       { status: 200 }
     )

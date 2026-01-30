@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify QR asset exists and is UNREGISTERED
+    // Verify QR asset exists and is UNREGISTERED or ACTIVE (reassign)
     const qrAsset = await prisma.qRAsset.findUnique({
       where: { token: token.trim() },
       select: {
@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
         token: true,
         status: true,
         venueId: true,
+        activatedAt: true,
       },
     })
 
@@ -151,16 +152,31 @@ export async function POST(request: NextRequest) {
     }
     // For "area", no validation needed (just a string identifier)
 
-    // Update QR asset
+    // Update QR asset. We intentionally do not set reservedOrderId so reserved tokens
+    // keep reserved_order_id for audit after assignment; it no longer blocks usage because status becomes ACTIVE.
+    const activatedBy = session.user?.id ?? session.user?.email ?? null
+    const updateData: {
+      status: "ACTIVE"
+      venueId: string
+      resourceType: string
+      resourceId: string | null
+      activatedAt: Date
+      activatedBy: string | null
+      activationSource?: string
+    } = {
+      status: "ACTIVE",
+      venueId,
+      resourceType,
+      resourceId: resourceId || null,
+      activatedAt: qrAsset.activatedAt ?? new Date(),
+      activatedBy,
+    }
+    if (qrAsset.status === "UNREGISTERED") {
+      updateData.activationSource = "scan_register"
+    }
     const updatedQRAsset = await prisma.qRAsset.update({
       where: { token: token.trim() },
-      data: {
-        status: "ACTIVE",
-        venueId,
-        resourceType,
-        resourceId: resourceId || null,
-        activatedAt: new Date(),
-      },
+      data: updateData,
       include: {
         venue: {
           select: {

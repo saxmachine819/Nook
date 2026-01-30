@@ -82,11 +82,11 @@ export async function lookupQRAssetByToken(token: string) {
     return null
   }
 
+  const trimmed = token.trim()
   try {
-    const qrAsset = await prisma.qRAsset.findUnique({
-      where: {
-        token: token.trim(),
-      },
+    // Try exact match first (preserves unique index use)
+    let qrAsset = await prisma.qRAsset.findUnique({
+      where: { token: trimmed },
       include: {
         venue: {
           select: {
@@ -98,6 +98,24 @@ export async function lookupQRAssetByToken(token: string) {
         },
       },
     })
+    // If not found, try case-insensitive match (QR scanners/URLs may alter case)
+    if (!qrAsset) {
+      qrAsset = await prisma.qRAsset.findFirst({
+        where: {
+          token: { equals: trimmed, mode: "insensitive" },
+        },
+        include: {
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              ownerId: true,
+            },
+          },
+        },
+      })
+    }
 
     return qrAsset
   } catch (error: any) {

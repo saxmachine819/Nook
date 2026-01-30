@@ -28,6 +28,10 @@ import {
   RefreshCw,
   Ban,
   Plus,
+  Printer,
+  Download,
+  XCircle,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -91,6 +95,7 @@ interface VenueOpsConsoleClientProps {
   }>
   deals: Deal[]
   now: string
+  assignedQrByResourceKey?: Record<string, string>
 }
 
 type TabMode = "upcoming" | "past" | "cancelled"
@@ -101,10 +106,16 @@ export function VenueOpsConsoleClient({
   seatBlocks: initialSeatBlocks,
   deals: initialDeals,
   now: initialNow,
+  assignedQrByResourceKey = {},
 }: VenueOpsConsoleClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
   const [deals, setDeals] = useState<Deal[]>(initialDeals || [])
+  const [printQRModal, setPrintQRModal] = useState<{ token: string } | null>(null)
+  const [printQRLoading, setPrintQRLoading] = useState<string | null>(null)
+  const [localQrTokensByKey, setLocalQrTokensByKey] = useState<Record<string, string>>({})
+  const [retiringKey, setRetiringKey] = useState<string | null>(null)
+  const [qrManagementOpen, setQrManagementOpen] = useState(false)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
 
@@ -127,6 +138,89 @@ export function VenueOpsConsoleClient({
   const weekSectionRef = useRef<HTMLDivElement>(null)
   
   const [visibleSection, setVisibleSection] = useState<"Now" | "Today" | "This week">("Now")
+
+  const hasQrForResource = useCallback(
+    (resourceType: "seat" | "table", resourceId: string) => {
+      const key = `${resourceType}:${resourceId}`
+      return key in assignedQrByResourceKey || key in localQrTokensByKey
+    },
+    [assignedQrByResourceKey, localQrTokensByKey]
+  )
+
+  const getTokenForResource = useCallback(
+    (resourceType: "seat" | "table", resourceId: string): string | undefined => {
+      const key = `${resourceType}:${resourceId}`
+      return assignedQrByResourceKey[key] ?? localQrTokensByKey[key]
+    },
+    [assignedQrByResourceKey, localQrTokensByKey]
+  )
+
+  const handlePrintQR = useCallback(
+    async (resourceType: "seat" | "table", resourceId: string) => {
+      const key = `${resourceType}:${resourceId}`
+      setPrintQRLoading(key)
+      try {
+        const res = await fetch("/api/qr-assets/allocate-and-assign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            venueId: venue.id,
+            resourceType,
+            resourceId,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          showToast(data.error || "Failed to get QR", "error")
+          return
+        }
+        setLocalQrTokensByKey((prev) => ({ ...prev, [key]: data.token }))
+        setPrintQRModal({ token: data.token })
+      } catch {
+        showToast("Failed to get QR", "error")
+      } finally {
+        setPrintQRLoading(null)
+      }
+    },
+    [venue.id, showToast]
+  )
+
+  const handleRetire = useCallback(
+    async (resourceType: "seat" | "table", resourceId: string) => {
+      const key = `${resourceType}:${resourceId}`
+      const token = getTokenForResource(resourceType, resourceId)
+      if (!token) {
+        showToast("No QR assigned to this resource", "error")
+        return
+      }
+      if (!confirm("Retire this QR? It will no longer be active.")) return
+      setRetiringKey(key)
+      try {
+        const res = await fetch("/api/qr-assets/retire", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          showToast(data.error || "Failed to retire QR", "error")
+          return
+        }
+        setLocalQrTokensByKey((prev) => {
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+        router.refresh()
+        showToast("QR retired", "success")
+      } catch {
+        showToast("Failed to retire QR", "error")
+      } finally {
+        setRetiringKey(null)
+      }
+    },
+    [getTokenForResource, showToast, router]
+  )
 
   // Update current time every minute
   useEffect(() => {
@@ -937,12 +1031,12 @@ export function VenueOpsConsoleClient({
             </Card>
           </div>
 
-          {/* Right Column: Seat Status + Quick Actions */}
+          {/* Right Column: Manage Seats + Quick Actions */}
           <div className="space-y-4">
-            {/* Seat Status Panel */}
+            {/* Manage Seats Panel */}
             <Card>
               <CardHeader>
-                <CardTitle>Seat Status</CardTitle>
+                <CardTitle>Manage Seats</CardTitle>
                 <CardDescription>Current availability and blocks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1032,65 +1126,66 @@ export function VenueOpsConsoleClient({
                           const { status, reservation, block } = seatStatus
 
                           return (
-                            <button
-                              key={seat.id}
-                              onClick={() =>
-                                setSelectedSeat({
-                                  seatId: seat.id,
-                                  tableId: table.id,
-                                  tableName: table.name || "Table",
-                                  isGroupTable: false,
-                                })
-                              }
-                              className={cn(
-                                "rounded-lg border p-3 text-left transition-colors",
-                                status === "available" && "bg-muted/30 hover:bg-muted/50",
-                                status === "reserved" && "bg-amber-50 border-amber-200",
-                                status === "blocked" && "bg-red-50 border-red-200"
-                              )}
-                            >
-                              <div className="text-xs font-medium">{seatLabel}</div>
-                              <div className="text-xs text-muted-foreground">
-                                ${seat.pricePerHour}/hr
-                              </div>
-                              <div className="mt-1 space-y-1">
-                                <span
-                                  className={cn(
-                                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
-                                    status === "available" && "bg-muted text-muted-foreground",
-                                    status === "reserved" && "bg-amber-100 text-amber-700",
-                                    status === "blocked" && "bg-red-100 text-red-700"
+                            <div key={seat.id} className="flex flex-col gap-1">
+                              <button
+                                onClick={() =>
+                                  setSelectedSeat({
+                                    seatId: seat.id,
+                                    tableId: table.id,
+                                    tableName: table.name || "Table",
+                                    isGroupTable: false,
+                                  })
+                                }
+                                className={cn(
+                                  "rounded-lg border p-3 text-left transition-colors",
+                                  status === "available" && "bg-muted/30 hover:bg-muted/50",
+                                  status === "reserved" && "bg-amber-50 border-amber-200",
+                                  status === "blocked" && "bg-red-50 border-red-200"
+                                )}
+                              >
+                                <div className="text-xs font-medium">{seatLabel}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  ${seat.pricePerHour}/hr
+                                </div>
+                                <div className="mt-1 space-y-1">
+                                  <span
+                                    className={cn(
+                                      "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                      status === "available" && "bg-muted text-muted-foreground",
+                                      status === "reserved" && "bg-amber-100 text-amber-700",
+                                      status === "blocked" && "bg-red-100 text-red-700"
+                                    )}
+                                  >
+                                    {status === "available" && "Available"}
+                                    {status === "reserved" && "Reserved now"}
+                                    {status === "blocked" && "Blocked"}
+                                  </span>
+                                  {status === "reserved" && reservation && (
+                                    <div className="space-y-0.5 text-[10px] text-muted-foreground">
+                                      <div>
+                                        {formatTimeRange(
+                                          normalizeDate(reservation.startAt),
+                                          normalizeDate(reservation.endAt)
+                                        )}
+                                      </div>
+                                      <div>
+                                        {getBookerDisplay(reservation)}
+                                        {reservation.tableId && !reservation.seatId && (
+                                          <span className="ml-1">
+                                            · {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   )}
-                                >
-                                  {status === "available" && "Available"}
-                                  {status === "reserved" && "Reserved now"}
-                                  {status === "blocked" && "Blocked"}
-                                </span>
-                                {status === "reserved" && reservation && (
-                                  <div className="space-y-0.5 text-[10px] text-muted-foreground">
-                                    <div>
-                                      {formatTimeRange(
-                                        normalizeDate(reservation.startAt),
-                                        normalizeDate(reservation.endAt)
-                                      )}
+                                  {status === "blocked" && block && (
+                                    <div className="text-[10px] text-red-600">
+                                      {block.reason || "Blocked"}
                                     </div>
-                                    <div>
-                                      {getBookerDisplay(reservation)}
-                                      {reservation.tableId && !reservation.seatId && (
-                                        <span className="ml-1">
-                                          · {reservation.seatCount} seat{reservation.seatCount > 1 ? "s" : ""}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                )}
-                                {status === "blocked" && block && (
-                                  <div className="text-[10px] text-red-600">
-                                    {block.reason || "Blocked"}
-                                  </div>
-                                )}
-                              </div>
-                            </button>
+                                  )}
+                                </div>
+                              </button>
+                            </div>
                           )
                         })}
                       </div>
@@ -1136,6 +1231,147 @@ export function VenueOpsConsoleClient({
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => setQrManagementOpen((open) => !open)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Printer className="h-4 w-4" />
+                    QR Code Management
+                  </span>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", qrManagementOpen && "rotate-180")} />
+                </Button>
+                {qrManagementOpen && (
+                  <div className="rounded-md border bg-muted/30 overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                      {venue.tables.length === 0 ? (
+                        <p className="text-xs text-muted-foreground px-2 py-3 text-center">No seats or tables yet</p>
+                      ) : (
+                        venue.tables.flatMap((table) => {
+                          const isGroupTable = table.bookingMode === "group"
+                          if (isGroupTable) {
+                            const tableHasQr = hasQrForResource("table", table.id)
+                            const tableKey = `table:${table.id}`
+                            return [
+                              <div
+                                key={tableKey}
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                              >
+                                <span className="text-xs font-medium truncate min-w-0">
+                                  {table.name || "Unnamed Table"}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {tableHasQr ? (
+                                    <>
+                                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        QR assigned
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-1.5"
+                                        onClick={() => {
+                                          const token = getTokenForResource("table", table.id)
+                                          if (token) setPrintQRModal({ token })
+                                        }}
+                                      >
+                                        <Download className="h-2.5 w-2.5 mr-0.5" />
+                                        Download
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
+                                        disabled={retiringKey !== null}
+                                        onClick={() => handleRetire("table", table.id)}
+                                      >
+                                        {retiringKey === tableKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-[10px] px-1.5"
+                                      disabled={printQRLoading !== null}
+                                      onClick={() => handlePrintQR("table", table.id)}
+                                    >
+                                      {printQRLoading === tableKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>,
+                            ]
+                          }
+                          return table.seats.map((seat) => {
+                            const seatHasQr = hasQrForResource("seat", seat.id)
+                            const seatKey = `seat:${seat.id}`
+                            const tableName = table.name || "Unnamed Table"
+                            const seatLabel = getSeatLabel(seat)
+                            const rowLabel = `${tableName} — ${seatLabel}`
+                            return (
+                              <div
+                                key={seatKey}
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                              >
+                                <span className="text-xs font-medium truncate min-w-0" title={rowLabel}>
+                                  {rowLabel}
+                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {seatHasQr ? (
+                                    <>
+                                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                        QR assigned
+                                      </span>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-1.5"
+                                        onClick={() => {
+                                          const token = getTokenForResource("seat", seat.id)
+                                          if (token) setPrintQRModal({ token })
+                                        }}
+                                      >
+                                        <Download className="h-2.5 w-2.5 mr-0.5" />
+                                        Download
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
+                                        disabled={retiringKey !== null}
+                                        onClick={() => handleRetire("seat", seat.id)}
+                                      >
+                                        {retiringKey === seatKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 text-[10px] px-1.5"
+                                      disabled={printQRLoading !== null}
+                                      onClick={() => handlePrintQR("seat", seat.id)}
+                                    >
+                                      {printQRLoading === seatKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   className="w-full"
@@ -1188,6 +1424,53 @@ export function VenueOpsConsoleClient({
             />
           </DialogContent>
         )}
+      </Dialog>
+
+      {/* QR ready modal */}
+      <Dialog
+        open={printQRModal !== null}
+        onOpenChange={(open) => !open && setPrintQRModal(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>QR ready</DialogTitle>
+          </DialogHeader>
+          {printQRModal && (
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                <img
+                  src={`/api/qr-assets/${printQRModal.token}/qr-only.svg`}
+                  alt="QR preview"
+                  className="h-24 w-24"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Token (use this to verify in DB):{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] select-all">
+                  {printQRModal.token}
+                </code>
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`/api/qr-assets/${printQRModal.token}/qr-only.svg`}
+                    download="nook-qr-only.svg"
+                  >
+                    Download QR only (SVG)
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`/api/qr-assets/${printQRModal.token}/sticker.svg`}
+                    download="nook-sticker.svg"
+                  >
+                    Download full sticker (SVG)
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
       </Dialog>
 
       {/* Block Seat Modal */}

@@ -128,3 +128,83 @@ export async function generateQRStickerSVG(options: StickerOptions): Promise<str
 
   return svg
 }
+
+export interface QROnlyOptions {
+  qrUrl: string
+  qrSize?: number
+  logoSize?: number
+  quietZone?: number
+  padding?: number
+}
+
+/**
+ * Generates a print-ready SVG containing only the QR code with logo in the center (no text).
+ * Uses high error correction (H) and same brand colors/logo as the sticker.
+ */
+export async function generateQROnlySVG(options: QROnlyOptions): Promise<string> {
+  const {
+    qrUrl,
+    logoSize = 102,
+    qrSize = 300,
+    quietZone = 24,
+    padding = 20,
+  } = options
+
+  const brandGreen = "#0F5132"
+  const white = "#FFFFFF"
+
+  const qrSvg = await QRCode.toString(qrUrl, {
+    type: "svg",
+    errorCorrectionLevel: "H",
+    margin: 1,
+    width: qrSize,
+    color: {
+      dark: white,
+      light: brandGreen,
+    },
+  })
+
+  const qrContent = qrSvg.replace(/^<\?xml[^>]*\?>/, "").trim()
+  const logoDataUri = getLogoDataUri()
+  const logoBgSize = logoSize + 8
+
+  const size = qrSize + quietZone * 2 + padding * 2
+
+  const svg = `
+<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .logo-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        fill: ${white};
+        text-anchor: middle;
+      }
+    </style>
+  </defs>
+  <rect width="${size}" height="${size}" fill="${brandGreen}" rx="8"/>
+  <g transform="translate(${padding + quietZone}, ${padding + quietZone})">
+    ${qrContent}
+    ${logoDataUri ? `
+    <rect x="${qrSize / 2 - logoBgSize / 2}" y="${qrSize / 2 - logoBgSize / 2}"
+          width="${logoBgSize}" height="${logoBgSize}"
+          rx="14" fill="${brandGreen}" stroke="${white}" stroke-width="2"/>
+    <image href="${logoDataUri}"
+           x="${qrSize / 2 - logoSize / 2}"
+           y="${qrSize / 2 - logoSize / 2}"
+           width="${logoSize}"
+           height="${logoSize}"
+           preserveAspectRatio="xMidYMid meet"/>
+    ` : `
+    <rect x="${qrSize / 2 - logoBgSize / 2}" y="${qrSize / 2 - logoBgSize / 2}"
+          width="${logoBgSize}" height="${logoBgSize}"
+          rx="14" fill="${brandGreen}" stroke="${white}" stroke-width="2"/>
+    <text x="${qrSize / 2}" y="${qrSize / 2 + 6}" class="logo-text">NOOK</text>
+    `}
+  </g>
+</svg>
+  `.trim()
+
+  return svg
+}

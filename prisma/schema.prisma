@@ -307,21 +307,46 @@ model FavoriteSeat {
 }
 
 model QRAsset {
-  id           String         @id @default(uuid())
-  token        String         @unique
-  status       QRAssetStatus  @default(UNREGISTERED)
-  batchId      String?
-  venueId      String?
-  resourceType String?        // 'seat' | 'table' | 'area'
-  resourceId   String?        // Foreign key to seat/table or area identifier
-  activatedAt  DateTime?
-  retiredAt    DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  venue        Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  id               String         @id @default(uuid())
+  token            String         @unique
+  status           QRAssetStatus  @default(UNREGISTERED)
+  batchId          String?
+  reservedOrderId  String?        // Reserved for an order or short-lived allocation claim
+  venueId          String?
+  resourceType     String?        // 'seat' | 'table' | 'area'
+  resourceId       String?        // Foreign key to seat/table or area identifier
+  activatedAt      DateTime?
+  activatedBy      String?        // User id or email when activated
+  activationSource String?        @map("activation_source") // 'venue_print' | 'scan_register' | 'order_fulfillment'
+  retiredAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  venue            Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  qrEvents         QREvent[]
 
   @@index([venueId])
   @@index([status])
   @@index([batchId])
+  @@index([status, reservedOrderId])
   @@map("qr_assets")
+}
+
+model QREvent {
+  id          String    @id @default(uuid())
+  token       String
+  qrAssetId   String?
+  eventType   String    // 'scan' only for now
+  venueId     String?
+  resourceType String?
+  resourceId  String?
+  userId      String?
+  sessionId   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  qrAsset     QRAsset?  @relation(fields: [qrAssetId], references: [id], onDelete: SetNull)
+
+  @@index([token, createdAt])
+  @@index([venueId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("qr_events")
 }
