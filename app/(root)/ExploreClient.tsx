@@ -742,7 +742,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
             venues={venues}
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
-            autoExpand={!isSearchingArea && (searchQuery.length > 0 || isSearchingText || activeFilterCount > 0)}
+            autoExpand={!isSearchingArea && searchQuery.length > 0}
             favoritesOnly={filters.favoritesOnly}
             favoritedVenueIds={favoritedVenueIdsState}
             onToggleFavorite={async (venueId, favorited) => {

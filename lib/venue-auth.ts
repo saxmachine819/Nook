@@ -47,3 +47,34 @@ export function canEditVenue(
   // Owner can edit their own venue
   return user.id === venue.ownerId
 }
+
+/**
+ * Check if a user has permission to register QR codes.
+ * Returns true if user is admin or owns at least one venue.
+ * 
+ * @param user - The user to check (must have id property)
+ * @returns Promise<boolean> - true if user can register QR codes
+ */
+export async function canRegisterQR(user: { id: string; email?: string | null } | null): Promise<boolean> {
+  if (!user) {
+    return false
+  }
+
+  // Admins can always register QR codes
+  if (isAdmin(user)) {
+    return true
+  }
+
+  // Check if user owns at least one venue
+  const { prisma } = await import("@/lib/prisma")
+  const ownedVenue = await prisma.venue.findFirst({
+    where: {
+      ownerId: user.id,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  return !!ownedVenue
+}

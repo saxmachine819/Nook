@@ -48,8 +48,8 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
           <X className="h-5 w-5" />
         </button>
       </div>
-      <div className="flex items-start justify-between gap-4 pr-8">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-col gap-4 pr-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             {name}
           </h1>
@@ -60,7 +60,7 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
           )}
         </div>
         {deal && (
-          <div className="flex-shrink-0 w-full max-w-xs">
+          <div className="w-full flex-shrink-0 sm:max-w-xs lg:hidden">
             <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm h-fit">
               <CardContent className="p-3">
                 <div className="space-y-2">

@@ -90,6 +90,10 @@ export function VenueBookingWidget({
     ? parsedInitialSeatCount 
     : null
 
+  // Get preselected resource from QR code scan
+  const resourceTypeFromUrl = searchParams.get("resourceType")
+  const resourceIdFromUrl = searchParams.get("resourceId")
+
   const [date, setDate] = useState<string>("")
   const [startTime, setStartTime] = useState<string>("")
   const [durationHours, setDurationHours] = useState<number>(2)
@@ -97,6 +101,12 @@ export function VenueBookingWidget({
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
+  const [preselectedSeatId, setPreselectedSeatId] = useState<string | null>(
+    resourceTypeFromUrl === "seat" && resourceIdFromUrl ? resourceIdFromUrl : null
+  )
+  const [preselectedTableId, setPreselectedTableId] = useState<string | null>(
+    resourceTypeFromUrl === "table" && resourceIdFromUrl ? resourceIdFromUrl : null
+  )
   const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
   const [unavailableSeats, setUnavailableSeats] = useState<UnavailableSeat[]>([])
   const [availableSeatGroups, setAvailableSeatGroups] = useState<AvailableSeatGroup[]>([])
@@ -128,9 +138,12 @@ export function VenueBookingWidget({
 
     setIsLoadingAvailability(true)
     setError(null)
-    setSelectedSeatId(null)
-    setSelectedSeatIds([])
-    setSelectedGroupTableId(null)
+    // Don't clear selections if we have a preselected resource - wait to see if it's available
+    if (!preselectedSeatId && !preselectedTableId) {
+      setSelectedSeatId(null)
+      setSelectedSeatIds([])
+      setSelectedGroupTableId(null)
+    }
 
     try {
       const startAtLocal = new Date(`${date}T${startTime}`)
@@ -207,6 +220,23 @@ export function VenueBookingWidget({
       setAvailableGroupTables(data.availableGroupTables || [])
       setUnavailableGroupTables(data.unavailableGroupTables || [])
       setUnavailableSeatIds(new Set(data.unavailableSeatIds || []))
+
+      // Auto-select preselected seat/table if available
+      if (preselectedSeatId) {
+        const preselectedSeat = (data.availableSeats || []).find((s: AvailableSeat) => s.id === preselectedSeatId)
+        if (preselectedSeat) {
+          setSelectedSeatId(preselectedSeatId)
+          setSeatCount(1) // Individual seat selection
+          showToast("Pre-selected seat from QR code", "success")
+        }
+      } else if (preselectedTableId) {
+        const preselectedTable = (data.availableGroupTables || []).find((t: AvailableGroupTable) => t.id === preselectedTableId)
+        if (preselectedTable) {
+          setSelectedGroupTableId(preselectedTableId)
+          setSeatCount(preselectedTable.seatCount)
+          showToast("Pre-selected table from QR code", "success")
+        }
+      }
     } catch (err) {
       console.error("Error checking availability:", err)
       setError("Something went wrong while checking availability.")
@@ -219,7 +249,7 @@ export function VenueBookingWidget({
     } finally {
       setIsLoadingAvailability(false)
     }
-  }, [date, startTime, durationHours, venueId, seatCount])
+  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast])
 
   // Track if we've initialized date/time to prevent re-initialization
   const hasInitialized = useRef(false)
@@ -281,8 +311,8 @@ export function VenueBookingWidget({
       setStartTime(`${hh}:${min}`)
       hasInitialized.current = true
       
-      // Auto-trigger availability check after setting date/time (only for default initialization, not URL params)
-      // Use a small delay to ensure state is updated
+      // Auto-trigger availability check after setting date/time
+      // Also trigger if we have preselected resource from QR code
       setTimeout(() => {
         if (!hasAutoChecked.current && !searchParams.get("booking")) {
           hasAutoChecked.current = true
@@ -290,7 +320,7 @@ export function VenueBookingWidget({
         }
       }, 150)
     }
-  }, [searchParams, router])
+  }, [searchParams, router, preselectedSeatId, preselectedTableId])
 
   // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {

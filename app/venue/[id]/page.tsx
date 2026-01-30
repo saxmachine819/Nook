@@ -327,8 +327,45 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
           </div>
         </div>
 
-        {/* Booking card */}
+        {/* Right column: deal (when two-column) + booking */}
         <div className="space-y-4 lg:pt-[140px]">
+          {/* Deal at top of right column on lg+ (avoids overlap with name/address on medium widths) */}
+          {(venue as any).deals?.[0] && (() => {
+            const primaryDeal = (venue as any).deals[0]
+            const eligibility = primaryDeal.eligibilityJson || {}
+            const eligibilitySummary = formatEligibilitySummary(primaryDeal)
+            const dealDescription = generateDescription(primaryDeal.type, eligibility)
+            return (
+              <div className="hidden lg:block">
+                <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm">
+                  <CardContent className="p-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex-shrink-0 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap">
+                          Deal
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold tracking-tight text-foreground leading-tight line-clamp-1">
+                            {primaryDeal.title}
+                          </h3>
+                          {eligibilitySummary && (
+                            <p className="text-[10px] font-medium text-primary/90 mt-0.5 line-clamp-1">
+                              {eligibilitySummary}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-primary/10 bg-background/60 p-2">
+                        <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-2">
+                          {primaryDeal.description || dealDescription}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )
+          })()}
           <Card className="overflow-hidden">
             <CardHeader className="pb-4">
               <div className="flex items-start justify-between gap-4">

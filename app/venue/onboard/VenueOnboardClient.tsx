@@ -118,7 +118,8 @@ export function VenueOnboardClient() {
     script.async = true
     script.defer = true
     script.onload = () => {
-      setIsLoadingScript(false)
+      // Yield so window.google is set before we mark script ready (avoids init race)
+      setTimeout(() => setIsLoadingScript(false), 0)
     }
     script.onerror = () => {
       console.error("Failed to load Google Maps script")
@@ -127,12 +128,19 @@ export function VenueOnboardClient() {
     document.head.appendChild(script)
   }, [apiKey])
 
-  // Initialize Places Autocomplete
+  // Initialize Places Autocomplete (retry briefly if script just loaded and google isn't ready yet)
+  const [autocompleteRetry, setAutocompleteRetry] = useState(0)
   useEffect(() => {
-    if (!autocompleteInputRef.current || isLoadingScript || !window.google?.maps?.places) {
+    if (!autocompleteInputRef.current || isLoadingScript) {
       return
     }
-
+    if (!window.google?.maps?.places) {
+      if (apiKey && autocompleteRetry < 3) {
+        const t = setTimeout(() => setAutocompleteRetry((n) => n + 1), 300)
+        return () => clearTimeout(t)
+      }
+      return
+    }
     if (autocompleteRef.current) {
       return
     }
@@ -226,7 +234,7 @@ export function VenueOnboardClient() {
         }
       }
     })
-  }, [isLoadingScript, showToast])
+  }, [apiKey, isLoadingScript, showToast, autocompleteRetry])
 
   const addTable = () => {
     const defaultPrice = 0
@@ -611,30 +619,35 @@ export function VenueOnboardClient() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {apiKey && (
-                <div>
-                  <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                    Find on Google <span className="text-muted-foreground">(optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      id="place-search"
-                      ref={autocompleteInputRef}
-                      type="text"
-                      disabled={isLoadingScript || isLoadingPlaceDetails}
-                      placeholder={
-                        isLoadingScript
+              <div>
+                <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
+                  Find on Google <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    id="place-search"
+                    ref={autocompleteInputRef}
+                    type="text"
+                    disabled={!apiKey || isLoadingScript || isLoadingPlaceDetails}
+                    placeholder={
+                      !apiKey
+                        ? "Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable"
+                        : isLoadingScript
                           ? "Loading..."
                           : isLoadingPlaceDetails
                             ? "Loading place details..."
                             : "Search for your venue or address"
-                      }
-                      className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    />
-                  </div>
+                    }
+                    className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  />
                 </div>
-              )}
+                {!apiKey && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env and enable Maps JavaScript API and Places API in Google Cloud.
+                  </p>
+                )}
+              </div>
 
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium">

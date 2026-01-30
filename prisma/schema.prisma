@@ -21,6 +21,12 @@ enum OnboardingStatus {
   REJECTED
 }
 
+enum QRAssetStatus {
+  UNREGISTERED
+  ACTIVE
+  RETIRED
+}
+
 model Venue {
   id              String        @id @default(cuid())
   name            String
@@ -53,6 +59,7 @@ model Venue {
   favoriteVenues  FavoriteVenue[]
   favoriteTables  FavoriteTable[]
   favoriteSeats   FavoriteSeat[]
+  qrAssets        QRAsset[]
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?
@@ -297,4 +304,24 @@ model FavoriteSeat {
   @@unique([userId, seatId])
   @@index([userId])
   @@map("favorite_seats")
+}
+
+model QRAsset {
+  id           String         @id @default(uuid())
+  token        String         @unique
+  status       QRAssetStatus  @default(UNREGISTERED)
+  batchId      String?
+  venueId      String?
+  resourceType String?        // 'seat' | 'table' | 'area'
+  resourceId   String?        // Foreign key to seat/table or area identifier
+  activatedAt  DateTime?
+  retiredAt    DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  venue        Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+
+  @@index([venueId])
+  @@index([status])
+  @@index([batchId])
+  @@map("qr_assets")
 }
