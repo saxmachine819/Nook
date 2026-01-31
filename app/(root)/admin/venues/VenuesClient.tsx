@@ -43,7 +43,7 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
 
   // Update search query in URL
   const updateSearch = (query: string) => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(searchParams?.toString() ?? '')
     if (query.trim()) {
       params.set("search", query.trim())
     } else {

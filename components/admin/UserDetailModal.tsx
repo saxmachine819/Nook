@@ -24,7 +24,7 @@ interface UserDetail {
   id: string
   name: string | null
   email: string | null
-  createdAt: Date | string
+  createdAt: Date | string | null
   isAdmin: boolean
   venues: Array<{
     id: string
@@ -178,7 +178,7 @@ export function UserDetailModal({ userId, open, onOpenChange }: UserDetailModalP
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      Joined: {formatDate(userDetail.createdAt)}
+                      Joined: {userDetail.createdAt ? formatDate(userDetail.createdAt) : "Unknown"}
                     </div>
                     {userDetail.isAdmin && (
                       <div>

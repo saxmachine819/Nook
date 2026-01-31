@@ -24,8 +24,8 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
   const router = useRouter()
 
   const eligibility = deal?.eligibilityJson || {}
-  const eligibilitySummary = deal ? formatEligibilitySummary(deal) : null
-  const dealDescription = deal ? generateDescription(deal.type, eligibility) : null
+  const eligibilitySummary = deal ? formatEligibilitySummary(deal as any) : null
+  const dealDescription = deal ? generateDescription(deal.type as any, eligibility) : null
 
   return (
     <div className="relative">

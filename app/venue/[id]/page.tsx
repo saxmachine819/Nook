@@ -95,7 +95,9 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     const userId = session.user.id
     const venueId = venue.id
     const tableIds = venue.tables.map((t) => t.id)
-    const seatIds = venue.tables.flatMap((t) => t.seats.map((s) => s.id))
+    const seatIds = (
+      venue.tables as unknown as Array<{ id: string; seats: { id: string }[] }>
+    ).flatMap((t) => t.seats.map((s) => s.id))
 
     const [venueFav, tableFavs, seatFavs] = await Promise.all([
       prisma.favoriteVenue.findUnique({
@@ -135,33 +137,34 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   if (!venue.tables) {
     venue.tables = []
   }
-  venue.tables = venue.tables.map(table => ({
+  ;(venue as any).tables = venue.tables.map((table: any) => ({
     ...table,
-    seats: table.seats || []
+    seats: table.seats || [],
   }))
 
   // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
   const capacity = venue.tables.reduce((sum, table) => {
-    if (table.seats.length > 0) {
-      return sum + table.seats.length
+    const seats = (table as any).seats
+    if (seats?.length > 0) {
+      return sum + seats.length
     }
     // Fallback for older venues without Seat records
-    return sum + (table.seatCount || 0)
+    return sum + ((table as any).seatCount || 0)
   }, 0)
   
   // Calculate price range based on booking modes
   // Min: cheapest individual seat price
   // Max: most expensive full table price (total, not per seat)
-  const groupTables = venue.tables.filter(t => {
-    const mode = (t as any).bookingMode
+  const groupTables = venue.tables.filter((t: any) => {
+    const mode = t.bookingMode
     return mode === "group" || mode === null || mode === undefined
   })
-  const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
+  const individualTables = venue.tables.filter((t: any) => t.bookingMode === "individual")
   
   // Min price: cheapest individual seat
   let minPrice = venue.hourlySeatPrice || 0
   if (individualTables.length > 0) {
-    const individualSeats = individualTables.flatMap(t => t.seats)
+    const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
     const seatPrices = individualSeats
       .map(seat => seat.pricePerHour)
       .filter(price => price && price > 0)
@@ -183,7 +186,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   
   // If no group tables, max should be the most expensive individual seat
   if (groupTables.length === 0 && individualTables.length > 0) {
-    const individualSeats = individualTables.flatMap(t => t.seats)
+    const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
     const seatPrices = individualSeats
       .map(seat => seat.pricePerHour)
       .filter(price => price && price > 0)
@@ -197,7 +200,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     const perSeatPrices = groupTables
       .map(t => {
         const tablePrice = (t as any).tablePricePerHour
-        const seatCount = t.seats.length
+        const seatCount = (t as any).seats?.length ?? 0
         if (tablePrice && tablePrice > 0 && seatCount > 0) {
           return tablePrice / seatCount
         }
@@ -267,7 +270,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     // Fallback to table / seat images (if present) so the page still feels alive
     for (const t of venue.tables) {
       safeStringArray((t as any).imageUrls).forEach((u) => images.add(u))
-      for (const s of t.seats ?? []) {
+      for (const s of (t as any).seats ?? []) {
         safeStringArray((s as any).imageUrls).forEach((u) => images.add(u))
       }
       if (images.size >= 8) break

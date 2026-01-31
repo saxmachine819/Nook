@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        id: "desc",
       },
     })
 
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
         id: user.id,
         name: user.name,
         email: user.email,
-        createdAt: user.createdAt,
+        createdAt: null as Date | null, // User model doesn't have createdAt
         isAdmin: isAdmin(user),
         venuesOwnedCount,
         reservationsCount,

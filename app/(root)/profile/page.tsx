@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import { useSession, signIn, signOut } from "next-auth/react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -37,11 +38,11 @@ interface Venue {
   thumbnail: string | null
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const callbackUrl = searchParams.get("callbackUrl")
+  const callbackUrl = searchParams?.get("callbackUrl")
   const [venues, setVenues] = useState<Venue[]>([])
   const [loadingVenues, setLoadingVenues] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -354,5 +355,19 @@ export default function ProfilePage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex items-center justify-center py-12">
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   )
 }

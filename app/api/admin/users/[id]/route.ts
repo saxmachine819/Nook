@@ -85,7 +85,7 @@ export async function GET(
           id: user.id,
           name: user.name,
           email: user.email,
-          createdAt: user.createdAt,
+          createdAt: null as Date | null, // User model doesn't have createdAt
           isAdmin: isAdmin(user),
           venues: user.venues,
           reservations,

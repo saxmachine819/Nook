@@ -83,7 +83,7 @@ export function VenueBookingWidget({
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
 
   // Get initial seat count from URL params if available
-  const initialSeatCountFromUrl = searchParams.get("seats")
+  const initialSeatCountFromUrl = searchParams?.get("seats")
   const parsedInitialSeatCount = initialSeatCountFromUrl 
     ? parseInt(initialSeatCountFromUrl, 10) 
     : null
@@ -92,8 +92,8 @@ export function VenueBookingWidget({
     : null
 
   // Get preselected resource from QR code scan
-  const resourceTypeFromUrl = searchParams.get("resourceType")
-  const resourceIdFromUrl = searchParams.get("resourceId")
+  const resourceTypeFromUrl = searchParams?.get("resourceType")
+  const resourceIdFromUrl = searchParams?.get("resourceId")
 
   // #region agent log
   useEffect(() => {
@@ -291,7 +291,7 @@ export function VenueBookingWidget({
 
   // Restore booking data from URL params if present (after sign-in)
   useEffect(() => {
-    const bookingParam = searchParams.get("booking")
+    const bookingParam = searchParams?.get("booking")
     if (bookingParam) {
       try {
         const bookingData = JSON.parse(decodeURIComponent(bookingParam))
@@ -342,7 +342,7 @@ export function VenueBookingWidget({
       // Auto-trigger availability check after setting date/time
       // Also trigger if we have preselected resource from QR code
       setTimeout(() => {
-        if (!hasAutoChecked.current && !searchParams.get("booking")) {
+        if (!hasAutoChecked.current && !searchParams?.get("booking")) {
           hasAutoChecked.current = true
           handleCheckAvailabilityRef.current()
         }
@@ -1425,7 +1425,7 @@ export function VenueBookingWidget({
         }}
         onSignInSuccess={retryReservation}
         description="Sign in to complete your reservation."
-        callbackUrl={pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "")}
+        callbackUrl={pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")}
       />
 
       <ImageGalleryModal

@@ -199,10 +199,11 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     }
     
     // Priority 2: Google hours (openingHoursJson) - parse if available
-    if (venue.openingHoursJson?.periods && Array.isArray(venue.openingHoursJson.periods) && venue.openingHoursJson.periods.length > 0) {
+    const jsonHours = venue.openingHoursJson as { periods?: unknown[] } | null | undefined
+    if (jsonHours?.periods && Array.isArray(jsonHours.periods) && jsonHours.periods.length > 0) {
       try {
         const hoursData = parseGooglePeriodsToVenueHours(
-          venue.openingHoursJson.periods,
+          jsonHours.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
           venue.id,
           "google"
         )

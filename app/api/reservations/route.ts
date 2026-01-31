@@ -164,7 +164,13 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       }
-    } else if (openingHoursJson?.periods && Array.isArray(openingHoursJson.periods) && openingHoursJson.periods.length > 0) {
+    } else if (
+      openingHoursJson &&
+      typeof openingHoursJson === "object" &&
+      "periods" in openingHoursJson &&
+      Array.isArray((openingHoursJson as { periods?: unknown[] }).periods) &&
+      (openingHoursJson as { periods: unknown[] }).periods.length > 0
+    ) {
       // Fallback to JSON hours if VenueHours not available but JSON exists
       const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, null, openingHoursJson)
       if (!hoursCheck.isValid) {
