@@ -118,9 +118,9 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
     const icsContent = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Nook//Reservation//EN",
+      "PRODID:-//Nooc//Reservation//EN",
       "BEGIN:VEVENT",
-      `UID:${reservation.id}@nook`,
+      `UID:${reservation.id}@nooc`,
       `DTSTART:${formatICSDate(start)}`,
       `DTEND:${formatICSDate(end)}`,
       `SUMMARY:Reservation at ${reservation.venue.name}`,

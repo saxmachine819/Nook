@@ -13,7 +13,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Nook - Reserve calm workspaces by the hour",
+  title: "Nooc - Reserve calm workspaces by the hour",
   description: "Reserve a seat by the hour in calm, professional public environments.",
 }
 

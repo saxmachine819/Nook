@@ -86,24 +86,24 @@ function escapeICSString(str: string): string {
 }
 
 function buildICS(res: ReservationForConfirmation): string {
-  const uid = `nook-reservation-${res.id}@nook.app`
+  const uid = `nooc-reservation-${res.id}@nooc.app`
   const dtstamp = toICSDateUTC(new Date().toISOString())
   const dtstart = toICSDateUTC(res.startAt)
   const dtend = toICSDateUTC(res.endAt)
 
-  const summary = escapeICSString(`Nook: Reservation @ ${res.venue.name}`)
+  const summary = escapeICSString(`Nooc: Reservation @ ${res.venue.name}`)
   const location = res.venue.address ? escapeICSString(res.venue.address) : ""
   const seatText = `${res.seatCount} seat${res.seatCount > 1 ? "s" : ""}`
 
   const rules = res.venue.rulesText
     ? `\\n\\nHouse rules:\\n${escapeICSString(res.venue.rulesText)}`
     : ""
-  const description = escapeICSString(`Reserved ${seatText} via Nook.`) + rules
+  const description = escapeICSString(`Reserved ${seatText} via Nooc.`) + rules
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Nook//Reservation//EN",
+    "PRODID:-//Nooc//Reservation//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -160,12 +160,12 @@ export function BookingConfirmationModal({
     const estimated = pricePerSeatPerHour * hours * reservation.seatCount
 
     const googleUrl = (() => {
-      const text = `Nook: Reservation @ ${reservation.venue.name}`
+      const text = `Nooc: Reservation @ ${reservation.venue.name}`
       const dates = `${toGoogleCalendarDateUTC(reservation.startAt)}/${toGoogleCalendarDateUTC(
         reservation.endAt
       )}`
       const detailsParts = [
-        `Reserved ${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} via Nook.`,
+        `Reserved ${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} via Nooc.`,
         reservation.venue.rulesText ? `\n\nHouse rules:\n${reservation.venue.rulesText}` : "",
       ].filter(Boolean)
       const details = detailsParts.join("")
@@ -299,7 +299,7 @@ export function BookingConfirmationModal({
                   </a>
                 </Button>
                 <Button asChild variant="outline">
-                  <a href={computed.icsDataUrl} download={`nook-reservation-${reservation.id}.ics`}>
+                  <a href={computed.icsDataUrl} download={`nooc-reservation-${reservation.id}.ics`}>
                     Apple Calendar
                   </a>
                 </Button>

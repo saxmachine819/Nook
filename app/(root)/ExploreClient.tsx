@@ -64,7 +64,7 @@ function normalizeVenue(v: Record<string, unknown>): Venue {
   }
 }
 
-const FILTER_STORAGE_KEY = "nook_explore_filters"
+const FILTER_STORAGE_KEY = "nooc_explore_filters"
 
 // Helper function to load filters from localStorage (with SSR guard)
 function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState } {

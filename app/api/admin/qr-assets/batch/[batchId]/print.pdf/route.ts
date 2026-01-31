@@ -147,7 +147,7 @@ export async function GET(
       )
     )
 
-    const fileName = `nook-qr-batch-${encodeURIComponent(batchId)}.pdf`
+    const fileName = `nooc-qr-batch-${encodeURIComponent(batchId)}.pdf`
     const pdfBuffer = await renderPdfBuffer({ svgs, fileName })
 
     return new NextResponse(pdfBuffer, {

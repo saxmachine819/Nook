@@ -20,7 +20,7 @@ export function UnregisteredQRPage({ token, canRegister }: UnregisteredQRPagePro
           <CardHeader>
             <div className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              <CardTitle>This Nook QR hasn't been set up yet</CardTitle>
+              <CardTitle>This Nooc QR hasn't been set up yet</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">

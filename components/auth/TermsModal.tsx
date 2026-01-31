@@ -12,7 +12,7 @@ import {
 const TERMS_CONTENT = (
   <>
     <p className="mb-4">
-      By creating an account and using Nook, you agree to the following:
+      By creating an account and using Nooc, you agree to the following:
     </p>
 
     <h3 className="font-semibold mt-4 mb-2">Reservations & Payments</h3>
@@ -31,15 +31,15 @@ const TERMS_CONTENT = (
         provide a comparable seat.
       </li>
       <li>
-        If the issue cannot be resolved, you may report it to Nook for review.
+        If the issue cannot be resolved, you may report it to Nooc for review.
         Refunds or credits are not guaranteed and are handled case-by-case.
       </li>
     </ul>
 
     <h3 className="font-semibold mt-4 mb-2">Venue Expectations</h3>
     <p className="mb-4">
-      Venues are expected to clearly identify Nook seats and make reasonable
-      efforts to honor reservations. Nook does not control venue staff or
+      Venues are expected to clearly identify Nooc seats and make reasonable
+      efforts to honor reservations. Nooc does not control venue staff or
       operations.
     </p>
 
@@ -57,14 +57,14 @@ const TERMS_CONTENT = (
 
     <h3 className="font-semibold mt-4 mb-2">Platform Disclaimer</h3>
     <p className="mb-4">
-      Nook facilitates reservations but does not own or operate venues. Nook is
+      Nooc facilitates reservations but does not own or operate venues. Nooc is
       not responsible for lost items, venue disputes, or seating issues beyond
       reasonable review.
     </p>
 
     <p className="text-sm text-muted-foreground mt-4">
       By checking &quot;I Agree&quot;, you confirm that you have read and accept
-      Nook&apos;s full Terms & Conditions.
+      Nooc&apos;s full Terms & Conditions.
     </p>
   </>
 )
@@ -81,7 +81,7 @@ export function TermsModal({ trigger }: TermsModalProps) {
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Nook – User Agreement</DialogTitle>
+          <DialogTitle>Nooc – User Agreement</DialogTitle>
         </DialogHeader>
         <div className="overflow-y-auto pr-2 text-sm">{TERMS_CONTENT}</div>
       </DialogContent>

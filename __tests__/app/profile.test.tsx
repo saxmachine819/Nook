@@ -85,12 +85,12 @@ describe('ProfilePage', () => {
 
       // Wait for venues to load
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nook')).toBeInTheDocument()
+        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
       })
 
       expect(
         screen.getByText(
-          'If you manage a café or hotel lobby with workspace seating, you can request to be added to Nook.'
+          'If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.'
         )
       ).toBeInTheDocument()
 
@@ -135,7 +135,7 @@ describe('ProfilePage', () => {
 
       // Should show empty state after error
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nook')).toBeInTheDocument()
+        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
       })
     })
 
@@ -150,7 +150,7 @@ describe('ProfilePage', () => {
 
       // Should show empty state after error
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nook')).toBeInTheDocument()
+        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
       })
     })
 
@@ -199,7 +199,7 @@ describe('ProfilePage', () => {
 
       // Wait for venues to load
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nook')).toBeInTheDocument()
+        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
       })
 
       // Admin button should not be present

@@ -371,7 +371,7 @@ export function MapboxMap({
       map.addControl(
         new mapboxgl.AttributionControl({
           compact: true,
-          customAttribution: "© Nook",
+          customAttribution: "© Nooc",
         })
       )
 

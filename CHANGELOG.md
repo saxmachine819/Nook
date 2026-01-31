@@ -9,7 +9,7 @@
 - **Public scan**: `GET /q/[token]` — invalid / unregistered / active / retired handling; active QRs redirect with preselection; scan events logged.
 - **Registration**: Protected `/q/[token]/register` and `POST /api/qr-assets/assign`; resource type (seat/table) and booking-mode–aware options (group tables only for table assignment). See `QR_REGISTRATION_TESTING.md`.
 - **Admin controls**: On active QR scan, venue admins see Reassign + Retire; `POST /api/qr-assets/reassign`, `POST /api/qr-assets/retire`. See `QR_ADMIN_CONTROLS_TESTING.md`.
-- **Sticker SVG**: `GET /api/qr-assets/[token]/sticker.svg` — print-ready SVG with Nook logo, top/bottom text, high error correction. Venue dashboard QR stickers page: `/venue/dashboard/[id]/qr-stickers`.
+- **Sticker SVG**: `GET /api/qr-assets/[token]/sticker.svg` — print-ready SVG with Nooc logo, top/bottom text, high error correction. Venue dashboard QR stickers page: `/venue/dashboard/[id]/qr-stickers`.
 - **Batch PDF**: Admin-only `GET /api/admin/qr-assets/batch/[batchId]/print.pdf`; internal admin page `/admin/qr-assets/batch/[batchId]`. See `QR_BATCH_PDF_EXPORT.md`.
 - **Utilities**: `lib/qr-asset-utils.ts`, `lib/qr-logo-utils.ts`, `lib/qr-sticker-generator.ts`; scripts: `create-single-qr.ts`, `create-test-qr.ts`, `verify-qr-assets.ts`, `test-batch-create.sh`.
 

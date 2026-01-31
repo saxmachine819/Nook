@@ -63,7 +63,7 @@ VALUES (gen_random_uuid(), 'TEST-QR-2025', 'UNREGISTERED', NOW(), NOW());
 #### Test 1.1: Public Scan - Not Logged In
 - **URL:** `http://localhost:3000/q/TEST-QR-2025`
 - **Expected:**
-  - ✅ Shows "This Nook QR hasn't been set up yet" page
+  - ✅ Shows "This Nooc QR hasn't been set up yet" page
   - ✅ "Log in to register" button visible
   - ✅ "Register this QR code" button NOT visible
 
@@ -71,7 +71,7 @@ VALUES (gen_random_uuid(), 'TEST-QR-2025', 'UNREGISTERED', NOW(), NOW());
 - **URL:** `http://localhost:3000/q/TEST-QR-2025`
 - **Setup:** Log in as user who doesn't own any venues
 - **Expected:**
-  - ✅ Shows "This Nook QR hasn't been set up yet" page
+  - ✅ Shows "This Nooc QR hasn't been set up yet" page
   - ✅ "Log in to register" button visible
   - ✅ "Register this QR code" button NOT visible
 
@@ -79,7 +79,7 @@ VALUES (gen_random_uuid(), 'TEST-QR-2025', 'UNREGISTERED', NOW(), NOW());
 - **URL:** `http://localhost:3000/q/TEST-QR-2025`
 - **Setup:** Log in as user who owns at least one venue
 - **Expected:**
-  - ✅ Shows "This Nook QR hasn't been set up yet" page
+  - ✅ Shows "This Nooc QR hasn't been set up yet" page
   - ✅ "Register this QR code" button visible
   - ✅ Clicking button navigates to `/q/TEST-QR-2025/register`
 

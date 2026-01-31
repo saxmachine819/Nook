@@ -1,4 +1,4 @@
-# Nook MVP
+# Nooc MVP
 
 Reserve calm workspaces by the hour — Resy for workspaces.
 

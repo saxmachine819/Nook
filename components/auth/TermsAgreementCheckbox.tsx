@@ -10,7 +10,7 @@ interface TermsAgreementCheckboxProps {
   className?: string
 }
 
-const AGREEMENT_TEXT = 'By checking "I Agree", you confirm that you have read and accept Nook\'s full '
+const AGREEMENT_TEXT = 'By checking "I Agree", you confirm that you have read and accept Nooc\'s full '
 
 export function TermsAgreementCheckbox({
   checked,

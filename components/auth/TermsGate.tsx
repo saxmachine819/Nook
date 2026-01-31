@@ -47,7 +47,7 @@ export function TermsGate({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-6 shadow-sm">
         <h1 className="text-xl font-semibold">Accept Terms to Continue</h1>
         <p className="text-sm text-muted-foreground">
-          To use Nook, you must read and accept our Terms & Conditions.
+          To use Nooc, you must read and accept our Terms & Conditions.
         </p>
         <TermsAgreementCheckbox
           checked={agreed}

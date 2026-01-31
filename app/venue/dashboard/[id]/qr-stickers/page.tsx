@@ -69,7 +69,7 @@ export default async function QRStickersPage({ params }: QRStickersPageProps) {
                     </p>
                   </div>
                   <Button asChild size="sm" variant="outline">
-                    <a href={`/api/qr-assets/${asset.token}/sticker.svg`} download={`nook-sticker-${asset.token}.svg`}>
+                    <a href={`/api/qr-assets/${asset.token}/sticker.svg`} download={`nooc-sticker-${asset.token}.svg`}>
                       <Download className="mr-2 h-4 w-4" />
                       Download SVG
                     </a>

@@ -67,7 +67,7 @@ Visit: http://localhost:3000/q/test-unregistered-1
 ```
 
 **Expected Result:**
-- Shows "This Nook QR hasn't been set up yet" page
+- Shows "This Nooc QR hasn't been set up yet" page
 - Button: "Log in to register" (links to `/profile` with callback)
 - No "Register this QR code" button (user not logged in)
 

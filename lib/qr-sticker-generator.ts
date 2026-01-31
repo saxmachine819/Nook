@@ -13,7 +13,7 @@ interface StickerOptions {
  * Generates a print-ready QR code sticker SVG with embedded logo.
  * 
  * Layout:
- * - Top text: "This seat is reserved for Nook"
+ * - Top text: "This seat is reserved for Nooc"
  * - Center: QR code with logo overlay
  * - Bottom text: "Scan here to book"
  * 
@@ -95,7 +95,7 @@ export async function generateQRStickerSVG(options: StickerOptions): Promise<str
   <rect width="${stickerWidth}" height="${stickerHeight}" fill="${brandGreen}" rx="8"/>
   
   <!-- Top text -->
-  <text x="${stickerWidth / 2}" y="${padding + 36}" class="text-top">This seat is reserved for Nook</text>
+  <text x="${stickerWidth / 2}" y="${padding + 36}" class="text-top">This seat is reserved for Nooc</text>
   
   <!-- QR code container -->
   <g transform="translate(${padding + quietZone}, ${padding + textTopHeight + quietZone})">
@@ -117,7 +117,7 @@ export async function generateQRStickerSVG(options: StickerOptions): Promise<str
     <rect x="${qrSize / 2 - logoBgSize / 2}" y="${qrSize / 2 - logoBgSize / 2}" 
           width="${logoBgSize}" height="${logoBgSize}" 
           rx="14" fill="${brandGreen}" stroke="${white}" stroke-width="2"/>
-    <text x="${qrSize / 2}" y="${qrSize / 2 + 6}" class="logo-text">NOOK</text>
+    <text x="${qrSize / 2}" y="${qrSize / 2 + 6}" class="logo-text">NOOC</text>
     `}
   </g>
   
@@ -200,7 +200,7 @@ export async function generateQROnlySVG(options: QROnlyOptions): Promise<string>
     <rect x="${qrSize / 2 - logoBgSize / 2}" y="${qrSize / 2 - logoBgSize / 2}"
           width="${logoBgSize}" height="${logoBgSize}"
           rx="14" fill="${brandGreen}" stroke="${white}" stroke-width="2"/>
-    <text x="${qrSize / 2}" y="${qrSize / 2 + 6}" class="logo-text">NOOK</text>
+    <text x="${qrSize / 2}" y="${qrSize / 2 + 6}" class="logo-text">NOOC</text>
     `}
   </g>
 </svg>

@@ -1609,7 +1609,7 @@ export function VenueOpsConsoleClient({
                 <Button asChild variant="outline" size="sm">
                   <a
                     href={`/api/qr-assets/${printQRModal.token}/qr-only.svg`}
-                    download="nook-qr-only.svg"
+                    download="nooc-qr-only.svg"
                   >
                     Download QR only (SVG)
                   </a>
@@ -1617,7 +1617,7 @@ export function VenueOpsConsoleClient({
                 <Button asChild variant="outline" size="sm">
                   <a
                     href={`/api/qr-assets/${printQRModal.token}/sticker.svg`}
-                    download="nook-sticker.svg"
+                    download="nooc-sticker.svg"
                   >
                     Download full sticker (SVG)
                   </a>

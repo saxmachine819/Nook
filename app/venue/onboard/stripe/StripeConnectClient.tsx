@@ -38,10 +38,10 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
         <CardContent className="space-y-6">
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Customers book seats through Nook.
+              Customers book seats through Nooc.
             </p>
             <p className="text-sm text-muted-foreground">
-              Nook uses Stripe Connect to send your share of each booking automatically.
+              Nooc uses Stripe Connect to send your share of each booking automatically.
             </p>
             <p className="text-sm text-muted-foreground">
               You'll be able to see payouts and manage your account in Stripe.

@@ -270,7 +270,7 @@ export default function ProfilePage() {
               {loadingVenues
                 ? "Loading..."
                 : venues.length === 0
-                  ? "List your venue on Nook"
+                  ? "List your venue on Nooc"
                   : "Manage your venues from the dashboard"}
             </CardDescription>
           </CardHeader>
@@ -280,7 +280,7 @@ export default function ProfilePage() {
             ) : venues.length === 0 ? (
               <>
                 <p className="mb-4 text-sm text-muted-foreground">
-                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nook.
+                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.
                 </p>
                 <Button size="lg" asChild className="w-full">
                   <Link href="/venue/onboard">
