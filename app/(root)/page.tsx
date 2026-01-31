@@ -103,6 +103,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
     // Only show APPROVED venues in Explore
     whereClause.onboardingStatus = "APPROVED"
+    // Exclude soft-deleted venues; PAUSED venues still appear (show as temporarily unavailable)
+    whereClause.status = { not: "DELETED" }
 
     // Fetch venues from database (with optional search filter)
     let venues = await prisma.venue.findMany({

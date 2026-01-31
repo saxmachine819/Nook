@@ -32,6 +32,7 @@ export default async function CompleteSubmissionPage({
       state: true,
       ownerId: true,
       onboardingStatus: true,
+      venueTermsAcceptedAt: true,
     },
   })
 
@@ -45,6 +46,10 @@ export default async function CompleteSubmissionPage({
 
   if (venue.onboardingStatus !== "DRAFT") {
     redirect("/venue/onboard?error=invalid_status")
+  }
+
+  if (venue.venueTermsAcceptedAt == null) {
+    redirect(`/venue/onboard/terms?venueId=${venueId}`)
   }
 
   // User is authenticated and venue is valid, render the client component

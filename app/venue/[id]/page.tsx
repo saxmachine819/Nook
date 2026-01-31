@@ -69,6 +69,11 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     notFound()
   }
 
+  // Soft-deleted venues are not viewable (404)
+  if ((venue as any).status === "DELETED" || (venue as any).deletedAt) {
+    notFound()
+  }
+
   // Check if venue is approved - if not, only owner/admin can view
   const isOwner = session?.user?.id === venue.ownerId
   const userIsAdmin = session?.user ? isAdmin(session.user) : false

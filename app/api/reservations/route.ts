@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { isReservationWithinHours } from "@/lib/venue-hours"
+import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
 
 export async function POST(request: Request) {
   try {
@@ -81,13 +82,13 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify user exists in database
-    const userExists = await prisma.user.findUnique({
+    // Verify user exists in database and has accepted terms
+    const userRecord = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true },
+      select: { id: true, email: true, termsAcceptedAt: true },
     })
 
-    if (!userExists) {
+    if (!userRecord) {
       console.error("❌ User not found in database:", {
         userId: session.user.id,
         email: session.user.email,
@@ -95,6 +96,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "User account not found. Please sign out and sign in again." },
         { status: 401 }
+      )
+    }
+
+    if (!userRecord.termsAcceptedAt) {
+      return NextResponse.json(
+        { error: "You must accept the Terms & Conditions to make a reservation." },
+        { status: 403 }
       )
     }
 
@@ -123,6 +131,22 @@ export async function POST(request: Request) {
         { error: "This venue is not available for booking." },
         { status: 403 }
       )
+    }
+
+    // Enforce venue/owner status (ACTIVE, not deleted/paused; owner not deleted)
+    try {
+      await canBookVenue(venueId, {
+        userId: session.user.id,
+        timeRange: { startAt: parsedStart, endAt: parsedEnd },
+      })
+    } catch (err) {
+      if (err instanceof BookingNotAllowedError) {
+        return NextResponse.json(
+          { error: err.publicMessage ?? err.message },
+          { status: 403 }
+        )
+      }
+      throw err
     }
 
     // Check if reservation is within venue hours (only if hours data exists and is complete)
@@ -183,6 +207,13 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Table does not belong to this venue." },
           { status: 400 }
+        )
+      }
+
+      if (table.isActive === false) {
+        return NextResponse.json(
+          { error: "This table is no longer available for booking." },
+          { status: 403 }
         )
       }
 
@@ -305,12 +336,18 @@ export async function POST(request: Request) {
         )
       }
 
-      // Validate all seats belong to the same venue
+      // Validate all seats belong to the same venue and are active
       for (const seat of seats) {
         if (seat.table.venueId !== venueId) {
           return NextResponse.json(
             { error: "One or more seats do not belong to this venue." },
             { status: 400 }
+          )
+        }
+        if (seat.isActive === false || seat.table.isActive === false) {
+          return NextResponse.json(
+            { error: "One or more seats are no longer available for booking." },
+            { status: 403 }
           )
         }
       }

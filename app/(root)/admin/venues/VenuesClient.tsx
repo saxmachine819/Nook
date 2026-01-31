@@ -13,6 +13,7 @@ interface VenueListItem {
   id: string
   name: string
   address: string | null
+  status?: "ACTIVE" | "PAUSED" | "DELETED"
   onboardingStatus: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED"
   createdAt: Date | string
   ownerEmail: string | null
@@ -88,7 +89,7 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
     updateSearch("")
   }
 
-  const getStatusBadgeClass = (status: string) => {
+  const getOnboardingStatusBadgeClass = (status: string) => {
     switch (status) {
       case "APPROVED":
         return "bg-green-100 text-green-800"
@@ -183,29 +184,38 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
           </div>
 
           {/* Venue Rows */}
-          {venues.map((venue) => (
-            <Card key={venue.id} className="transition-colors">
+          {venues.map((venue) => {
+            const isDeleted = venue.status === "DELETED"
+            return (
+            <Card key={venue.id} className={cn("transition-colors", isDeleted && "opacity-70 bg-muted/30")}>
               <CardContent className="p-4">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-6 md:items-center">
                   {/* Name */}
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="font-medium">{venue.name}</p>
+                      <p className={cn("font-medium", isDeleted && "text-muted-foreground line-through")}>
+                        {venue.name}
+                      </p>
                     </div>
                   </div>
 
                   {/* Address */}
-                  <div className="text-sm text-muted-foreground">
+                  <div className={cn("text-sm text-muted-foreground", isDeleted && "line-through")}>
                     {venue.address || "No address"}
                   </div>
 
                   {/* Status */}
-                  <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isDeleted && (
+                      <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">
+                        Deleted
+                      </span>
+                    )}
                     <span
                       className={cn(
                         "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        getStatusBadgeClass(venue.onboardingStatus)
+                        getOnboardingStatusBadgeClass(venue.onboardingStatus)
                       )}
                     >
                       {venue.onboardingStatus}
@@ -228,32 +238,39 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
 
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/venue/${venue.id}?returnTo=/admin/venues`} className="flex items-center justify-center">
-                        <Eye className="mr-2 h-4 w-4" />
-                        View
-                      </Link>
-                    </Button>
-                    <Button asChild variant="outline" size="sm">
-                      <Link href={`/venue/dashboard/${venue.id}/edit?returnTo=/admin/venues`} className="flex items-center justify-center">
-                        <Edit className="mr-2 h-4 w-4" />
-                        Edit
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setReassignDialog({ open: true, venue })}
-                      className="flex items-center justify-center"
-                    >
-                      <UserCog className="mr-2 h-4 w-4" />
-                      Reassign
-                    </Button>
+                    {!isDeleted && (
+                      <>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/venue/${venue.id}?returnTo=/admin/venues`} className="flex items-center justify-center">
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/venue/dashboard/${venue.id}/edit?returnTo=/admin/venues`} className="flex items-center justify-center">
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setReassignDialog({ open: true, venue })}
+                          className="flex items-center justify-center"
+                        >
+                          <UserCog className="mr-2 h-4 w-4" />
+                          Reassign
+                        </Button>
+                      </>
+                    )}
+                    {isDeleted && (
+                      <span className="text-xs text-muted-foreground">No actions</span>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
+          ); })}
         </div>
       </div>
 

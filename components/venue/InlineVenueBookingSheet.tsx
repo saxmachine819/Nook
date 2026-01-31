@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
+import { SignInModal } from "@/components/auth/SignInModal"
 
 interface InlineVenue {
   id: string
@@ -45,6 +46,13 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
   const [seats, setSeats] = useState<number>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [showSignInModal, setShowSignInModal] = useState(false)
+  const pendingReservationPayloadRef = useRef<{
+    venueId: string
+    startAt: string
+    endAt: string
+    seatCount: number
+  } | null>(null)
 
   // Initialize date to today
   useEffect(() => {
@@ -136,7 +144,16 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        // Handle PAST_TIME error code specifically
+        if (response.status === 401) {
+          pendingReservationPayloadRef.current = {
+            venueId: venue.id,
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+            seatCount: seats,
+          }
+          setShowSignInModal(true)
+          return
+        }
         if (data?.code === "PAST_TIME") {
           setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
         } else {
@@ -166,6 +183,44 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       setIsSubmitting(false)
     }
   }
+
+  const retryReservation = useCallback(async () => {
+    const payload = pendingReservationPayloadRef.current
+    if (!payload) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setSubmitError(data?.error || "Failed to create reservation.")
+        }
+        pendingReservationPayloadRef.current = null
+        return
+      }
+      pendingReservationPayloadRef.current = null
+      showToast("Reservation confirmed.", "success")
+      if (pathname === "/reservations") router.refresh()
+      setTimeout(() => {
+        setSelectedSlot(null)
+        setSubmitError(null)
+        setDate((prev) => prev)
+      }, 400)
+    } catch (error) {
+      console.error("Error creating reservation:", error)
+      setSubmitError("Something went wrong while creating your reservation.")
+      pendingReservationPayloadRef.current = null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [venue.id, pathname, router, showToast])
 
   const locationDisplay =
     venue.address ||
@@ -339,6 +394,16 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
           </div>
         </div>
       </div>
+
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={(open) => {
+          setShowSignInModal(open)
+          if (!open) pendingReservationPayloadRef.current = null
+        }}
+        onSignInSuccess={retryReservation}
+        description="Sign in to complete your reservation."
+      />
 
       {ToastComponent}
     </>

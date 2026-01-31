@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/components/auth/AuthProvider"
 import { ClientErrorBoundary } from "@/components/auth/ClientErrorBoundary"
+import { TermsGate } from "@/components/auth/TermsGate"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,7 +26,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <ClientErrorBoundary>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+          <TermsGate>{children}</TermsGate>
+        </AuthProvider>
         </ClientErrorBoundary>
       </body>
     </html>

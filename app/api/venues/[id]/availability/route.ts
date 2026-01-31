@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getOpenIntervalsFromVenueHours, isReservationWithinHours } from "@/lib/venue-hours"
+import { getVenueBookability } from "@/lib/booking-guard"
 
 type OpeningHoursPeriod = {
   open: { day: number; hour: number; minute: number }
@@ -182,10 +183,19 @@ export async function GET(
         return NextResponse.json({ error: "Venue not found." }, { status: 404 })
       }
 
-      // Calculate total capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+      const bookability = await getVenueBookability(venueId)
+      if (bookability.status === "DELETED") {
+        return NextResponse.json({ error: "Venue not found." }, { status: 404 })
+      }
+      const bookingDisabled = !bookability.canBook
+      const pauseMessage = bookability.pauseMessage ?? null
+
+      // Calculate total capacity: only active tables/seats; use actual Seat records if available, otherwise fall back to table.seatCount
       const totalCapacity = venue.tables.reduce((sum, table) => {
-        if (table.seats.length > 0) {
-          return sum + table.seats.length
+        if ((table as any).isActive === false) return sum
+        const activeSeats = table.seats.filter((s: any) => s.isActive !== false)
+        if (activeSeats.length > 0) {
+          return sum + activeSeats.length
         }
         // Fallback for older venues without Seat records
         return sum + (table.seatCount || 0)
@@ -199,6 +209,8 @@ export async function GET(
             availableSeatGroups: [],
             unavailableSeatIds: [],
             error: `This venue only has ${totalCapacity} seat${totalCapacity > 1 ? "s" : ""} available. Please select ${totalCapacity} or fewer seats.`,
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
@@ -215,6 +227,8 @@ export async function GET(
             availableSeats: [],
             unavailableSeatIds: [],
             error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours.",
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
@@ -318,6 +332,7 @@ export async function GET(
 
       console.log(`📊 Processing ${venue.tables.length} tables for venue ${venue.id}`)
       venue.tables.forEach((table) => {
+        if ((table as any).isActive === false) return
         const bookingMode = (table as any).bookingMode || "individual"
         const tablePricePerHour = (table as any).tablePricePerHour
         console.log(`📋 Table "${table.name || 'unnamed'}" (id: ${table.id}): bookingMode=${bookingMode}, tablePricePerHour=${tablePricePerHour}, seats=${table.seats.length}`)
@@ -339,6 +354,7 @@ export async function GET(
         const isCommunal = (table as any).isCommunal || false
 
         table.seats.forEach((seat) => {
+          if ((seat as any).isActive === false) return
           const seatImageUrls = Array.isArray(seat.imageUrls)
             ? seat.imageUrls
             : seat.imageUrls
@@ -382,6 +398,7 @@ export async function GET(
 
       console.log(`\n🔍 BUILDING GROUP TABLES - Processing ${venue.tables.length} tables`)
       venue.tables.forEach((table) => {
+        if ((table as any).isActive === false) return
         const bookingMode = (table as any).bookingMode || "individual"
         const tablePricePerHour = (table as any).tablePricePerHour
         const rawBookingMode = (table as any).bookingMode
@@ -577,6 +594,8 @@ export async function GET(
             availableGroupTables: availableGroupTablesFiltered,
             unavailableGroupTables,
             unavailableSeatIds: Array.from(unavailableSeatIds),
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
@@ -659,6 +678,8 @@ export async function GET(
           availableGroupTables: availableGroupTablesFiltered,
           unavailableGroupTables,
           unavailableSeatIds: Array.from(unavailableSeatIds),
+          bookingDisabled,
+          pauseMessage,
         },
         { status: 200 }
       )

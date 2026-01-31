@@ -27,6 +27,17 @@ enum QRAssetStatus {
   RETIRED
 }
 
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
+enum VenueStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+}
+
 model Venue {
   id              String        @id @default(cuid())
   name            String
@@ -45,12 +56,17 @@ model Venue {
   tags            String[]
   ownerId         String?
   onboardingStatus OnboardingStatus @default(DRAFT)
+  venueTermsAcceptedAt DateTime?
   submittedAt     DateTime?
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
   approvedByUserId String?
   rejectedByUserId String?
+  status           VenueStatus  @default(ACTIVE)
+  pausedAt         DateTime?
+  deletedAt       DateTime?
+  pauseMessage    String?
   reservations    Reservation[]
   tables          Table[]
   seatBlocks      SeatBlock[]
@@ -73,6 +89,7 @@ model Venue {
 
   @@index([ownerId])
   @@index([onboardingStatus])
+  @@index([status])
   @@map("venues")
 }
 
@@ -86,6 +103,7 @@ model Table {
   bookingMode     String        @default("individual") // "group" | "individual"
   tablePricePerHour Float?      // For group bookings
   isCommunal      Boolean       @default(false) // For communal spaces like bars
+  isActive        Boolean       @default(true)
   imageUrls        Json?
   directionsText  String?       // "Directions to your seat"
   reservations    Reservation[]
@@ -103,6 +121,7 @@ model Seat {
   label        String?
   position     Int?          // Position within table (1, 2, 3...) for adjacency checking
   pricePerHour Float
+  isActive     Boolean       @default(true)
   tags         Json?
   imageUrls    Json?
   createdAt    DateTime      @default(now())
@@ -116,22 +135,23 @@ model Seat {
 }
 
 model Reservation {
-  id        String   @id @default(cuid())
-  venueId   String
-  tableId   String?
-  seatId    String?
-  userId    String?
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  endAt     DateTime
-  seatCount Int      @default(1)
-  startAt   DateTime
-  seat      Seat?    @relation(fields: [seatId], references: [id])
-  table     Table?   @relation(fields: [tableId], references: [id])
-  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  dealRedemptions DealRedemption[]
+  id                 String   @id @default(cuid())
+  venueId            String
+  tableId            String?
+  seatId             String?
+  userId             String?
+  status             String   @default("active")
+  cancellationReason String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  endAt              DateTime
+  seatCount          Int      @default(1)
+  startAt            DateTime
+  seat               Seat?    @relation(fields: [seatId], references: [id])
+  table              Table?   @relation(fields: [tableId], references: [id])
+  venue              Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  dealRedemptions    DealRedemption[]
 
   @@map("reservations")
 }
@@ -185,23 +205,29 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name           String?
-  email          String?   @unique
-  emailVerified  DateTime?
-  image          String?
-  accounts       Account[]
-  sessions       Session[]
-  reservations   Reservation[]
-  venues         Venue[]
+  id               String     @id @default(cuid())
+  name             String?
+  email            String?    @unique
+  emailVerified    DateTime?
+  image            String?
+  status           UserStatus @default(ACTIVE)
+  termsAcceptedAt  DateTime?
+  deletedAt        DateTime?
+  deletionReason   String?
+  accounts         Account[]
+  sessions         Session[]
+  reservations     Reservation[]
+  venues           Venue[]
   createdSeatBlocks SeatBlock[]
-  dealRedemptions DealRedemption[]
-  favoriteVenues  FavoriteVenue[]
-  favoriteTables  FavoriteTable[]
-  favoriteSeats   FavoriteSeat[]
-  approvedVenues  Venue[]  @relation("ApprovedVenues")
-  rejectedVenues  Venue[]  @relation("RejectedVenues")
+  dealRedemptions  DealRedemption[]
+  favoriteVenues   FavoriteVenue[]
+  favoriteTables   FavoriteTable[]
+  favoriteSeats    FavoriteSeat[]
+  approvedVenues   Venue[]    @relation("ApprovedVenues")
+  rejectedVenues   Venue[]    @relation("RejectedVenues")
+  auditLogs        AuditLog[] @relation("AuditLogActor")
 
+  @@index([status])
   @@map("users")
 }
 
@@ -349,4 +375,20 @@ model QREvent {
   @@index([venueId, createdAt])
   @@index([eventType, createdAt])
   @@map("qr_events")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  actorUserId  String?
+  action       String
+  entityType   String
+  entityId     String?
+  metadata     Json?
+  actor        User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

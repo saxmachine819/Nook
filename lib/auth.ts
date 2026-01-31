@@ -20,7 +20,7 @@ if (!process.env.NEXTAUTH_URL) {
 }
 
 export const authOptions = {
-  debug: true, // Always debug for now
+  debug: false,
   trustHost: true, // Required for NextAuth v5
     adapter: PrismaAdapter(prisma) as any,
   providers: [
@@ -70,6 +70,7 @@ export const authOptions = {
         session.user.name = user.name
         session.user.email = user.email
         session.user.image = user.image
+        session.user.termsAcceptedAt = user.termsAcceptedAt
       }
       return session
     },

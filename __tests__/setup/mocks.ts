@@ -45,6 +45,10 @@ export function createMockPrisma() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    auditLog: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
     favoriteVenue: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -72,6 +76,12 @@ export function createMockPrisma() {
     $transaction: vi.fn((callback) => {
       // Mock transaction: execute callback with a mock transaction client
       const tx = {
+        user: { findUnique: vi.fn(), update: vi.fn() },
+        venue: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+        reservation: { findMany: vi.fn(), updateMany: vi.fn() },
+        table: { updateMany: vi.fn() },
+        seat: { updateMany: vi.fn() },
+        auditLog: { create: vi.fn() },
         favoriteVenue: {
           findUnique: vi.fn(),
           create: vi.fn(),

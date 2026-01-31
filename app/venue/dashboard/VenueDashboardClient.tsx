@@ -46,11 +46,21 @@ export function VenueDashboardClient() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
+          </p>
+        </div>
+        {!loading && (
+          <Button asChild className="shrink-0">
+            <Link href="/venue/onboard">
+              <Plus className="mr-2 h-4 w-4" />
+              Add venue
+            </Link>
+          </Button>
+        )}
       </div>
 
       {loading ? (

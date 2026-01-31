@@ -37,7 +37,10 @@ export async function GET() {
 
     const admin = isAdmin(session.user)
     const venues = await prisma.venue.findMany({
-      where: admin ? undefined : { ownerId: session.user.id },
+      where: {
+        status: { not: "DELETED" },
+        ...(admin ? {} : { ownerId: session.user.id }),
+      },
       select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true, onboardingStatus: true },
     })
 

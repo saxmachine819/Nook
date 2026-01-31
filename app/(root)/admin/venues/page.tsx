@@ -35,11 +35,12 @@ async function getVenues(searchQuery?: string) {
       },
     })
 
-    // Transform venues for response
+    // Transform venues for response (include status so admin can show deleted state)
     return venues.map((venue) => ({
       id: venue.id,
       name: venue.name,
       address: venue.address,
+      status: venue.status,
       onboardingStatus: venue.onboardingStatus,
       createdAt: venue.createdAt.toISOString(),
       ownerEmail: venue.owner?.email || null,

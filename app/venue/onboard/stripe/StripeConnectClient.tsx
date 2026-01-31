@@ -20,7 +20,7 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
   }
 
   const handleNext = () => {
-    router.push(`/venue/onboard/complete?venueId=${venueId}`)
+    router.push(`/venue/onboard/terms?venueId=${venueId}`)
   }
 
   return (

@@ -32,7 +32,12 @@ import {
   Download,
   XCircle,
   ChevronDown,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   isReservationActive,
@@ -56,6 +61,8 @@ interface VenueOpsConsoleClientProps {
   venue: {
     id: string
     name: string
+    status?: string
+    pauseMessage?: string | null
     openingHoursJson?: any
     tables: Array<{
       id: string
@@ -131,6 +138,16 @@ export function VenueOpsConsoleClient({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isTabVisible, setIsTabVisible] = useState(true)
   const refreshInFlightRef = useRef(false)
+  const [venueStatus, setVenueStatus] = useState<string>(venue.status ?? "ACTIVE")
+  const [venuePauseMessage, setVenuePauseMessage] = useState<string | null>(venue.pauseMessage ?? null)
+  const [pauseUnpauseLoading, setPauseUnpauseLoading] = useState(false)
+  const [pauseModalOpen, setPauseModalOpen] = useState(false)
+  const [pauseMessageInput, setPauseMessageInput] = useState("")
+  const [cancelFutureOnPause, setCancelFutureOnPause] = useState(false)
+  const [deleteVenueModalOpen, setDeleteVenueModalOpen] = useState(false)
+  const [deleteVenueConfirmation, setDeleteVenueConfirmation] = useState("")
+  const [deleteVenueLoading, setDeleteVenueLoading] = useState(false)
+  const [deleteVenueError, setDeleteVenueError] = useState<string | null>(null)
   
   // Refs for intersection observer (sticky header)
   const nowSectionRef = useRef<HTMLDivElement>(null)
@@ -221,6 +238,89 @@ export function VenueOpsConsoleClient({
     },
     [getTokenForResource, showToast, router]
   )
+
+  const handlePause = useCallback(async () => {
+    setPauseModalOpen(false)
+    setPauseUnpauseLoading(true)
+    try {
+      const res = await fetch(`/api/venues/${venue.id}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pauseMessage: pauseMessageInput.trim() || undefined,
+          cancelFutureReservations: cancelFutureOnPause,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to pause venue", "error")
+        return
+      }
+      setVenueStatus("PAUSED")
+      setVenuePauseMessage(data.venue?.pauseMessage ?? (pauseMessageInput.trim() || null))
+      if (cancelFutureOnPause) {
+        router.refresh()
+      }
+      showToast("Venue paused. New reservations are blocked.", "success")
+    } catch {
+      showToast("Failed to pause venue", "error")
+    } finally {
+      setPauseUnpauseLoading(false)
+    }
+  }, [venue.id, pauseMessageInput, cancelFutureOnPause, showToast, router])
+
+  const handleUnpause = useCallback(async () => {
+    setPauseUnpauseLoading(true)
+    try {
+      const res = await fetch(`/api/venues/${venue.id}/unpause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to resume venue", "error")
+        return
+      }
+      setVenueStatus("ACTIVE")
+      setVenuePauseMessage(null)
+      showToast("Venue is accepting reservations again.", "success")
+    } catch {
+      showToast("Failed to resume venue", "error")
+    } finally {
+      setPauseUnpauseLoading(false)
+    }
+  }, [venue.id, showToast])
+
+  const handleDeleteVenue = useCallback(async () => {
+    const expected = venue.name?.trim() || "DELETE"
+    if (deleteVenueConfirmation !== expected && deleteVenueConfirmation !== "DELETE") {
+      setDeleteVenueError(`Type "${venue.name}" or DELETE to confirm.`)
+      return
+    }
+    setDeleteVenueError(null)
+    setDeleteVenueLoading(true)
+    try {
+      const res = await fetch(`/api/venues/${venue.id}/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: deleteVenueConfirmation }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to delete venue", "error")
+        setDeleteVenueError(data.error || "Failed to delete venue")
+        return
+      }
+      showToast("Venue deleted.", "success")
+      setDeleteVenueModalOpen(false)
+      router.push("/venue/dashboard")
+    } catch {
+      showToast("Failed to delete venue", "error")
+      setDeleteVenueError("Something went wrong.")
+    } finally {
+      setDeleteVenueLoading(false)
+    }
+  }, [venue.id, venue.name, deleteVenueConfirmation, showToast, router])
 
   // Update current time every minute
   useEffect(() => {
@@ -368,12 +468,7 @@ export function VenueOpsConsoleClient({
     }
   }, [activeTab, categorizedReservations.upcoming.length, currentTime])
 
-  // Determine refresh interval based on active reservations (smart polling)
-  const refreshInterval = useMemo(() => {
-    const hasActiveReservations = upcomingSections.now.length > 0 || upcomingSections.today.length > 0
-    // More frequent when there are active reservations (15s), less frequent otherwise (30s)
-    return hasActiveReservations ? 15000 : 30000
-  }, [upcomingSections])
+  const refreshInterval = 60000 // Once per minute
 
   const handleRefresh = useCallback(async (mode: "manual" | "auto" | "focus" | "visible") => {
     if (refreshInFlightRef.current) return
@@ -449,11 +544,13 @@ export function VenueOpsConsoleClient({
     return () => window.removeEventListener("focus", handleFocus)
   }, [handleRefresh])
 
-  // Refresh when tab becomes visible
+  // Refresh only when tab transitions from hidden to visible (not on every render while visible)
+  const prevTabVisibleRef = useRef(isTabVisible)
   useEffect(() => {
-    if (isTabVisible) {
+    if (isTabVisible && !prevTabVisibleRef.current) {
       handleRefresh("visible")
     }
+    prevTabVisibleRef.current = isTabVisible
   }, [isTabVisible, handleRefresh])
 
   // Auto-refresh with smart polling and tab visibility handling
@@ -1231,6 +1328,64 @@ export function VenueOpsConsoleClient({
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {venue.status !== "DELETED" && (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                          venueStatus === "PAUSED"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-green-100 text-green-800"
+                        )}
+                      >
+                        {venueStatus === "PAUSED" ? "Paused" : "Accepting"}
+                      </span>
+                      {venueStatus === "PAUSED" && venuePauseMessage && (
+                        <span className="text-sm text-muted-foreground">{venuePauseMessage}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {venueStatus === "ACTIVE" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPauseMessageInput(venuePauseMessage ?? "")
+                            setCancelFutureOnPause(false)
+                            setPauseModalOpen(true)
+                          }}
+                          disabled={pauseUnpauseLoading}
+                        >
+                          <PauseCircle className="mr-1.5 h-3.5 w-3.5" />
+                          Pause reservations
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUnpause}
+                          disabled={pauseUnpauseLoading}
+                        >
+                          <PlayCircle className="mr-1.5 h-3.5 w-3.5" />
+                          Resume reservations
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setDeleteVenueModalOpen(true)
+                          setDeleteVenueConfirmation("")
+                          setDeleteVenueError(null)
+                        }}
+                      >
+                        Delete venue
+                      </Button>
+                    </div>
+                  </>
+                )}
                 <Button
                   variant="outline"
                   className="w-full justify-between"
@@ -1470,6 +1625,91 @@ export function VenueOpsConsoleClient({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Pause reservations modal */}
+      <Dialog open={pauseModalOpen} onOpenChange={setPauseModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pause reservations</DialogTitle>
+            <DialogDescription>
+              New bookings will be blocked. Optionally add a message shown to users and cancel future reservations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="pause-message">Pause message (optional)</Label>
+              <Textarea
+                id="pause-message"
+                value={pauseMessageInput}
+                onChange={(e) => setPauseMessageInput(e.target.value)}
+                placeholder="e.g. Closed for renovations until next week"
+                rows={2}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="cancel-future"
+                checked={cancelFutureOnPause}
+                onChange={(e) => setCancelFutureOnPause(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              <Label htmlFor="cancel-future">Cancel all future reservations for this venue</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPauseModalOpen(false)} disabled={pauseUnpauseLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                handlePause()
+              }}
+              disabled={pauseUnpauseLoading}
+            >
+              {pauseUnpauseLoading ? "Pausing…" : "Pause reservations"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete venue modal */}
+      <Dialog open={deleteVenueModalOpen} onOpenChange={setDeleteVenueModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete venue</DialogTitle>
+            <DialogDescription>
+              This will remove the venue from listings and cancel all future reservations. Past reservations and data are preserved. Type the venue name or DELETE to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="delete-venue-confirmation">
+                Type &quot;{venue.name}&quot; or DELETE to confirm
+              </Label>
+              <Input
+                id="delete-venue-confirmation"
+                value={deleteVenueConfirmation}
+                onChange={(e) => setDeleteVenueConfirmation(e.target.value)}
+                placeholder={venue.name ?? "DELETE"}
+                className="font-mono"
+                autoComplete="off"
+              />
+            </div>
+            {deleteVenueError && (
+              <p className="text-sm text-destructive">{deleteVenueError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteVenueModalOpen(false)} disabled={deleteVenueLoading}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteVenue} disabled={deleteVenueLoading}>
+              {deleteVenueLoading ? "Deleting…" : "Delete venue"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

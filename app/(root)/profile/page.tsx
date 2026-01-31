@@ -6,7 +6,18 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield, Trash2 } from "lucide-react"
 
 function initialsFromName(name?: string | null) {
   const trimmed = (name || "").trim()
@@ -34,6 +45,11 @@ export default function ProfilePage() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [loadingVenues, setLoadingVenues] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [deleteReason, setDeleteReason] = useState("")
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Redirect to callbackUrl after successful sign-in (defer to avoid setState-during-render)
   useEffect(() => {
@@ -64,6 +80,36 @@ export default function ProfilePage() {
         setLoadingVenues(false)
       })
   }, [session?.user?.id])
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== "DELETE") {
+      setDeleteError("Type DELETE to confirm.")
+      return
+    }
+    setDeleteError(null)
+    setDeleteLoading(true)
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmation: "DELETE",
+          reason: deleteReason.trim() || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setDeleteError(data.error || "Failed to delete account.")
+        return
+      }
+      await signOut({ redirect: false })
+      router.push("/account-deleted")
+    } catch {
+      setDeleteError("Something went wrong. Please try again.")
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   if (status === "loading") {
     return (
@@ -171,7 +217,7 @@ export default function ProfilePage() {
               Manage your account
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <Button
               onClick={() => signOut()}
               variant="outline"
@@ -180,6 +226,20 @@ export default function ProfilePage() {
             >
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full text-muted-foreground hover:text-foreground"
+              size="lg"
+              onClick={() => {
+                setDeleteModalOpen(true)
+                setDeleteError(null)
+                setDeleteConfirmation("")
+                setDeleteReason("")
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete account
             </Button>
           </CardContent>
         </Card>
@@ -240,6 +300,59 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete account</DialogTitle>
+            <DialogDescription>
+              This will anonymize your account, pause your venues, and cancel your future reservations. Type DELETE to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
+              <Input
+                id="delete-confirmation"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder="DELETE"
+                className="font-mono"
+                autoComplete="off"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="delete-reason">Reason (optional)</Label>
+              <Textarea
+                id="delete-reason"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="Optional feedback"
+                rows={2}
+              />
+            </div>
+            {deleteError && (
+              <p className="text-sm text-destructive">{deleteError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={deleteLoading || deleteConfirmation !== "DELETE"}
+            >
+              {deleteLoading ? "Deleting…" : "Delete my account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

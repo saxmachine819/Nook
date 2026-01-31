@@ -147,6 +147,8 @@ export async function GET(request: Request) {
 
     // Only show APPROVED venues in search results
     whereClause.onboardingStatus = "APPROVED"
+    // Exclude soft-deleted venues; PAUSED venues still appear (show as temporarily unavailable)
+    whereClause.status = { not: "DELETED" }
 
     // Query venues with filters
     let venues = await prisma.venue.findMany({

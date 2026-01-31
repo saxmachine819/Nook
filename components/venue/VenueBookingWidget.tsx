@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
 import { SeatCard } from "@/components/venue/SeatCard"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
+import { SignInModal } from "@/components/auth/SignInModal"
 import { cn } from "@/lib/utils"
 import { roundUpToNext15Minutes } from "@/lib/availability-utils"
 
@@ -135,6 +136,8 @@ export function VenueBookingWidget({
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSignInModal, setShowSignInModal] = useState(false)
+  const pendingReservationPayloadRef = useRef<any>(null)
 
   const handleCheckAvailability = useCallback(async () => {
     if (!date || !startTime) {
@@ -189,6 +192,18 @@ export function VenueBookingWidget({
       if (data.error) {
         console.error("Availability error:", data.error)
         setError(data.error)
+        setAvailableSeats([])
+        setUnavailableSeats([])
+        setAvailableSeatGroups([])
+        setAvailableGroupTables([])
+        setUnavailableGroupTables([])
+        setUnavailableSeatIds(new Set())
+        return
+      }
+
+      // Venue paused: show message and block booking
+      if (data.bookingDisabled) {
+        setError(data.pauseMessage || "This venue is temporarily not accepting reservations.")
         setAvailableSeats([])
         setUnavailableSeats([])
         setAvailableSeatGroups([])
@@ -495,23 +510,8 @@ export function VenueBookingWidget({
 
       if (!response.ok) {
         if (response.status === 401) {
-          const bookingData = {
-            date: date,
-            startTime: startTime.replace(":", ""),
-            duration: durationHours,
-            tableId: selectedGroupTableId,
-            seatId: seatCount === 1 ? selectedSeatId : null,
-            seatIds: seatCount > 1 ? selectedSeatIds : null,
-            seatCount: selectedGroupTableId
-              ? availableGroupTables.find((t) => t.id === selectedGroupTableId)?.seatCount ?? seatCount
-              : seatCount,
-          }
-          const bookingParam = encodeURIComponent(JSON.stringify(bookingData))
-          router.push(
-            `/profile?callbackUrl=${encodeURIComponent(
-              `/venue/${venueId}?booking=${bookingParam}`
-            )}`
-          )
+          pendingReservationPayloadRef.current = requestBody
+          setShowSignInModal(true)
           return
         }
         // Handle PAST_TIME error code specifically
@@ -538,6 +538,41 @@ export function VenueBookingWidget({
       setIsSubmitting(false)
     }
   }
+
+  const retryReservation = useCallback(async () => {
+    const payload = pendingReservationPayloadRef.current
+    if (!payload) return
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (data?.code === "PAST_TIME") {
+          setError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setError(data?.error || "Failed to create reservation. Please try again.")
+        }
+        pendingReservationPayloadRef.current = null
+        return
+      }
+      pendingReservationPayloadRef.current = null
+      setConfirmedReservation(data?.reservation || null)
+      setConfirmationOpen(true)
+      showToast("Reservation confirmed.", "success")
+      if (pathname === "/reservations") router.refresh()
+    } catch (err) {
+      console.error("Error creating reservation:", err)
+      setError("Something went wrong while creating your reservation.")
+      pendingReservationPayloadRef.current = null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [pathname, showToast])
 
   // Helper function to render single seat selection
   const renderSingleSeatSelection = () => {
@@ -1380,6 +1415,17 @@ export function VenueBookingWidget({
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
         reservation={confirmedReservation}
+      />
+
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={(open) => {
+          setShowSignInModal(open)
+          if (!open) pendingReservationPayloadRef.current = null
+        }}
+        onSignInSuccess={retryReservation}
+        description="Sign in to complete your reservation."
+        callbackUrl={pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "")}
       />
 
       <ImageGalleryModal
