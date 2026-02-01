@@ -48,9 +48,10 @@ async function main() {
     console.log(`Status: ${qrAsset.status}`)
     console.log(`ID: ${qrAsset.id}`)
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "")
     console.log("\n📋 Test URLs:")
-    console.log(`   Public Scan: http://localhost:3000/q/${qrAsset.token}`)
-    console.log(`   Register:    http://localhost:3000/q/${qrAsset.token}/register`)
+    console.log(`   Public Scan: ${baseUrl}/q/${qrAsset.token}`)
+    console.log(`   Register:    ${baseUrl}/q/${qrAsset.token}/register`)
     console.log("\n")
   } catch (error) {
     console.error("Error:", error)

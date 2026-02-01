@@ -41,6 +41,9 @@ async function getReservations(userId: string) {
           seatCount: true,
           tablePricePerHour: true,
           directionsText: true,
+          seats: {
+            select: { id: true },
+          },
         },
       },
     },

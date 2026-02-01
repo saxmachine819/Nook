@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getQRBaseUrl } from "@/lib/qr-asset-utils"
 import { isAdmin } from "@/lib/venue-auth"
 import { generateQRStickerSVG } from "@/lib/qr-sticker-generator"
 import PDFDocument from "pdfkit"
@@ -12,17 +13,6 @@ function parsePositiveInt(value: string | null): number | null {
   const n = Number.parseInt(value, 10)
   if (!Number.isFinite(n) || n <= 0) return null
   return n
-}
-
-function getBaseUrlFromRequest(request: NextRequest): string {
-  const host =
-    request.headers.get("host") ||
-    process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, "") ||
-    "localhost:3000"
-  const proto =
-    request.headers.get("x-forwarded-proto") ||
-    (host.includes("localhost") ? "http" : "https")
-  return `${proto}://${host}`
 }
 
 async function renderPdfBuffer(opts: {
@@ -137,7 +127,7 @@ export async function GET(
       )
     }
 
-    const baseUrl = getBaseUrlFromRequest(request)
+    const baseUrl = getQRBaseUrl(request)
     const svgs = await Promise.all(
       assets.map((a) =>
         generateQRStickerSVG({

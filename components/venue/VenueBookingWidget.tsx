@@ -1345,6 +1345,7 @@ export function VenueBookingWidget({
             type="button"
             onClick={handleCheckAvailability}
             disabled={!canCheckAvailability}
+            loading={isLoadingAvailability}
             className="w-full"
             variant="outline"
           >
@@ -1396,7 +1397,7 @@ export function VenueBookingWidget({
               type="submit"
               className="mt-1 w-full"
               size="lg"
-              disabled={isSubmitting}
+              loading={isSubmitting}
             >
               {isSubmitting ? "Reserving..." : "Reserve seat"}
             </Button>

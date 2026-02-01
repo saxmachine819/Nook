@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { MapPin, X } from "lucide-react"
@@ -293,7 +294,8 @@ export function VenueCard({
     // Show loading state while redirecting
     return (
       <Card className={cn("transition-all", className)}>
-        <CardContent className="py-8 text-center">
+        <CardContent className="flex flex-col items-center justify-center gap-2 py-8">
+          <LoadingSpinner size="md" />
           <p className="text-sm text-muted-foreground">Loading booking...</p>
         </CardContent>
       </Card>

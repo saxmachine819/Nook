@@ -1420,7 +1420,7 @@ export function MapboxMap({
           <Button
             size="sm"
             onClick={handleSearchArea}
-            disabled={isSearching}
+            loading={isSearching}
             className="shadow-lg px-3 py-1.5 text-xs"
           >
             {isSearching ? "Searching..." : "Search this area"}

@@ -1462,7 +1462,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         </Card>
 
         <div className="flex justify-end gap-4 pb-8">
-          <Button type="submit" disabled={isSubmitting} size="lg">
+          <Button type="submit" loading={isSubmitting} size="lg">
             {isSubmitting ? "Saving..." : "Save changes"}
           </Button>
         </div>

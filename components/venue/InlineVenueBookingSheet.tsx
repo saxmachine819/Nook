@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useToast } from "@/components/ui/toast"
 import { SignInModal } from "@/components/auth/SignInModal"
 
@@ -320,7 +321,10 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
             </p>
             <div className="no-scrollbar flex gap-1 overflow-x-auto pb-1">
               {isLoadingSlots && (
-                <p className="text-xs text-muted-foreground">Loading times…</p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <LoadingSpinner size="sm" className="shrink-0" />
+                  Loading times…
+                </p>
               )}
               {!isLoadingSlots && slotsError && (
                 <p className="text-xs text-red-600">{slotsError}</p>
@@ -386,7 +390,8 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
             <Button
               size="sm"
               className="px-4 text-xs"
-              disabled={isSubmitting || !selectedSlot}
+              disabled={!selectedSlot}
+              loading={isSubmitting}
               onClick={handleBook}
             >
               {isSubmitting ? "Reserving..." : "Reserve"}

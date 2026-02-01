@@ -186,6 +186,20 @@ export async function POST(request: Request) {
 
     if (isGroupBooking) {
       // Group table booking
+      // Reject if tableId is actually a seat ID (prevents ID type mix-up)
+      const seatWithSameId = await prisma.seat.findUnique({
+        where: { id: tableId },
+      })
+      if (seatWithSameId) {
+        return NextResponse.json(
+          {
+            error:
+              "Invalid table ID. Did you mean to book a specific seat? Please select a table from the booking options.",
+          },
+          { status: 400 }
+        )
+      }
+
       const table = await prisma.table.findUnique({
         where: { id: tableId },
         include: {

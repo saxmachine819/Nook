@@ -1,6 +1,30 @@
 import { prisma } from "@/lib/prisma"
 
 /**
+ * Returns the base URL for QR code links (e.g. https://nooc.io).
+ * Resolution order: NEXT_PUBLIC_APP_URL → request host → NEXTAUTH_URL → localhost.
+ *
+ * @param request - Optional request with headers (for host, x-forwarded-proto)
+ */
+export function getQRBaseUrl(
+  request?: { headers: { get: (k: string) => string | null } }
+): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (appUrl) {
+    return appUrl.replace(/\/$/, "")
+  }
+
+  const host =
+    request?.headers?.get("host") ||
+    process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, "") ||
+    "localhost:3000"
+  const protocol =
+    request?.headers?.get("x-forwarded-proto") ||
+    (host.includes("localhost") ? "http" : "https")
+  return `${protocol}://${host}`
+}
+
+/**
  * Validates the format of a QR asset token.
  * 
  * Token format requirements:

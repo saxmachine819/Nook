@@ -61,6 +61,7 @@ interface Reservation {
     name: string | null
     seatCount: number | null
     tablePricePerHour: number | null
+    seats?: { id: string }[]
   } | null
 }
 
@@ -207,9 +208,12 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
 
   const getSeatInfo = (reservation: Reservation): string => {
     // For group table bookings (seatId is null, tableId exists)
-    // Use table's actual seat count as the source of truth
-    if (!reservation.seatId && reservation.tableId && reservation.table?.seatCount) {
-      const actualSeatCount = reservation.table.seatCount
+    // Use table's seats.length when available, else fall back to seatCount column
+    if (!reservation.seatId && reservation.tableId && reservation.table) {
+      const actualSeatCount =
+        reservation.table.seats?.length ??
+        reservation.table.seatCount ??
+        1
       const tableName = reservation.table.name
       return tableName ? `Table ${tableName} for ${actualSeatCount}` : `Table for ${actualSeatCount}`
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { lookupQRAssetByToken } from "@/lib/qr-asset-utils"
+import { getQRBaseUrl, lookupQRAssetByToken } from "@/lib/qr-asset-utils"
 import { generateQROnlySVG } from "@/lib/qr-sticker-generator"
 
 export async function GET(
@@ -15,14 +15,7 @@ export async function GET(
       return new NextResponse("QR asset not found", { status: 404 })
     }
 
-    const host =
-      request.headers.get("host") ||
-      process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, "") ||
-      "localhost:3000"
-    const protocol =
-      request.headers.get("x-forwarded-proto") ||
-      (host.includes("localhost") ? "http" : "https")
-    const baseUrl = `${protocol}://${host}`
+    const baseUrl = getQRBaseUrl(request)
     const qrUrl = `${baseUrl}/q/${token}`
 
     const svg = await generateQROnlySVG({ qrUrl })
