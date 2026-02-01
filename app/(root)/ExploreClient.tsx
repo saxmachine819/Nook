@@ -8,6 +8,7 @@ import { VenuePreviewSheet } from "@/components/explore/VenuePreviewSheet"
 import { ResultsDrawer } from "@/components/explore/ResultsDrawer"
 import { FilterState } from "@/components/explore/FilterPanel"
 import { Button } from "@/components/ui/button"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 
 interface Venue {
   id: string
@@ -160,6 +161,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
   const filtersRef = useRef<FilterState>(initialFilterState.filters)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
+  const [venueLoadingOverlay, setVenueLoadingOverlay] = useState(false)
   const [centerOnVenueId, setCenterOnVenueId] = useState<string | null>(null)
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
   const [shouldFitMapBounds, setShouldFitMapBounds] = useState<boolean>(false) // Signal to map that it should fit bounds
@@ -657,6 +659,17 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     setCenterOnVenueId(id)
   }, [])
 
+  // Brief loading overlay when venue card is clicked (until preview sheet animates in)
+  useEffect(() => {
+    if (selectedVenueId) {
+      setVenueLoadingOverlay(true)
+      const t = setTimeout(() => setVenueLoadingOverlay(false), 250)
+      return () => clearTimeout(t)
+    } else {
+      setVenueLoadingOverlay(false)
+    }
+  }, [selectedVenueId])
+
   useEffect(() => {
     if (!centerOnVenueId) return
     const t = setTimeout(() => setCenterOnVenueId(null), 800)
@@ -665,6 +678,9 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
 
   return (
     <div className="fixed inset-0 flex flex-col">
+      {venueLoadingOverlay && (
+        <LoadingOverlay zIndex={40} className="pointer-events-none" />
+      )}
       {isClient && (
         <>
           <MapView

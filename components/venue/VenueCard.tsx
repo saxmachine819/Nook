@@ -1,10 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { MapPin, X } from "lucide-react"
@@ -78,6 +79,7 @@ export function VenueCard({
 }: VenueCardProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const [isPending, startTransition] = useTransition()
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
@@ -306,14 +308,18 @@ export function VenueCard({
   // Collapsed state
   return (
     <>
+      {isPending && (
+        <LoadingOverlay label="Loading venue..." zIndex={100} />
+      )}
       <button
         type="button"
         onClick={() => {
-          // Pass initialSeatCount as URL param if set
-          const url = initialSeatCount && initialSeatCount > 0 
+          const url = initialSeatCount && initialSeatCount > 0
             ? `/venue/${id}?seats=${initialSeatCount}`
             : `/venue/${id}`
-          router.push(url)
+          startTransition(() => {
+            router.push(url)
+          })
         }}
         className="w-full text-left"
       >

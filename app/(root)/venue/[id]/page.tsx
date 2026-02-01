@@ -142,26 +142,21 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     seats: table.seats || [],
   }))
 
-  // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+  // Calculate capacity: actual Seat records if available, otherwise fall back to table.seatCount
   const capacity = venue.tables.reduce((sum, table) => {
     const seats = (table as any).seats
     if (seats?.length > 0) {
       return sum + seats.length
     }
-    // Fallback for older venues without Seat records
     return sum + ((table as any).seatCount || 0)
   }, 0)
   
-  // Calculate price range based on booking modes
-  // Min: cheapest individual seat price
-  // Max: most expensive full table price (total, not per seat)
   const groupTables = venue.tables.filter((t: any) => {
     const mode = t.bookingMode
     return mode === "group" || mode === null || mode === undefined
   })
   const individualTables = venue.tables.filter((t: any) => t.bookingMode === "individual")
   
-  // Min price: cheapest individual seat
   let minPrice = venue.hourlySeatPrice || 0
   if (individualTables.length > 0) {
     const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
@@ -173,7 +168,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }
   }
   
-  // Max price: most expensive full table (total table price)
   let maxPrice = venue.hourlySeatPrice || 0
   if (groupTables.length > 0) {
     const tablePrices = groupTables
@@ -184,7 +178,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }
   }
   
-  // If no group tables, max should be the most expensive individual seat
   if (groupTables.length === 0 && individualTables.length > 0) {
     const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
     const seatPrices = individualSeats
@@ -195,7 +188,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }
   }
   
-  // If no individual tables, min should be the cheapest group table per seat
   if (individualTables.length === 0 && groupTables.length > 0) {
     const perSeatPrices = groupTables
       .map(t => {
@@ -212,7 +204,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }
   }
   
-  // Pricing description
   let pricingDescription = "Reserve seats by the hour."
   if (individualTables.length > 0 && groupTables.length === 0) {
     pricingDescription = "Reserve seats individually by the hour."
@@ -222,14 +213,11 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     pricingDescription = "Reserve seats individually or entire tables by the hour."
   }
 
-  // Filter to only individual booking mode tables for seat selection
-  // Default to all tables if bookingMode is not set (backward compatibility)
   const individualTablesForBooking = venue.tables.filter(t => {
     const mode = (t as any).bookingMode
     return mode === "individual" || mode === null || mode === undefined
   })
 
-  // Fetch reservations for availability calculation
   const now = new Date()
   const futureReservations = await prisma.reservation.findMany({
     where: {
@@ -244,7 +232,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     },
   })
 
-  // Calculate availability label
   const venueWithHours = venue as any
   const venueHours = venueWithHours.venueHours || null
   const openingHoursJson = venueWithHours.openingHoursJson || null
@@ -261,13 +248,9 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
   const venueHeroImages: string[] = (() => {
     const images = new Set<string>()
-
-    // Prefer venue-level images
     const hero = (venue as any).heroImageUrl
     if (typeof hero === "string" && hero.length > 0) images.add(hero)
     safeStringArray((venue as any).imageUrls).forEach((u) => images.add(u))
-
-    // Fallback to table / seat images (if present) so the page still feels alive
     for (const t of venue.tables) {
       safeStringArray((t as any).imageUrls).forEach((u) => images.add(u))
       for (const s of (t as any).seats ?? []) {
@@ -275,7 +258,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       }
       if (images.size >= 8) break
     }
-
     return Array.from(images).slice(0, 8)
   })()
 
@@ -287,9 +269,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        {/* Photo panel */}
         <div className="space-y-4">
-          {/* Venue header */}
           <VenuePageHeader 
             name={venue.name} 
             address={venue.address}
@@ -304,7 +284,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             })()}
           />
 
-          {/* Tags - under address */}
           {(venue.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-2">
               {(venue.tags ?? []).map((tag) => (
@@ -318,15 +297,12 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             </div>
           )}
 
-          {/* Photo */}
           <div className="relative overflow-hidden rounded-2xl border bg-muted">
             <VenueImageCarousel
               images={venueHeroImages}
               className="h-[260px] sm:h-[340px] lg:h-[560px]"
             />
             <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-black/5" />
-            
-            {/* Availability label bubble */}
             {availabilityLabel && (
               <span className="absolute top-3 right-3 z-10 rounded-full bg-background/90 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-primary shadow-sm">
                 {availabilityLabel}
@@ -335,9 +311,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
           </div>
         </div>
 
-        {/* Right column: deal (when two-column) + booking */}
         <div className="space-y-4 lg:pt-[140px]">
-          {/* Deal at top of right column on lg+ (avoids overlap with name/address on medium widths) */}
           {(venue as any).deals?.[0] && (() => {
             const primaryDeal = (venue as any).deals[0]
             const eligibility = primaryDeal.eligibilityJson || {}
@@ -413,7 +387,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             </CardContent>
           </Card>
 
-          {/* Details directly below booking */}
           <div className="space-y-4">
             <div className="h-px w-full bg-border" />
 
@@ -428,7 +401,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
             </div>
 
-            {/* Hours */}
             <VenueHoursDisplay openingHoursJson={(venue as any).openingHoursJson} />
 
             {venue.rulesText && (
@@ -445,7 +417,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
         </div>
       </div>
 
-      {/* Spacer for bottom nav */}
       <div className="h-24" />
     </div>
   )
