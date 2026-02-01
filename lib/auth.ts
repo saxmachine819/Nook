@@ -4,6 +4,12 @@ import GoogleProvider from "next-auth/providers/google"
 import EmailProvider from "next-auth/providers/email"
 import { prisma } from "@/lib/prisma"
 
+// Local dev only: force OAuth callbacks to localhost so sign-in works without .env.local override.
+// Production (NODE_ENV=production on Vercel) is never touched.
+if (process.env.NODE_ENV === "development") {
+  process.env.NEXTAUTH_URL = "http://localhost:3000"
+}
+
 // Verify required environment variables
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
   console.error("❌ Missing Google OAuth credentials!")

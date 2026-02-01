@@ -2,6 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Use DATABASE_URL only (no directUrl). Local: use pooler (port 6543) + ?pgbouncer=true; add ?sslmode=require if connection fails.
+// Vercel/production: unchanged — use whatever DATABASE_URL you already have. No DIRECT_URL required anywhere.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
