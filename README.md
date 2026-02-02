@@ -89,3 +89,9 @@ prisma/
 - `npm run build` - Build for production
 - `npm run lint` - Run ESLint
 - `npm run db:studio` - Open Prisma Studio
+
+## Sentry (error monitoring)
+
+Error monitoring is wired via `@sentry/nextjs`. If `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` are not set, Sentry no-ops (local dev does not crash). See `.env.example` for all Sentry env vars.
+
+**Vercel:** Set the same Sentry env vars in the Vercel project: **Project → Settings → Environment Variables**. Add `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, and `SENTRY_ENVIRONMENT=production` (and optionally `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_RELEASE`). For source map upload, set `SENTRY_ORG`, `SENTRY_PROJECT`, and `SENTRY_AUTH_TOKEN` (mark Auth Token as sensitive).

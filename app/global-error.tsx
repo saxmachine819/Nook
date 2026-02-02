@@ -1,5 +1,6 @@
 "use client"
 
+import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 
 // #region agent log
@@ -27,6 +28,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
+    Sentry.captureException(error)
     // #region agent log
     logError("app/global-error.tsx:render", "Global error boundary caught", {
       errorMessage: error?.message,
