@@ -85,8 +85,8 @@ export async function GET(request: Request) {
     // Build where clause
     const whereClause: any = {}
 
-    // Add bounds filter if valid bounds provided
-    if (boundsValid && parsedBounds) {
+    // Add bounds filter only when no text query (text search = full DB; area/initial = bounded)
+    if (boundsValid && parsedBounds && q.length === 0) {
       whereClause.latitude = {
         gte: parsedBounds.south,
         lte: parsedBounds.north,

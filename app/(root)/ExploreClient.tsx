@@ -248,9 +248,9 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
         setFilters(stored.filters)
         filtersRef.current = stored.filters
         
-        // Re-apply search with restored filters only when we have bounds
-        if (performSearchRef.current && currentBoundsRef.current) {
-          performSearchRef.current(stored.searchQuery, currentBoundsRef.current, stored.filters)
+        // Re-apply search with restored filters (full DB; don't send bounds)
+        if (performSearchRef.current) {
+          performSearchRef.current(stored.searchQuery, undefined, stored.filters)
         }
       }
     }
@@ -478,7 +478,8 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           return
         }
       }
-      await performSearch(query, currentBoundsRef.current ?? undefined)
+      // Text search = full DB; don't send bounds
+      await performSearch(query, undefined)
     },
     [filters]
   )
@@ -504,8 +505,8 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       setMapRefreshTrigger(prev => prev + 1)
     }
     
-    // Perform search with the filters - this will update venues and trigger map refresh
-    await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filtersToUse)
+    // Filter apply = full DB; don't send bounds
+    await performSearch(searchQuery, undefined, filtersToUse)
   }, [searchQuery])
 
   const handleClearFilters = useCallback(async () => {
@@ -525,11 +526,8 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     setMapRefreshTrigger(prev => prev + 1)
     // Save cleared filters to localStorage
     saveFiltersToStorage("", cleared)
-    if (currentBoundsRef.current) {
-      await performSearch("", currentBoundsRef.current, cleared)
-    } else {
-      setVenues([])
-    }
+    // Clear = full DB; don't send bounds
+    await performSearch("", undefined, cleared)
   }, [searchQuery])
 
   const activeFilterCount =
@@ -555,7 +553,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -569,7 +567,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -583,7 +581,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     })
@@ -597,7 +595,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -611,7 +609,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -625,7 +623,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -639,7 +637,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     })
@@ -653,7 +651,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -813,7 +811,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
               if (filters.favoritesOnly && !favorited) {
                 setVenues(prev => prev.filter(v => v.id !== venueId))
                 // Refresh search to sync with server
-                await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filters)
+                await performSearch(searchQuery, undefined, filters)
               }
             }}
             onClearFavoritesFilter={async () => {
@@ -821,7 +819,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
               setFilters(newFilters)
               filtersRef.current = newFilters
               setMapRefreshTrigger(prev => prev + 1)
-              await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+              await performSearch(searchQuery, undefined, newFilters)
             }}
           />
           <VenuePreviewSheet
@@ -862,7 +860,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
                   // Remove venue from list immediately
                   setVenues(prev => prev.filter(v => v.id !== selectedVenue.id))
                   // Refresh search to get updated results
-                  await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filters)
+                  await performSearch(searchQuery, undefined, filters)
                 }
               }
             }}
