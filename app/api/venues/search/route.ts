@@ -64,6 +64,10 @@ export async function GET(request: Request) {
       }
     }
 
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Explore API] bounds", { hasBounds: boundsValid, parsedBounds })
+    }
+
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
 
@@ -461,6 +465,13 @@ export async function GET(request: Request) {
         },
       })
       favoritedVenueIds = favorites.map((f: { venueId: string }) => f.venueId)
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Explore API] response", {
+        count: formattedVenues.length,
+        first3Ids: formattedVenues.slice(0, 3).map((v) => v.id),
+      })
     }
 
     return NextResponse.json({ 

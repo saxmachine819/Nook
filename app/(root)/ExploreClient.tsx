@@ -154,22 +154,28 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
   const hasRequestedLocationRef = useRef(false)
+  const [mapReady, setMapReady] = useState(false) // Gate map until location resolved or timeout
   const [isSearching, setIsSearching] = useState(false)
   const [isSearchingText, setIsSearchingText] = useState(false)
   const [isSearchingArea, setIsSearchingArea] = useState(false) // Track if we're searching by area (not text)
   
   const filtersRef = useRef<FilterState>(initialFilterState.filters)
+  const searchQueryRef = useRef<string>(initialFilterState.searchQuery)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
   const [venueLoadingOverlay, setVenueLoadingOverlay] = useState(false)
   const [centerOnVenueId, setCenterOnVenueId] = useState<string | null>(null)
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
+  const hasReceivedInitialBoundsRef = useRef(false)
   const [shouldFitMapBounds, setShouldFitMapBounds] = useState<boolean>(false) // Signal to map that it should fit bounds
   const [mapRefreshTrigger, setMapRefreshTrigger] = useState<number>(0) // Increment to force map refresh
-  
-  // Keep filtersRef in sync with filters state and save to localStorage
+  const didAreaSearchRef = useRef(false) // Track if we just completed an area search (synchronous, no batching delay)
+  const [debugBounds, setDebugBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null)
+
+  // Keep filtersRef and searchQueryRef in sync and save to localStorage
   useEffect(() => {
     filtersRef.current = filters
+    searchQueryRef.current = searchQuery
     // Save filters to localStorage whenever they change
     saveFiltersToStorage(searchQuery, filters)
     console.log("📝 Filters state updated and saved to storage:", {
@@ -232,52 +238,14 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
         setFilters(stored.filters)
         filtersRef.current = stored.filters
         
-        // Re-apply search with restored filters
-        if (performSearchRef.current) {
-          performSearchRef.current(stored.searchQuery, currentBoundsRef.current ?? undefined, stored.filters)
+        // Re-apply search with restored filters only when we have bounds
+        if (performSearchRef.current && currentBoundsRef.current) {
+          performSearchRef.current(stored.searchQuery, currentBoundsRef.current, stored.filters)
         }
-      } else {
-        // Filters match, but we still need to initialize venues
-        // If we have active filters, search will be triggered by the initialVenues useEffect
-        // Otherwise, set initial venues
-        if (!hasStoredFilters && !hasInitializedVenuesRef.current) {
-          setVenues(initialVenues)
-          setFavoritedVenueIdsState(favoritedVenueIds)
-          hasInitializedVenuesRef.current = true
-        }
-      }
-    } else {
-      // No stored filters, use initial venues
-      if (!hasInitializedVenuesRef.current) {
-        setVenues(initialVenues)
-        setFavoritedVenueIdsState(favoritedVenueIds)
-        hasInitializedVenuesRef.current = true
       }
     }
+    // No stored filters: venues stay [] until onInitialBounds triggers bounded fetch
   }, [isClient, filters, searchQuery]) // Run when client becomes true (after mount)
-
-  // Initialize venues after filters are restored (to avoid flash of wrong content)
-  useEffect(() => {
-    if (typeof window === "undefined" || hasInitializedVenuesRef.current) return
-    
-    const hasActiveFilters = filters.dealsOnly || filters.favoritesOnly || filters.tags.length > 0 || 
-                            filters.priceMin != null || filters.priceMax != null || 
-                            filters.seatCount != null || filters.bookingMode.length > 0 ||
-                            filters.availableNow || searchQuery.length > 0
-    
-    if (hasActiveFilters && performSearchRef.current) {
-      // Filters are active, search will populate venues
-      console.log("🔄 Initializing with active filters, will search")
-      performSearchRef.current(searchQuery, currentBoundsRef.current ?? undefined, filters)
-      hasInitializedVenuesRef.current = true
-    } else if (!hasActiveFilters) {
-      // No filters, use initialVenues
-      console.log("🔄 Initializing with no filters, using initialVenues")
-      setVenues(initialVenues)
-      setFavoritedVenueIdsState(favoritedVenueIds)
-      hasInitializedVenuesRef.current = true
-    }
-  }, [filters, searchQuery, initialVenues]) // Run when filters/searchQuery are ready
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -313,6 +281,21 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     }
   }, [isClient, locationState, userLocation])
 
+  // Gate map until location is resolved (have coords, denied, unavailable, or timeout after mount)
+  const hasMapReadyTimeoutRef = useRef(false)
+  useEffect(() => {
+    if (!isClient) return
+    if (userLocation !== null || locationState === "denied" || locationState === "unavailable") {
+      setMapReady(true)
+      return
+    }
+    if (!hasMapReadyTimeoutRef.current) {
+      hasMapReadyTimeoutRef.current = true
+      const timeout = setTimeout(() => setMapReady(true), 4000)
+      return () => clearTimeout(timeout)
+    }
+  }, [isClient, userLocation, locationState])
+
   const handleSearchArea = async (bounds: {
     north: number
     south: number
@@ -320,9 +303,12 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     west: number
   }) => {
     currentBoundsRef.current = bounds
+    if (process.env.NODE_ENV !== "production") setDebugBounds(bounds)
     // Mark that we're searching by area (not text) to prevent auto-expand
     setIsSearchingArea(true)
     setIsSearching(true)
+    // Set ref immediately (synchronous, no batching delay) so map can read it
+    didAreaSearchRef.current = true
     try {
       // Use performSearch with skipSetIsSearchingText=true to prevent auto-expand
       await performSearch(searchQuery, bounds, filters, true)
@@ -330,6 +316,10 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       console.error("Error in handleSearchArea:", error)
     } finally {
       setIsSearching(false)
+      // Clear the ref after delay so map's interval has time to see loaded() and run repaint
+      setTimeout(() => {
+        didAreaSearchRef.current = false
+      }, 2000)
       // Reset the flag after a longer delay to allow venues useEffect and auto-center checks to run with skipFitBounds=true
       // Use a longer delay to ensure all map operations complete before allowing auto-center again
       setTimeout(() => {
@@ -378,6 +368,16 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       }
 
       const url = `/api/venues/search?${params.toString()}`
+      if (process.env.NODE_ENV !== "production") {
+        const trigger = skipSetIsSearchingText ? "search_area" : (bounds ? "filters" : "initial")
+        console.log("[Explore search] request", {
+          trigger,
+          hasBounds: !!bounds,
+          bounds: bounds ?? null,
+          q: query || "(none)",
+          url,
+        })
+      }
       console.log("🔍 Searching with filters:", { dealsOnly: activeFilters.dealsOnly, url, currentVenueCount: venues.length })
       const res = await fetch(url)
       const data = await res.json().catch(() => null)
@@ -386,7 +386,14 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
         return
       }
       const raw = (data.venues ?? []) as Record<string, unknown>[]
-      const newVenues = raw.map(normalizeVenue)
+      const normalized = raw.map(normalizeVenue)
+      const newVenues = normalized.filter((v) => v.latitude != null && v.longitude != null)
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Explore search] response", {
+          total: newVenues.length,
+          first3: newVenues.slice(0, 3).map((v) => ({ id: v.id, lat: v.latitude, lng: v.longitude })),
+        })
+      }
       const favoritedIds = Array.isArray(data.favoritedVenueIds) 
         ? new Set(data.favoritedVenueIds as string[])
         : new Set<string>()
@@ -427,8 +434,18 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
   useEffect(() => {
     performSearchRef.current = performSearch
   }, [performSearch])
-  
-  // This is now handled in the URL params loading useEffect above
+
+  const handleInitialBounds = useCallback(
+    (bounds: { north: number; south: number; east: number; west: number }) => {
+      if (hasReceivedInitialBoundsRef.current) return
+      hasReceivedInitialBoundsRef.current = true
+      currentBoundsRef.current = bounds
+      if (process.env.NODE_ENV !== "production") setDebugBounds(bounds)
+      // Do not performSearch or set hasInitializedVenuesRef here.
+      // Venues stay [] until user clicks "Search this area" or applies search/filters.
+    },
+    []
+  )
 
   const handleSearch = useCallback(
     async (query: string) => {
@@ -448,11 +465,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           if (currentBoundsRef.current) {
             await performSearch("", currentBoundsRef.current)
           } else {
-            // Only reset to initialVenues if we truly have no filters and no search
-            console.log("🔄 Resetting to initialVenues (no active filters, no search)")
-            setVenues(initialVenues)
-            setFavoritedVenueIdsState(favoritedVenueIds)
-            // Force map refresh when clearing search
+            setVenues([])
             setMapRefreshTrigger(prev => prev + 1)
           }
           return
@@ -460,7 +473,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       }
       await performSearch(query, currentBoundsRef.current ?? undefined)
     },
-    [initialVenues, filters]
+    [filters]
   )
 
   const handleFiltersChange = useCallback((f: FilterState) => {
@@ -505,15 +518,12 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     setMapRefreshTrigger(prev => prev + 1)
     // Save cleared filters to localStorage
     saveFiltersToStorage("", cleared)
-    if (searchQuery.length > 0 || currentBoundsRef.current) {
-      await performSearch("", currentBoundsRef.current ?? undefined, cleared)
+    if (currentBoundsRef.current) {
+      await performSearch("", currentBoundsRef.current, cleared)
     } else {
-      // Only reset to initialVenues when explicitly clearing all filters with no search/bounds
-      console.log("🔄 Resetting to initialVenues (clear filters, no search/bounds)")
-      setVenues(initialVenues)
-      setFavoritedVenueIdsState(favoritedVenueIds)
+      setVenues([])
     }
-  }, [searchQuery, initialVenues])
+  }, [searchQuery])
 
   const activeFilterCount =
     filters.tags.length +
@@ -681,7 +691,12 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       {venueLoadingOverlay && (
         <LoadingOverlay zIndex={40} className="pointer-events-none" />
       )}
-      {isClient && (
+      {isClient && !mapReady && (
+        <div className="fixed inset-0 z-0 flex items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Getting your location…</p>
+        </div>
+      )}
+      {isClient && mapReady && (
         <>
           <MapView
             key={`map-${mapRefreshTrigger}`}
@@ -708,7 +723,19 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
             onRequestLocation={requestLocation}
             locationState={locationState}
             isSearchingArea={isSearchingArea}
+            onBoundsChange={setDebugBounds}
+            onInitialBounds={handleInitialBounds}
+            didAreaSearch={didAreaSearchRef.current}
           />
+          {process.env.NODE_ENV !== "production" && (
+            <div className="fixed bottom-20 left-2 z-10 rounded bg-background/90 px-2 py-1 text-xs font-mono text-muted-foreground shadow">
+              bounds:{" "}
+              {debugBounds
+                ? `${debugBounds.north.toFixed(4)}/${debugBounds.south.toFixed(4)}/${debugBounds.east.toFixed(4)}/${debugBounds.west.toFixed(4)}`
+                : "—"}{" "}
+              | results: {venues.length}
+            </div>
+          )}
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
             <TopOverlayControls
               onSearch={handleSearch}

@@ -314,6 +314,12 @@ export function ResultsDrawer({
               </button>
             )}
           </div>
+        ) : venues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+            <p className="text-sm text-muted-foreground">
+              No locations in this area. Tap &quot;Search this area&quot; on the map to search.
+            </p>
+          </div>
         ) : (
           <ul className="space-y-2">
             {venues.map((venue) => {

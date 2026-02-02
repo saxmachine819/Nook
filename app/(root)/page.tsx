@@ -395,7 +395,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       favoritedVenueIds = new Set(favorites.map((f) => f.venueId))
     }
 
-    return <ExploreClient venues={formattedVenues} favoritedVenueIds={favoritedVenueIds} />
+    return <ExploreClient venues={[]} favoritedVenueIds={favoritedVenueIds} />
   } catch (error) {
     console.error("Error fetching venues:", error)
     return <ExploreClient venues={[]} />

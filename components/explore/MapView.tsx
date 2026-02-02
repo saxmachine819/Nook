@@ -28,6 +28,9 @@ interface MapViewProps {
   locationState?: "idle" | "requesting" | "granted" | "denied" | "unavailable"
   skipFitBounds?: boolean
   isSearchingArea?: boolean
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void
+  onInitialBounds?: (bounds: { north: number; south: number; east: number; west: number }) => void
+  didAreaSearch?: boolean
 }
 
 export function MapView({
@@ -45,6 +48,9 @@ export function MapView({
   locationState,
   skipFitBounds,
   isSearchingArea,
+  onBoundsChange,
+  onInitialBounds,
+  didAreaSearch,
 }: MapViewProps) {
   if (!hasMapboxToken) {
     return (
@@ -77,6 +83,9 @@ export function MapView({
         locationState={locationState}
         skipFitBounds={skipFitBounds}
         isSearchingArea={isSearchingArea}
+        onBoundsChange={onBoundsChange}
+        onInitialBounds={onInitialBounds}
+        didAreaSearch={didAreaSearch}
       />
     </div>
   )
