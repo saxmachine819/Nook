@@ -60,11 +60,13 @@ export function VenuePreviewSheet({
   const swipeToCloseActiveRef = useRef(false)
   const currentDeltaYRef = useRef(0)
   const touchGestureActiveRef = useRef(false)
+  const pointerDownOnSheetRef = useRef(false)
   const setDragTranslateYRef = useRef<(y: number) => void>(() => {})
   setDragTranslateYRef.current = setDragTranslateY
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (touchGestureActiveRef.current) return
+    pointerDownOnSheetRef.current = true
     const scrollEl = scrollContainerRef.current
     const startScrollTop = scrollEl ? scrollEl.scrollTop : 0
     startYRef.current = e.clientY
@@ -77,6 +79,7 @@ export function VenuePreviewSheet({
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (touchGestureActiveRef.current) return
+    if (!pointerDownOnSheetRef.current) return
     const deltaY = e.clientY - startYRef.current
     if (deltaY <= 0) return
     currentDeltaYRef.current = deltaY
@@ -91,6 +94,7 @@ export function VenuePreviewSheet({
 
   const handlePointerUp = (e: React.PointerEvent) => {
     if (touchGestureActiveRef.current) return
+    pointerDownOnSheetRef.current = false
     const deltaY = currentDeltaYRef.current
     const elapsed = Date.now() - startTimeRef.current
     const velocity = elapsed > 0 ? deltaY / elapsed : 0
@@ -171,6 +175,7 @@ export function VenuePreviewSheet({
       document.body.style.overflow = "hidden"
       setVisible(false)
       setDragTranslateY(0)
+      pointerDownOnSheetRef.current = false
       const id = requestAnimationFrame(() => {
         requestAnimationFrame(() => setVisible(true))
       })
@@ -182,6 +187,7 @@ export function VenuePreviewSheet({
     document.body.style.overflow = ""
     setVisible(false)
     setDragTranslateY(0)
+    pointerDownOnSheetRef.current = false
   }, [open])
 
 
