@@ -47,7 +47,7 @@ export function BottomNav() {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className={cn("h-5 w-5", isActive && "fill-[rgba(15,81,50,0.2)] [&_path]:fill-[rgba(15,81,50,0.2)]")} />
               <span className="text-xs">{label}</span>
             </Link>
           )
