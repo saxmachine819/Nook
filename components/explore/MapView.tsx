@@ -31,6 +31,8 @@ interface MapViewProps {
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void
   onInitialBounds?: (bounds: { north: number; south: number; east: number; west: number }) => void
   didAreaSearch?: boolean
+  /** When true (e.g. parent already has venues), skip loading overlay on remount */
+  initialLoadingComplete?: boolean
 }
 
 export function MapView({
@@ -51,6 +53,7 @@ export function MapView({
   onBoundsChange,
   onInitialBounds,
   didAreaSearch,
+  initialLoadingComplete,
 }: MapViewProps) {
   if (!hasMapboxToken) {
     return (
@@ -86,6 +89,7 @@ export function MapView({
         onBoundsChange={onBoundsChange}
         onInitialBounds={onInitialBounds}
         didAreaSearch={didAreaSearch}
+        initialLoadingComplete={initialLoadingComplete}
       />
     </div>
   )

@@ -3,11 +3,22 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
-import { isVenueOpenNow } from "@/lib/venue-hours"
+import { getCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
+
+const DEBUG_LOG = (payload: { location: string; message: string; data?: Record<string, unknown>; hypothesisId?: string }) => {
+  fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: "debug-session" }),
+  }).catch(() => {})
+}
 
 export async function GET(request: Request) {
   console.log("🔍 /api/venues/search route called")
   try {
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:entry", message: "GET search started", hypothesisId: "H2" })
+    // #endregion
     // Get session for favorite state fetching
     const session = await auth()
     
@@ -151,9 +162,13 @@ export async function GET(request: Request) {
 
     // Only show APPROVED venues in search results
     whereClause.onboardingStatus = "APPROVED"
-    // Exclude soft-deleted venues; PAUSED venues still appear (show as temporarily unavailable)
+    // Exclude soft-deleted and paused venues from Explore
     whereClause.status = { not: "DELETED" }
+    whereClause.pausedAt = null
 
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:beforeFindMany", message: "before prisma.venue.findMany", hypothesisId: "H2" })
+    // #endregion
     // Query venues with filters
     let venues = await prisma.venue.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
@@ -180,6 +195,9 @@ export async function GET(request: Request) {
       take: 100, // Limit results
       orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
     })
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:afterFindMany", message: "after findMany", data: { venueCount: venues.length, firstId: venues[0]?.id }, hypothesisId: "H2" })
+    // #endregion
     
     if (dealsOnly) {
       console.log(`📊 Found ${venues.length} venues with deals filter applied`)
@@ -292,59 +310,73 @@ export async function GET(request: Request) {
       return result
     }
 
+    // Resolve open status for each venue (single shared hours engine)
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:beforePromiseAll", message: "before Promise.all hours", data: { venueCount: venues.length }, hypothesisId: "H1,H5" })
+    // #endregion
+    let venuesWithOpenStatus = await Promise.all(
+      venues.map(async (venue) => {
+        // #region agent log
+        DEBUG_LOG({ location: "search/route.ts:mapEntry", message: "venue map entry", data: { venueId: venue.id }, hypothesisId: "H1,H5" })
+        // #endregion
+        try {
+          const canonical = await getCanonicalVenueHours(venue.id)
+          // #region agent log
+          DEBUG_LOG({ location: "search/route.ts:afterCanonical", message: "after getCanonicalVenueHours", data: { venueId: venue.id, hasCanonical: !!canonical }, hypothesisId: "H1,H5" })
+          // #endregion
+          const openStatus = canonical ? getOpenStatus(canonical, now) : null
+          // #region agent log
+          DEBUG_LOG({ location: "search/route.ts:afterOpenStatus", message: "after getOpenStatus", data: { venueId: venue.id }, hypothesisId: "H1" })
+          // #endregion
+          return { venue, openStatus }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          // #region agent log
+          DEBUG_LOG({ location: "search/route.ts:mapCatch", message: "hours catch", data: { venueId: venue.id, error: msg }, hypothesisId: "H1,H5" })
+          // #endregion
+          console.error("[Explore API] hours for venue", venue.id, err)
+          return { venue, openStatus: null }
+        }
+      })
+    )
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:afterPromiseAll", message: "after Promise.all", data: { count: venuesWithOpenStatus.length }, hypothesisId: "H1" })
+    // #endregion
+
     // Apply "Available Now" filter if requested
     if (availableNow) {
-      venues = venues.filter((venue) => {
+      venuesWithOpenStatus = venuesWithOpenStatus.filter(({ venue, openStatus }) => {
+        if (!openStatus?.isOpen) return false
         const venueWithIncludes = venue as any
-        const venueHours = venueWithIncludes.venueHours || null
-        const openingHoursJson = venueWithIncludes.openingHoursJson || null
-
-        // Check if venue is open
-        const openStatus = isVenueOpenNow(openingHoursJson, undefined, venueHours)
-        if (!openStatus.isOpen || !openStatus.canDetermine) {
-          return false
-        }
-
-        // Calculate capacity
         const capacity = venueWithIncludes.tables.reduce((sum: number, table: any) => {
-          if (table.seats.length > 0) {
-            return sum + table.seats.length
-          }
+          if (table.seats.length > 0) return sum + table.seats.length
           return sum + (table.seatCount || 0)
         }, 0)
-
-        if (capacity <= 0) {
-          return false
-        }
-
-        // Check available seats for current time window
+        if (capacity <= 0) return false
         const startBase = roundUpToNext15Minutes(now)
-        const windowStart = startBase
-        const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
-
+        const windowEnd = new Date(startBase.getTime() + 60 * 60 * 1000)
         const venueReservations = reservationsByVenue[venue.id] || []
         const bookedSeats = venueReservations.reduce((sum, res) => {
-          if (res.startAt < windowEnd && res.endAt > windowStart) {
-            return sum + res.seatCount
-          }
+          if (res.startAt < windowEnd && res.endAt > startBase) return sum + res.seatCount
           return sum
         }, 0)
-
         const availableSeats = capacity - bookedSeats
-
-        // Respect minimum seats filter if set
         if (seatCount !== null && !isNaN(seatCount) && seatCount > 0) {
           return availableSeats >= seatCount
         }
-
         return availableSeats > 0
       })
     }
 
     // Format venues for client
-    const formattedVenues = venues.map((venue) => {
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:beforeFormat", message: "before formattedVenues.map", data: { inputCount: venuesWithOpenStatus.length }, hypothesisId: "H3" })
+    // #endregion
+    const formattedVenues = venuesWithOpenStatus.map(({ venue, openStatus }, idx) => {
       const venueWithIncludes = venue as any
-      
+      // #region agent log
+      if (idx === 0) DEBUG_LOG({ location: "search/route.ts:formatFirst", message: "format first venue", data: { venueId: venue.id, hasTables: !!venueWithIncludes.tables }, hypothesisId: "H3" })
+      // #endregion
       // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
       const capacity = venueWithIncludes.tables.reduce((sum: number, table: any) => {
         if (table.seats.length > 0) {
@@ -377,15 +409,7 @@ export async function GET(request: Request) {
       }
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const venueWithHours = venue as any
-      const venueHours = venueWithHours.venueHours || null
-      const openingHoursJson = venueWithHours.openingHoursJson || null
-      const availabilityLabel = computeAvailabilityLabel(
-        capacity,
-        venueReservations,
-        venueHours,
-        openingHoursJson
-      )
+      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations, openStatus)
 
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array
@@ -441,11 +465,14 @@ export async function GET(request: Request) {
         state: venue.state || "",
         latitude: venue.latitude,
         longitude: venue.longitude,
-        hourlySeatPrice: averageSeatPrice, // Use average seat price for display
+        hourlySeatPrice: averageSeatPrice,
         tags: venue.tags || [],
         capacity,
         rulesText: venue.rulesText || "",
         availabilityLabel,
+        openStatus: openStatus
+          ? { status: openStatus.status, todayHoursText: openStatus.todayHoursText }
+          : null,
         imageUrls,
         dealBadge,
       }
@@ -474,12 +501,20 @@ export async function GET(request: Request) {
       })
     }
 
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:beforeJson", message: "before NextResponse.json", data: { formattedCount: formattedVenues.length }, hypothesisId: "H4" })
+    // #endregion
     return NextResponse.json({ 
       venues: formattedVenues,
       favoritedVenueIds,
     })
-  } catch (error) {
-    console.error("Error searching venues by bounds:", error)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    const stack = error instanceof Error ? error.stack : undefined
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:catch", message: "outer catch", data: { error: message, stack: (stack ?? "").slice(0, 200) }, hypothesisId: "H1,H2,H3,H4,H5" })
+    // #endregion
+    console.error("Error searching venues by bounds:", message, stack ?? "")
     return NextResponse.json(
       { error: "Failed to search venues. Please try again." },
       { status: 500 }

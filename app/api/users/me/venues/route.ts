@@ -41,7 +41,7 @@ export async function GET() {
         status: { not: "DELETED" },
         ...(admin ? {} : { ownerId: session.user.id }),
       },
-      select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true, onboardingStatus: true },
+      select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true, onboardingStatus: true, pausedAt: true },
     })
 
     const list = venues.map((v) => ({
@@ -50,6 +50,7 @@ export async function GET() {
       address: v.address ?? "",
       thumbnail: thumbnailForVenue(v),
       onboardingStatus: v.onboardingStatus,
+      pausedAt: v.pausedAt,
     }))
 
     return NextResponse.json({ venues: list, isAdmin: admin })

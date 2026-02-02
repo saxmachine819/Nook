@@ -34,6 +34,8 @@ interface MapboxMapProps {
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void
   onInitialBounds?: (bounds: { north: number; south: number; east: number; west: number }) => void
   didAreaSearch?: boolean // True when area search just completed (synchronous ref, no batching delay)
+  /** When true (e.g. parent already has venues), skip loading overlay so remount does not show "Loading map" again */
+  initialLoadingComplete?: boolean
 }
 
 // NYC coordinates (default center)
@@ -56,6 +58,7 @@ export function MapboxMap({
   onBoundsChange,
   onInitialBounds,
   didAreaSearch = false,
+  initialLoadingComplete = false,
 }: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -76,7 +79,7 @@ export function MapboxMap({
   const onInitialBoundsRef = useRef(onInitialBounds)
   const hasReportedInitialBoundsRef = useRef(false)
   const pendingAreaSearchRepaintRef = useRef(false) // So interval/handleLoad can repaint even after didAreaSearch prop clears
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!initialLoadingComplete)
   const [mapError, setMapError] = useState<string | null>(null)
   const [showSearchButton, setShowSearchButton] = useState(false)
 
@@ -176,6 +179,62 @@ export function MapboxMap({
     return canvas.toDataURL()
   }
 
+  // Cluster circle images for availability-based coloring (green, red, half-green-half-red)
+  const CLUSTER_IMAGE_SIZE = 64
+  const CLUSTER_GREEN = "#0F5132"
+  const CLUSTER_RED = "#991b1b"
+
+  const createClusterCircleImage = (fillColor: string): ImageData => {
+    const size = CLUSTER_IMAGE_SIZE
+    const canvas = document.createElement("canvas")
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("Could not get canvas context")
+    const center = size / 2
+    const radius = center - 4 // leave room for 2px stroke
+    ctx.fillStyle = fillColor
+    ctx.strokeStyle = "#ffffff"
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.stroke()
+    return ctx.getImageData(0, 0, size, size)
+  }
+
+  const createClusterCircleImageHalfHalf = (): ImageData => {
+    const size = CLUSTER_IMAGE_SIZE
+    const canvas = document.createElement("canvas")
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("Could not get canvas context")
+    const center = size / 2
+    const radius = center - 4
+    // Left semicircle (green)
+    ctx.fillStyle = CLUSTER_GREEN
+    ctx.beginPath()
+    ctx.moveTo(center, center)
+    ctx.arc(center, center, radius, Math.PI * 0.5, Math.PI * 1.5)
+    ctx.closePath()
+    ctx.fill()
+    // Right semicircle (red)
+    ctx.fillStyle = CLUSTER_RED
+    ctx.beginPath()
+    ctx.moveTo(center, center)
+    ctx.arc(center, center, radius, Math.PI * 1.5, Math.PI * 0.5)
+    ctx.closePath()
+    ctx.fill()
+    // White stroke around full circle
+    ctx.strokeStyle = "#ffffff"
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, Math.PI * 2)
+    ctx.stroke()
+    return ctx.getImageData(0, 0, size, size)
+  }
+
   const accessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
 
   // Initialize venues source and layers
@@ -198,6 +257,13 @@ export function MapboxMap({
       map.removeSource("venues")
     }
 
+    // Register cluster circle images once (green, red, half-green-half-red)
+    if (!map.hasImage("cluster-green")) {
+      map.addImage("cluster-green", createClusterCircleImage(CLUSTER_GREEN))
+      map.addImage("cluster-red", createClusterCircleImage(CLUSTER_RED))
+      map.addImage("cluster-mixed", createClusterCircleImageHalfHalf())
+    }
+
     // Add GeoJSON source with clustering
     const venuesGeoJSON = venuesToGeoJSON(venues)
     map.addSource("venues", {
@@ -206,26 +272,42 @@ export function MapboxMap({
       cluster: true,
       clusterRadius: 50,
       clusterMaxZoom: 14,
+      clusterProperties: {
+        availableCount: [
+          "+",
+          ["case", ["==", ["get", "availabilityLabel"], "Available now"], 1, 0],
+        ],
+      },
     })
 
 
-    // Add cluster circle layer
+    // Add cluster circle layer (symbol: green / red / half-green-half-red by availability)
     map.addLayer({
       id: "clusters",
-      type: "circle",
+      type: "symbol",
       source: "venues",
       filter: ["has", "point_count"],
-      paint: {
-        "circle-color": "#0F5132",
-        "circle-radius": [
+      layout: {
+        "icon-image": [
+          "case",
+          ["==", ["get", "availableCount"], ["get", "point_count"]],
+          "cluster-green",
+          ["==", ["get", "availableCount"], 0],
+          "cluster-red",
+          "cluster-mixed",
+        ],
+        "icon-size": [
           "step",
           ["get", "point_count"],
-          20, // radius for clusters with < 50 points
-          50, 30, // radius for clusters with 50-100 points
-          100, 40, // radius for clusters with 100+ points
+          (20 * 2) / CLUSTER_IMAGE_SIZE, // diameter ~40px (< 50 points)
+          50,
+          (30 * 2) / CLUSTER_IMAGE_SIZE, // diameter ~60px
+          100,
+          (40 * 2) / CLUSTER_IMAGE_SIZE, // diameter ~80px
         ],
-        "circle-stroke-width": 2,
-        "circle-stroke-color": "#ffffff",
+        "icon-anchor": "center",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
       },
     })
 
@@ -269,17 +351,14 @@ export function MapboxMap({
       id: "price-label",
       type: "symbol",
       source: "venues",
-      filter: [
-        "all",
-        ["!", ["has", "point_count"]],
-        ["==", ["get", "availabilityLabel"], "Available now"],
-      ],
+      filter: ["!", ["has", "point_count"]],
       layout: {
-        "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+        "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
         "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
         "text-size": 11,
         "text-anchor": "bottom",
-        "text-offset": [0, -1.5],
+        "text-offset": [0, -2],
+        "text-max-width": 8,
       },
       paint: {
         "text-color": "#1f2937",
@@ -464,6 +543,11 @@ export function MapboxMap({
             // Layer might not exist
           }
 
+          // Helper: hide loading overlay only after map has painted (so icons are visible)
+          const clearLoadingAfterPaint = () => {
+            map.once("idle", () => setIsLoading(false))
+          }
+
           // Load pin image
           if (!pinImageLoadedRef.current) {
             try {
@@ -502,17 +586,14 @@ export function MapboxMap({
                             id: "price-label",
                             type: "symbol",
                             source: "venues",
-                            filter: [
-                              "all",
-                              ["!", ["has", "point_count"]],
-                              ["==", ["get", "availabilityLabel"], "Available now"],
-                            ],
+                            filter: ["!", ["has", "point_count"]],
                             layout: {
-                              "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                              "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
                               "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
                               "text-size": 11,
                               "text-anchor": "bottom",
-                              "text-offset": [0, -1.5],
+                              "text-offset": [0, -2],
+                              "text-max-width": 8,
                             },
                             paint: {
                               "text-color": "#1f2937",
@@ -526,24 +607,34 @@ export function MapboxMap({
                         console.error("Error adding unclustered point layer:", error)
                       }
                     }
+                    if (venues.length > 0) clearLoadingAfterPaint()
                   } else {
-                    // Initialize venues source and layers after image is loaded
-                    initializeVenuesSource(map)
+                    // Only add venues source when we have venues (avoid clearing loading on empty map)
+                    if (venues.length > 0) {
+                      initializeVenuesSource(map)
+                      clearLoadingAfterPaint()
+                    }
                   }
                 } catch (error) {
                   console.error("Error adding pin image to map:", error)
+                  setIsLoading(false)
                 }
               }
               img.onerror = (error) => {
                 console.error("Error loading pin image:", error)
+                setIsLoading(false)
               }
               img.src = pinImageDataUrl
             } catch (error) {
               console.error("Error creating pin image:", error)
+              setIsLoading(false)
             }
           } else {
-            // Image already loaded, initialize venues source
-            initializeVenuesSource(map)
+            // Only add venues source when we have venues (avoid clearing loading on empty map)
+            if (venues.length > 0) {
+              initializeVenuesSource(map)
+              clearLoadingAfterPaint()
+            }
           }
 
           // Store initial bounds and report once for bounded initial fetch
@@ -592,8 +683,6 @@ export function MapboxMap({
               hasFitBoundsRef.current = true
             }
           }
-
-          setIsLoading(false)
           
           // If venues changed while map was loading, update them now
           if (venuesRef.current.length > 0) {
@@ -786,6 +875,9 @@ export function MapboxMap({
 
       map.on("idle", () => {
         if (isLoading && map.loaded() && map.getStyle()) {
+          // Only clear loading when venues source exists and has venues (avoid empty map flash)
+          if (!map.getSource("venues")) return
+          if (venuesRef.current.length === 0) return
           if (loadTimeoutRef.current) {
             clearTimeout(loadTimeoutRef.current)
             loadTimeoutRef.current = null
@@ -811,7 +903,6 @@ export function MapboxMap({
                 } catch (e) {}
               }
             })
-            // Markers will be added by venues useEffect, don't call addMarkers here
             setIsLoading(false)
           } catch (error) {
             console.error("❌ Error initializing via idle:", error)
@@ -855,6 +946,10 @@ export function MapboxMap({
 
 
   const addUserLocationMarker = (map: mapboxgl.Map, location: { lat: number; lng: number }) => {
+    if (userLocationMarkerRef.current) {
+      userLocationMarkerRef.current.remove()
+      userLocationMarkerRef.current = null
+    }
     const el = document.createElement("div")
     el.className = "user-location-marker"
     
@@ -991,6 +1086,13 @@ export function MapboxMap({
     if (!mapRef.current) {
       return
     }
+
+    // Clear loading overlay after map has painted venue data (so icons are visible)
+    const clearLoadingAfterPaintIfNeeded = () => {
+      if (isLoading && mapRef.current?.loaded()) {
+        mapRef.current.once("idle", () => setIsLoading(false))
+      }
+    }
     
     // Don't skip if isLoading - we can still queue the update
     // The map will update once it's ready
@@ -1041,6 +1143,7 @@ export function MapboxMap({
             const venuesGeoJSON = venuesToGeoJSON(currentVenues)
             console.log("🗺️ Updating map with", currentVenues.length, "venues (after wait)")
             source.setData(venuesGeoJSON)
+            clearLoadingAfterPaintIfNeeded()
             const mapForRepaint = mapRef.current
             if (mapForRepaint) {
               mapForRepaint.once("sourcedata", (e: mapboxgl.MapSourceDataEvent) => {
@@ -1098,13 +1201,16 @@ export function MapboxMap({
               }
             }
           } else {
-            // Source doesn't exist, initialize it
-            // PRIMARY GUARD: Don't initialize during area search - wait for it to complete
-            if (!isSearchingAreaRef.current) {
+            // Source doesn't exist; only add when we have venues (avoid empty map flash)
+            const currentVenues = venuesRef.current
+            if (!isSearchingAreaRef.current && currentVenues.length > 0) {
               console.log("🗺️ Initializing venues source (after wait)")
               initializeVenuesSource(mapRef.current)
-              const currentVenueIds = venuesRef.current.map(v => v.id).sort()
+              clearLoadingAfterPaintIfNeeded()
+              const currentVenueIds = currentVenues.map(v => v.id).sort()
               previousVenueIdsRef.current = currentVenueIds
+            } else if (currentVenues.length === 0) {
+              // No venues yet; loading overlay stays
             } else {
               // During area search, skip initialization to preserve map view
               console.log("🗺️ Skipping source initialization during area search")
@@ -1124,6 +1230,7 @@ export function MapboxMap({
           const venuesGeoJSON = venuesToGeoJSON(currentVenues)
           console.log("🗺️ Updating map with", currentVenues.length, "venues (on load event)")
           source.setData(venuesGeoJSON)
+          clearLoadingAfterPaintIfNeeded()
           const mapForRepaint = mapRef.current
           if (mapForRepaint) {
             mapForRepaint.once("sourcedata", (e: mapboxgl.MapSourceDataEvent) => {
@@ -1207,6 +1314,7 @@ export function MapboxMap({
               const venuesGeoJSON = venuesToGeoJSON(venues)
               console.log("🗺️ Updating map with", venues.length, "venues (after pin reload)")
               source.setData(venuesGeoJSON)
+              clearLoadingAfterPaintIfNeeded()
               const mapForRepaint = mapRef.current
               if (mapForRepaint) {
                 mapForRepaint.once("sourcedata", (e: mapboxgl.MapSourceDataEvent) => {
@@ -1225,9 +1333,12 @@ export function MapboxMap({
                 })
               }
             } else {
-              // PRIMARY GUARD: Don't initialize during area search
-              if (!isSearchingAreaRef.current) {
+              // Only add source when we have venues (avoid empty map flash)
+              if (!isSearchingAreaRef.current && venues.length > 0) {
                 initializeVenuesSource(mapRef.current)
+                clearLoadingAfterPaintIfNeeded()
+              } else if (venues.length === 0) {
+                // No venues yet; loading overlay stays
               } else {
                 // During area search, skip initialization to preserve map view
                 console.log("🗺️ Skipping source initialization during area search (pin reload)")
@@ -1264,6 +1375,7 @@ export function MapboxMap({
           // Area search just finished: list is accurate. Update source and refresh map by fitting to results.
           const venuesGeoJSON = venuesToGeoJSON(venues)
           source.setData(venuesGeoJSON)
+          clearLoadingAfterPaintIfNeeded()
           previousVenueIdsRef.current = currentVenueIds
           lastVenuesCountRef.current = venues.length
           const map = mapRef.current
@@ -1289,10 +1401,12 @@ export function MapboxMap({
         } else if (!hasUserInteractedWithMapRef.current) {
           // Only re-initialize if user hasn't interacted (e.g., filter change on initial load)
           initializeVenuesSource(mapRef.current)
+          clearLoadingAfterPaintIfNeeded()
         } else {
           // Just update the data without re-initializing to preserve map view
           const venuesGeoJSON = venuesToGeoJSON(venues)
           source.setData(venuesGeoJSON)
+          clearLoadingAfterPaintIfNeeded()
           previousVenueIdsRef.current = currentVenueIds
           lastVenuesCountRef.current = venues.length
           const mapForRepaint = mapRef.current
@@ -1355,6 +1469,7 @@ export function MapboxMap({
           const venuesGeoJSON = venuesToGeoJSON(venues)
           console.log("🗺️ Minor venue update, using setData:", venues.length, "venues")
         source.setData(venuesGeoJSON)
+        clearLoadingAfterPaintIfNeeded()
         const mapForRepaint = mapRef.current
         if (mapForRepaint) {
           mapForRepaint.once("sourcedata", (e: mapboxgl.MapSourceDataEvent) => {
@@ -1404,17 +1519,14 @@ export function MapboxMap({
               id: "price-label",
               type: "symbol",
               source: "venues",
-              filter: [
-                "all",
-                ["!", ["has", "point_count"]],
-                ["==", ["get", "availabilityLabel"], "Available now"],
-              ],
+              filter: ["!", ["has", "point_count"]],
               layout: {
-                "text-field": ["concat", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
                 "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
                 "text-size": 11,
                 "text-anchor": "bottom",
-                "text-offset": [0, -1.5],
+                "text-offset": [0, -2],
+                "text-max-width": 8,
               },
               paint: {
                 "text-color": "#1f2937",
@@ -1429,13 +1541,15 @@ export function MapboxMap({
         }
       }
     } else {
-      // Source doesn't exist yet, initialize it
-      // PRIMARY GUARD: Don't initialize during area search
-      if (!isSearchingAreaRef.current) {
+      // Source doesn't exist yet; only add when we have venues (avoid empty map flash)
+      if (!isSearchingAreaRef.current && venues.length > 0) {
         console.log("🗺️ Initializing venues source (first time)")
         // initializeVenuesSource will handle adding layers even if pin image isn't loaded
         initializeVenuesSource(mapRef.current)
+        clearLoadingAfterPaintIfNeeded()
         previousVenueIdsRef.current = currentVenueIds
+      } else if (venues.length === 0) {
+        // No venues yet; loading overlay stays until venues useEffect runs with data
       } else {
         // During area search, skip initialization to preserve map view
         console.log("🗺️ Skipping source initialization during area search (first time)")

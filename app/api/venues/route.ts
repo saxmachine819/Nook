@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { parseGooglePeriodsToVenueHours, upsertVenueHours } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function POST(request: NextRequest) {
   try {
@@ -169,13 +169,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Parse and save venue hours if openingHoursJson exists
+    // Parse and save venue hours if openingHoursJson exists (new venue: hoursSource is null)
     if (body.openingHoursJson) {
       try {
         const openingHours = body.openingHoursJson as any
         if (openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
           const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venue.id, "google")
-          await upsertVenueHours(prisma, venue.id, hoursData)
+          await syncVenueHoursFromGoogle(prisma, venue.id, hoursData, null)
         }
       } catch (error) {
         // Log error but don't fail venue creation

@@ -9,6 +9,11 @@ import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
 import { VenueHoursDisplay } from "@/components/venue/VenueHoursDisplay"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
+import {
+  getCanonicalVenueHours,
+  getOpenStatus,
+  formatWeeklyHoursFromCanonical,
+} from "@/lib/hours"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
 import { DealType } from "@prisma/client"
 
@@ -232,9 +237,9 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     },
   })
 
-  const venueWithHours = venue as any
-  const venueHours = venueWithHours.venueHours || null
-  const openingHoursJson = venueWithHours.openingHoursJson || null
+  const canonical = await getCanonicalVenueHours(venue.id)
+  const openStatus = canonical ? getOpenStatus(canonical, new Date()) : null
+  const weeklyFormatted = canonical ? formatWeeklyHoursFromCanonical(canonical) : []
   const availabilityLabel = computeAvailabilityLabel(
     capacity,
     futureReservations.map((r) => ({
@@ -242,8 +247,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       endAt: r.endAt,
       seatCount: r.seatCount,
     })),
-    venueHours,
-    openingHoursJson
+    openStatus
   )
 
   const venueHeroImages: string[] = (() => {
@@ -401,7 +405,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
             </div>
 
-            <VenueHoursDisplay openingHoursJson={(venue as any).openingHoursJson} />
+            <VenueHoursDisplay openStatus={openStatus} weeklyFormatted={weeklyFormatted} />
 
             {venue.rulesText && (
               <div className="rounded-xl border bg-background p-4">

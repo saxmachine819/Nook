@@ -24,6 +24,8 @@ interface Venue {
   capacity: number
   rulesText?: string
   availabilityLabel?: string
+  /** From hours engine: OPEN_NOW | CLOSED_NOW | OPENS_LATER | CLOSED_TODAY; use for map pin color. */
+  openStatus?: { status: string; todayHoursText: string } | null
   imageUrls?: string[]
   hourlySeatPrice?: number
   dealBadge?: {
@@ -57,6 +59,10 @@ function normalizeVenue(v: Record<string, unknown>): Venue {
     capacity: typeof v.capacity === "number" ? v.capacity : 0,
     rulesText: v.rulesText != null ? String(v.rulesText) : undefined,
     availabilityLabel: v.availabilityLabel != null ? String(v.availabilityLabel) : undefined,
+    openStatus:
+      v.openStatus && typeof v.openStatus === "object" && v.openStatus !== null
+        ? { status: String((v.openStatus as { status?: string }).status ?? ""), todayHoursText: String((v.openStatus as { todayHoursText?: string }).todayHoursText ?? "") }
+        : undefined,
     imageUrls: Array.isArray(v.imageUrls) ? (v.imageUrls as string[]) : undefined,
     hourlySeatPrice: h,
     dealBadge: v.dealBadge && typeof v.dealBadge === "object" && v.dealBadge !== null
@@ -171,6 +177,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
   const [mapRefreshTrigger, setMapRefreshTrigger] = useState<number>(0) // Increment to force map refresh
   const didAreaSearchRef = useRef(false) // Track if we just completed an area search (synchronous, no batching delay)
   const [debugBounds, setDebugBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null)
+  const venuesCountRef = useRef(0) // Current venue count for performSearch (avoid remount on first load)
 
   // Keep filtersRef and searchQueryRef in sync and save to localStorage
   useEffect(() => {
@@ -188,9 +195,12 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     })
   }, [filters, searchQuery])
 
-  
+  useEffect(() => {
+    venuesCountRef.current = venues.length
+  }, [venues])
+
   // Store performSearch in ref for verification and initial load
-  const performSearchRef = useRef<((query: string, bounds?: { north: number; south: number; east: number; west: number } | null, currentFilters?: FilterState) => Promise<void>) | null>(null)
+  const performSearchRef = useRef<((query: string, bounds?: { north: number; south: number; east: number; west: number } | null, currentFilters?: FilterState, skipSetIsSearchingText?: boolean, isInitialLoad?: boolean) => Promise<void>) | null>(null)
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
   const hasMapboxToken = !!mapboxToken
@@ -332,7 +342,8 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     query: string,
     bounds?: { north: number; south: number; east: number; west: number } | null,
     currentFilters?: FilterState,
-    skipSetIsSearchingText?: boolean
+    skipSetIsSearchingText?: boolean,
+    isInitialLoad?: boolean
   ) => {
     if (!skipSetIsSearchingText) {
       setIsSearchingText(true)
@@ -415,12 +426,6 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
         const merged = new Set([...prev, ...favoritedIds])
         return merged
       })
-      // Force map refresh when search results update
-      // CRITICAL: Don't refresh map during area search - it causes remount and zoom reset
-      if (!skipSetIsSearchingText) {
-        // Only refresh map for text searches, not area searches
-        setMapRefreshTrigger(prev => prev + 1)
-      }
     } catch (e) {
       console.error("Error searching venues:", e)
     } finally {
@@ -441,8 +446,10 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       hasReceivedInitialBoundsRef.current = true
       currentBoundsRef.current = bounds
       if (process.env.NODE_ENV !== "production") setDebugBounds(bounds)
-      // Do not performSearch or set hasInitializedVenuesRef here.
-      // Venues stay [] until user clicks "Search this area" or applies search/filters.
+      // Run first search so venues load for the visible area; map overlay clears after paint
+      if (performSearchRef.current) {
+        performSearchRef.current("", bounds, filtersRef.current, false, true)
+      }
     },
     []
   )
@@ -726,6 +733,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
             onBoundsChange={setDebugBounds}
             onInitialBounds={handleInitialBounds}
             didAreaSearch={didAreaSearchRef.current}
+            initialLoadingComplete={venues.length > 0}
           />
           {process.env.NODE_ENV !== "production" && (
             <div className="fixed bottom-20 left-2 z-10 rounded bg-background/90 px-2 py-1 text-xs font-mono text-muted-foreground shadow">

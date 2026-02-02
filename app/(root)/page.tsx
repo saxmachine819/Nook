@@ -2,8 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { ExploreClient } from "./ExploreClient"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
-import { isVenueOpenNow, getNextOpenTime } from "@/lib/venue-hours"
-
+import { getCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 
 interface ExplorePageProps {
@@ -103,8 +102,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
     // Only show APPROVED venues in Explore
     whereClause.onboardingStatus = "APPROVED"
-    // Exclude soft-deleted venues; PAUSED venues still appear (show as temporarily unavailable)
+    // Exclude soft-deleted and paused venues from Explore
     whereClause.status = { not: "DELETED" }
+    whereClause.pausedAt = null
 
     // Fetch venues from database (with optional search filter)
     let venues = await prisma.venue.findMany({
@@ -226,6 +226,18 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       return acc
     }, {})
 
+    // Pre-compute open status for all venues (can't await inside .map)
+    const openStatusList = await Promise.all(
+      venues.map(async (v) => {
+        const canonical = await getCanonicalVenueHours(v.id)
+        const openStatus = canonical ? getOpenStatus(canonical, now) : null
+        return { venueId: v.id, openStatus }
+      })
+    )
+    const openStatusByVenueId = Object.fromEntries(
+      openStatusList.map(({ venueId, openStatus }) => [venueId, openStatus])
+    )
+
     // Format venues for client component
     const formattedVenues = venues.map((venue) => {
       // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
@@ -303,15 +315,8 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       }
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const venueWithHours = venue as any
-      const venueHours = venueWithHours.venueHours || null
-      const openingHoursJson = venueWithHours.openingHoursJson || null
-      const availabilityLabel = computeAvailabilityLabel(
-        capacity,
-        venueReservations,
-        venueHours,
-        openingHoursJson
-      )
+      const openStatus = openStatusByVenueId[venue.id] ?? null
+      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations, openStatus)
 
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array
@@ -374,6 +379,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         capacity,
         rulesText: venue.rulesText || "",
         availabilityLabel,
+        openStatus: openStatus
+          ? { status: openStatus.status, todayHoursText: openStatus.todayHoursText }
+          : null,
         imageUrls,
         dealBadge,
       }

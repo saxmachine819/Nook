@@ -36,7 +36,8 @@ function formatTime(hour: number, minute: number): string {
 
 /**
  * Parse Google opening hours to human-readable format
- * Prefers weekdayDescriptions if available, otherwise formats from periods
+ * Prefers weekdayDescriptions if available, otherwise formats from periods.
+ * For UI display use getCanonicalVenueHours + formatWeeklyHoursFromCanonical from @/lib/hours; weekday_text is debug/sync only.
  */
 export function parseGoogleHours(openingHoursJson: any): {
   formatted: string[]
@@ -120,8 +121,8 @@ export function parseGoogleHours(openingHoursJson: any): {
 }
 
 /**
- * Check if venue is currently open based on venueHours or openingHoursJson
- * Prefers venueHours if available, falls back to openingHoursJson
+ * Check if venue is currently open based on venueHours or openingHoursJson.
+ * @deprecated Prefer getCanonicalVenueHours + getOpenStatus from @/lib/hours for all open/closed and today hours. Kept for sync/parsing only.
  */
 export function isVenueOpenNow(
   openingHoursJson?: any,
@@ -254,7 +255,8 @@ export function isVenueOpenNow(
 }
 
 /**
- * Get today's hours as a formatted string
+ * Get today's hours as a formatted string from raw Google payload.
+ * @deprecated Prefer getCanonicalVenueHours + getOpenStatus (todayHoursText) from @/lib/hours. Kept for sync/parsing only.
  */
 export function getTodaysHours(openingHoursJson: any): string | null {
   if (!openingHoursJson) return null
@@ -494,6 +496,76 @@ export function parseGooglePeriodsToVenueHours(
   }
 
   return days
+}
+
+/** VenueHours-like row (from DB or in-memory); source is "google" | "manual" */
+export type VenueHoursRow = {
+  dayOfWeek: number
+  isClosed: boolean
+  openTime: string | null
+  closeTime: string | null
+  source?: string
+}
+
+/**
+ * Return the effective schedule for availability/labels: manual wins when hoursSource is "manual", else use google rows.
+ * See docs/HOURS_AUDIT.md and precedence rules.
+ */
+export function getEffectiveVenueHours(
+  venueHours: VenueHoursRow[],
+  hoursSource: string | null | undefined
+): VenueHoursRow[] {
+  if (!venueHours || venueHours.length === 0) return []
+  if (hoursSource === "manual") {
+    return venueHours.filter((h) => h.source === "manual")
+  }
+  // Default: use google rows; treat missing source as google (legacy)
+  return venueHours.filter((h) => h.source === "google" || h.source === undefined)
+}
+
+/**
+ * Sync VenueHours from Google data. When venue.hoursSource === "manual", do not overwrite rows that are already source === "manual".
+ */
+export async function syncVenueHoursFromGoogle(
+  prisma: any,
+  venueId: string,
+  hoursData: Array<{
+    venueId: string
+    dayOfWeek: number
+    isClosed: boolean
+    openTime: string | null
+    closeTime: string | null
+    source: string
+  }>,
+  hoursSource: string | null | undefined
+): Promise<void> {
+  if (hoursSource === "manual") {
+    const existing = await prisma.venueHours.findMany({
+      where: { venueId },
+      select: { dayOfWeek: true, source: true },
+    })
+    const existingByDay = new Map(existing.map((r: { dayOfWeek: number; source: string }) => [r.dayOfWeek, r.source]))
+    for (const dayData of hoursData) {
+      if (existingByDay.get(dayData.dayOfWeek) === "manual") continue
+      await prisma.venueHours.upsert({
+        where: {
+          venueId_dayOfWeek: {
+            venueId,
+            dayOfWeek: dayData.dayOfWeek,
+          },
+        },
+        update: {
+          isClosed: dayData.isClosed,
+          openTime: dayData.openTime,
+          closeTime: dayData.closeTime,
+          source: dayData.source,
+        },
+        create: dayData,
+      })
+    }
+    return
+  }
+  await upsertVenueHours(prisma, venueId, hoursData)
 }
 
 /**

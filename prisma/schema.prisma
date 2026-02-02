@@ -78,6 +78,10 @@ model Venue {
   favoriteTables  FavoriteTable[]
   favoriteSeats   FavoriteSeat[]
   qrAssets        QRAsset[]
+  // Hours: canonical source and timezone (see docs/HOURS_AUDIT.md)
+  timezone        String?
+  hoursSource    String?       // "google" | "manual"; null = use google
+  hoursUpdatedAt DateTime?
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?

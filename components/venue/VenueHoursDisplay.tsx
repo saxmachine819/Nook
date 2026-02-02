@@ -1,18 +1,21 @@
 "use client"
 
-import { useMemo } from "react"
-import { parseGoogleHours, isVenueOpenNow, getTodaysHours } from "@/lib/venue-hours"
+import type { OpenStatus } from "@/lib/hours"
 
 interface VenueHoursDisplayProps {
-  openingHoursJson: any
+  /** From getOpenStatus(canonical, now); required for display. No raw Google payload. */
+  openStatus: OpenStatus | null
+  /** From formatWeeklyHoursFromCanonical(canonical). */
+  weeklyFormatted: string[]
 }
 
-export function VenueHoursDisplay({ openingHoursJson }: VenueHoursDisplayProps) {
-  const { formatted, hasHours } = useMemo(() => parseGoogleHours(openingHoursJson), [openingHoursJson])
-  const { isOpen, canDetermine } = useMemo(() => isVenueOpenNow(openingHoursJson), [openingHoursJson])
-  const todaysHours = useMemo(() => getTodaysHours(openingHoursJson), [openingHoursJson])
+export function VenueHoursDisplay({ openStatus, weeklyFormatted }: VenueHoursDisplayProps) {
+  const hasHours = weeklyFormatted.length > 0
+  const isOpen = openStatus?.isOpen ?? false
+  const canDetermine = openStatus != null
+  const todaysHours = openStatus?.todayHoursText ?? null
 
-  if (!hasHours) {
+  if (!hasHours && !openStatus) {
     return null
   }
 
@@ -35,18 +38,20 @@ export function VenueHoursDisplay({ openingHoursJson }: VenueHoursDisplayProps) 
       {todaysHours && (
         <p className="mb-2 text-sm font-medium">{todaysHours}</p>
       )}
-      <details className="group">
-        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-          View weekly hours
-        </summary>
-        <div className="mt-2 space-y-1">
-          {formatted.map((dayHours, index) => (
-            <div key={index} className="text-xs text-muted-foreground">
-              {dayHours}
-            </div>
-          ))}
-        </div>
-      </details>
+      {weeklyFormatted.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+            View weekly hours
+          </summary>
+          <div className="mt-2 space-y-1">
+            {weeklyFormatted.map((dayHours, index) => (
+              <div key={index} className="text-xs text-muted-foreground">
+                {dayHours}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }

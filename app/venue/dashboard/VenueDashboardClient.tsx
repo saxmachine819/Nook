@@ -12,13 +12,14 @@ interface Venue {
   address: string
   thumbnail: string | null
   onboardingStatus: string
+  pausedAt: string | null
 }
 
 function getStatusPill(status: string) {
   const config: Record<string, { label: string; className: string }> = {
     DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
     SUBMITTED: { label: "Pending Review", className: "bg-yellow-100 text-yellow-800" },
-    APPROVED: { label: "Approved", className: "bg-green-100 text-green-800" },
+    APPROVED: { label: "Active", className: "bg-green-100 text-green-800" },
     REJECTED: { label: "Rejected", className: "bg-red-100 text-red-800" },
   }
   const { label, className } = config[status] || config.DRAFT
@@ -94,6 +95,13 @@ export function VenueDashboardClient() {
                       {v.address || "No address"}
                     </p>
                     {(() => {
+                      if (v.pausedAt != null) {
+                        return (
+                          <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Paused
+                          </span>
+                        )
+                      }
                       const { label, className } = getStatusPill(v.onboardingStatus)
                       return (
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>

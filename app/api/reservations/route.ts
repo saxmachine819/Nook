@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { isReservationWithinHours } from "@/lib/venue-hours"
+import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
 import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
 
 export async function POST(request: Request) {
@@ -149,38 +149,17 @@ export async function POST(request: Request) {
       throw err
     }
 
-    // Check if reservation is within venue hours (only if hours data exists and is complete)
-    // IMPORTANT: Don't block reservations if hours data is incomplete or missing
-    const venueHours = venue.venueHours || null
-    const openingHoursJson = venue.openingHoursJson
-    
-    // Only enforce hours if we have complete hours data - be lenient to avoid blocking valid bookings
-    if (venueHours && venueHours.length === 7) {
-      // Only check if we have all 7 days of hours
-      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, venueHours, openingHoursJson)
+    // Validate reservation window against canonical hours (single shared hours engine)
+    const canonical = await getCanonicalVenueHours(venueId)
+    if (canonical && canonical.weeklyHours.length > 0) {
+      const hoursCheck = isReservationWithinCanonicalHours(parsedStart, parsedEnd, canonical)
       if (!hoursCheck.isValid) {
         return NextResponse.json(
-          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
-          { status: 400 }
-        )
-      }
-    } else if (
-      openingHoursJson &&
-      typeof openingHoursJson === "object" &&
-      "periods" in openingHoursJson &&
-      Array.isArray((openingHoursJson as { periods?: unknown[] }).periods) &&
-      (openingHoursJson as { periods: unknown[] }).periods.length > 0
-    ) {
-      // Fallback to JSON hours if VenueHours not available but JSON exists
-      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, null, openingHoursJson)
-      if (!hoursCheck.isValid) {
-        return NextResponse.json(
-          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
+          { error: hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours." },
           { status: 400 }
         )
       }
     }
-    // If no hours data or incomplete hours, allow booking (backward compatibility - don't break existing flow)
 
     let reservations: any[]
 

@@ -241,6 +241,10 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     }))
   }
   const [hours, setHours] = useState(initializeHours())
+  // Single venue hours pathway: manual edit → "manual", "Use Google hours" → "google"
+  const [hoursSourceChoice, setHoursSourceChoice] = useState<"manual" | "google">(
+    (venue as { hoursSource?: string | null }).hoursSource === "google" ? "google" : "manual"
+  )
   const [availablePhotos, setAvailablePhotos] = useState<Array<{
     photoUrl: string
     photoReference: string | null
@@ -779,6 +783,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           googlePlaceId: googlePlaceId || null,
           googleMapsUrl: googleMapsUrl || null,
           openingHoursJson: openingHoursJson || null,
+          hoursSource: hoursSourceChoice,
           venueHours: hours.map(h => ({
             dayOfWeek: h.dayOfWeek,
             isClosed: h.isClosed,
@@ -1095,7 +1100,45 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         <Card>
           <CardHeader>
             <CardTitle>Opening Hours</CardTitle>
-            <CardDescription>Set your venue&apos;s weekly schedule</CardDescription>
+            <CardDescription>Set your venue&apos;s weekly schedule. Manual edits set source to manual; use Google hours to pull from your place listing.</CardDescription>
+            {openingHoursJson?.periods && Array.isArray(openingHoursJson.periods) && openingHoursJson.periods.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  try {
+                    const hoursData = parseGooglePeriodsToVenueHours(
+                      openingHoursJson.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
+                      venue.id,
+                      "google"
+                    )
+                    const hoursMap = new Map(hoursData.map((h) => [h.dayOfWeek, h]))
+                    setHours(
+                      Array.from({ length: 7 }, (_, i) => {
+                        const existing = hoursMap.get(i)
+                        if (existing) {
+                          return {
+                            dayOfWeek: existing.dayOfWeek,
+                            isClosed: existing.isClosed,
+                            openTime: existing.openTime || "",
+                            closeTime: existing.closeTime || "",
+                          }
+                        }
+                        return { dayOfWeek: i, isClosed: true, openTime: "", closeTime: "" }
+                      })
+                    )
+                    setHoursSourceChoice("google")
+                    showToast("Hours updated from Google. Save to apply.", "success")
+                  } catch (e) {
+                    console.error(e)
+                    showToast("Could not parse Google hours.", "error")
+                  }
+                }}
+              >
+                Use Google hours
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -1114,6 +1157,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           newHours[index].closeTime = ""
                         }
                         setHours(newHours)
+                        setHoursSourceChoice("manual")
                       }}
                       className="h-4 w-4 rounded border-gray-300"
                     />
@@ -1128,6 +1172,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           const newHours = [...hours]
                           newHours[index].openTime = e.target.value
                           setHours(newHours)
+                          setHoursSourceChoice("manual")
                         }}
                         className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
                       />
@@ -1139,6 +1184,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           const newHours = [...hours]
                           newHours[index].closeTime = e.target.value
                           setHours(newHours)
+                          setHoursSourceChoice("manual")
                         }}
                         className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
                       />

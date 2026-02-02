@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VenueOpsConsoleClient } from "./VenueOpsConsoleClient"
-import { parseGooglePeriodsToVenueHours, upsertVenueHours } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 interface VenueOpsConsolePageProps {
   params: { id: string }
@@ -79,7 +79,7 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
 
   const now = new Date()
 
-  // Fetch reservations, seat blocks, deals, and QR assets assigned to this venue
+  // Fetch reservations, seat blocks, deals, and QR assets
   const [reservations, seatBlocks, dealsResult, qrAssets] = await Promise.all([
     prisma.reservation.findMany({
       where: {
@@ -151,20 +151,24 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
     }
   }
 
-  // Backfill venue hours if needed (idempotent)
+  // Backfill venue hours if needed (idempotent). Run when we have openingHoursJson.periods and
+  // either no VenueHours or all VenueHours are google source (so we can repair missing/stale google rows).
+  // syncVenueHoursFromGoogle respects hoursSource=manual and does not overwrite manual rows.
   if (venue.openingHoursJson) {
     try {
       const openingHours = venue.openingHoursJson as any
       if (openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
-        // Check if venueHours already exist
-        const existingHours = await prisma.venueHours.findFirst({
+        const existingRows = await prisma.venueHours.findMany({
           where: { venueId: venue.id },
+          select: { source: true },
         })
-
-        if (!existingHours) {
-          // Parse and save hours
+        const shouldSync =
+          existingRows.length === 0 ||
+          existingRows.every((r) => r.source === "google" || r.source == null)
+        if (shouldSync) {
           const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venue.id, "google")
-          await upsertVenueHours(prisma, venue.id, hoursData)
+          const hoursSource = (venue as { hoursSource?: string | null }).hoursSource ?? null
+          await syncVenueHoursFromGoogle(prisma, venue.id, hoursData, hoursSource)
         }
       }
     } catch (error) {
