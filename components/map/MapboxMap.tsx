@@ -353,7 +353,7 @@ export function MapboxMap({
       source: "venues",
       filter: ["!", ["has", "point_count"]],
       layout: {
-        "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+        "text-field": ["concat", ["get", "name"], "\n", "From $", ["to-string", ["get", "minPrice"]], "/hr"],
         "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
         "text-size": 11,
         "text-anchor": "bottom",
@@ -588,7 +588,7 @@ export function MapboxMap({
                             source: "venues",
                             filter: ["!", ["has", "point_count"]],
                             layout: {
-                              "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                              "text-field": ["concat", ["get", "name"], "\n", "From $", ["to-string", ["get", "minPrice"]], "/hr"],
                               "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
                               "text-size": 11,
                               "text-anchor": "bottom",
@@ -1521,7 +1521,7 @@ export function MapboxMap({
               source: "venues",
               filter: ["!", ["has", "point_count"]],
               layout: {
-                "text-field": ["concat", ["get", "name"], "\n", "$", ["to-string", ["get", "minPrice"]], "/hr"],
+                "text-field": ["concat", ["get", "name"], "\n", "From $", ["to-string", ["get", "minPrice"]], "/hr"],
                 "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
                 "text-size": 11,
                 "text-anchor": "bottom",

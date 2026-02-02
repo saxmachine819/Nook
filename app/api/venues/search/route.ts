@@ -386,27 +386,17 @@ export async function GET(request: Request) {
         return sum + (table.seatCount || 0)
       }, 0)
       
-      // Calculate pricing based on booking modes
-      const groupTables = venueWithIncludes.tables.filter((t: any) => t.bookingMode === "group")
-      const individualTables = venueWithIncludes.tables.filter((t: any) => t.bookingMode === "individual")
-      
-      let averageSeatPrice = venue.hourlySeatPrice
-      
-      if (individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap((t: any) => t.seats)
-        if (individualSeats.length > 0) {
-          averageSeatPrice = individualSeats.reduce((sum: number, seat: any) => sum + (seat.pricePerHour || 0), 0) / individualSeats.length
-        }
-      } else if (groupTables.length > 0) {
-        // Only group tables - calculate average table price per seat
-        const groupPrices = groupTables
-          .filter((t: any) => t.tablePricePerHour)
-          .map((t: any) => ({ price: t.tablePricePerHour!, seatCount: t.seats.length }))
-        if (groupPrices.length > 0) {
-          const totalPricePerSeat = groupPrices.reduce((sum: number, t: any) => sum + (t.price / t.seatCount), 0)
-          averageSeatPrice = totalPricePerSeat / groupPrices.length
-        }
-      }
+      // Cheapest price: min of (all seat prices, all table total prices)
+      const allSeatPrices = venueWithIncludes.tables.flatMap((t: any) =>
+        (t.seats || []).map((s: any) => s.pricePerHour).filter((p: number) => p != null && p > 0)
+      )
+      const allTablePrices = venueWithIncludes.tables
+        .filter((t: any) => t.bookingMode === "group" && t.tablePricePerHour != null && t.tablePricePerHour > 0)
+        .map((t: any) => t.tablePricePerHour)
+      const candidatePrices = [...allSeatPrices, ...allTablePrices]
+      const fallback = venue.hourlySeatPrice != null && venue.hourlySeatPrice > 0 ? venue.hourlySeatPrice : 0
+      const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
+      const maxPrice = candidatePrices.length > 0 ? Math.max(...candidatePrices) : fallback
       
       const venueReservations = reservationsByVenue[venue.id] || []
       const availabilityLabel = computeAvailabilityLabel(
@@ -470,7 +460,9 @@ export async function GET(request: Request) {
         state: venue.state || "",
         latitude: venue.latitude,
         longitude: venue.longitude,
-        hourlySeatPrice: averageSeatPrice,
+        minPrice,
+        maxPrice,
+        hourlySeatPrice: minPrice,
         tags: venue.tags || [],
         capacity,
         rulesText: venue.rulesText || "",

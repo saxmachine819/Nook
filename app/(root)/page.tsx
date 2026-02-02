@@ -253,69 +253,19 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         return sum + (tableWithSeats.seatCount || 0)
       }, 0)
       
-      // Calculate price range based on booking modes
-      // Min: cheapest individual seat price
-      // Max: most expensive full table price (total, not per seat)
-      const groupTables = venue.tables.filter(t => (t as any).bookingMode === "group")
-      const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
-      
-      // Min price: cheapest individual seat
-      let minPrice = venue.hourlySeatPrice || 0
-      if (individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => {
-          const tableWithSeats = t as any
-          return tableWithSeats.seats || []
-        })
-        const seatPrices = individualSeats
-          .map(seat => (seat as any).pricePerHour)
-          .filter(price => price && price > 0)
-        if (seatPrices.length > 0) {
-          minPrice = Math.min(...seatPrices)
-        }
-      }
-      
-      // Max price: most expensive full table (total table price)
-      let maxPrice = venue.hourlySeatPrice || 0
-      if (groupTables.length > 0) {
-        const tablePrices = groupTables
-          .map(t => (t as any).tablePricePerHour)
-          .filter(price => price && price > 0)
-        if (tablePrices.length > 0) {
-          maxPrice = Math.max(...tablePrices)
-        }
-      }
-      
-      // If no group tables, max should be the most expensive individual seat
-      if (groupTables.length === 0 && individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => {
-          const tableWithSeats = t as any
-          return tableWithSeats.seats || []
-        })
-        const seatPrices = individualSeats
-          .map(seat => (seat as any).pricePerHour)
-          .filter(price => price && price > 0)
-        if (seatPrices.length > 0) {
-          maxPrice = Math.max(...seatPrices)
-        }
-      }
-      
-      // If no individual tables, min should be the cheapest group table per seat
-      if (individualTables.length === 0 && groupTables.length > 0) {
-        const perSeatPrices = groupTables
-          .map(t => {
-            const tableWithSeats = t as any
-            const tablePrice = tableWithSeats.tablePricePerHour
-            const seatCount = tableWithSeats.seats ? tableWithSeats.seats.length : 0
-            if (tablePrice && tablePrice > 0 && seatCount > 0) {
-              return tablePrice / seatCount
-            }
-            return null
-          })
-          .filter((price): price is number => price !== null)
-        if (perSeatPrices.length > 0) {
-          minPrice = Math.min(...perSeatPrices)
-        }
-      }
+      // Cheapest price: min of (all seat prices, all table total prices)
+      const allSeatPrices = venue.tables.flatMap(t => {
+        const tableWithSeats = t as any
+        return (tableWithSeats.seats || []).map((seat: any) => seat.pricePerHour).filter((p: number) => p != null && p > 0)
+      })
+      const allTablePrices = venue.tables
+        .filter(t => (t as any).bookingMode === "group")
+        .map(t => (t as any).tablePricePerHour)
+        .filter((p: number) => p != null && p > 0)
+      const candidatePrices = [...allSeatPrices, ...allTablePrices]
+      const fallback = venue.hourlySeatPrice || 0
+      const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
+      const maxPrice = candidatePrices.length > 0 ? Math.max(...candidatePrices) : fallback
       
       const venueReservations = reservationsByVenue[venue.id] || []
       const { openStatus, timezone } = openStatusByVenueId[venue.id] ?? { openStatus: null, timezone: null }
