@@ -158,6 +158,42 @@ describe("computeAvailabilityLabel", () => {
     })
   })
 
+  describe("timezone", () => {
+    it("formats nextOpenAt in venue timezone (12:30 UTC = 7:30 AM ET)", () => {
+      // 2025-02-03 12:30 UTC = 7:30 AM Eastern
+      const nextOpenAt = new Date("2025-02-03T12:30:00.000Z")
+      const openStatus: OpenStatus = {
+        isOpen: false,
+        status: "CLOSED_NOW",
+        todayLabel: "Sun",
+        todayHoursText: "Closed",
+        nextOpenAt,
+      }
+      const result = computeAvailabilityLabel(10, [], openStatus, {
+        timeZone: "America/New_York",
+      })
+      expect(result).toContain("Opens")
+      expect(result).toContain("at")
+      expect(result).toContain("7:30 AM")
+    })
+
+    it("uses venue timezone for day and time (same UTC moment displays as 7:30 AM in ET)", () => {
+      const nextOpenAt = new Date("2025-02-03T12:30:00.000Z")
+      const openStatus: OpenStatus = {
+        isOpen: false,
+        status: "CLOSED_NOW",
+        todayLabel: "Sun",
+        todayHoursText: "Closed",
+        nextOpenAt,
+      }
+      const result = computeAvailabilityLabel(10, [], openStatus, {
+        timeZone: "America/New_York",
+      })
+      expect(result).toContain("7:30 AM")
+      expect(result).toMatch(/^Opens (at|tomorrow|Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday) at /)
+    })
+  })
+
   describe("edge cases", () => {
     it("handles overlapping reservations correctly", () => {
       const openStatus: OpenStatus = {

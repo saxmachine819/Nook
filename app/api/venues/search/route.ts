@@ -328,14 +328,14 @@ export async function GET(request: Request) {
           // #region agent log
           DEBUG_LOG({ location: "search/route.ts:afterOpenStatus", message: "after getOpenStatus", data: { venueId: venue.id }, hypothesisId: "H1" })
           // #endregion
-          return { venue, openStatus }
+          return { venue, openStatus, timezone: canonical?.timezone ?? null }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           // #region agent log
           DEBUG_LOG({ location: "search/route.ts:mapCatch", message: "hours catch", data: { venueId: venue.id, error: msg }, hypothesisId: "H1,H5" })
           // #endregion
           console.error("[Explore API] hours for venue", venue.id, err)
-          return { venue, openStatus: null }
+          return { venue, openStatus: null, timezone: null }
         }
       })
     )
@@ -372,7 +372,7 @@ export async function GET(request: Request) {
     // #region agent log
     DEBUG_LOG({ location: "search/route.ts:beforeFormat", message: "before formattedVenues.map", data: { inputCount: venuesWithOpenStatus.length }, hypothesisId: "H3" })
     // #endregion
-    const formattedVenues = venuesWithOpenStatus.map(({ venue, openStatus }, idx) => {
+    const formattedVenues = venuesWithOpenStatus.map(({ venue, openStatus, timezone }, idx) => {
       const venueWithIncludes = venue as any
       // #region agent log
       if (idx === 0) DEBUG_LOG({ location: "search/route.ts:formatFirst", message: "format first venue", data: { venueId: venue.id, hasTables: !!venueWithIncludes.tables }, hypothesisId: "H3" })
@@ -409,7 +409,12 @@ export async function GET(request: Request) {
       }
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations, openStatus)
+      const availabilityLabel = computeAvailabilityLabel(
+        capacity,
+        venueReservations,
+        openStatus,
+        { timeZone: timezone ?? undefined }
+      )
 
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array

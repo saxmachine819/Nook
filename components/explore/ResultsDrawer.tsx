@@ -21,6 +21,7 @@ export interface ResultsDrawerVenue {
 
 interface ResultsDrawerProps {
   venues: ResultsDrawerVenue[]
+  isSearchingText?: boolean
   onSelectVenue: (id: string) => void
   onCenterOnVenue?: (id: string) => void
   autoExpand?: boolean // Automatically expand when search/filters are active
@@ -32,6 +33,7 @@ interface ResultsDrawerProps {
 
 export function ResultsDrawer({
   venues,
+  isSearchingText = false,
   onSelectVenue,
   onCenterOnVenue,
   autoExpand = false,
@@ -93,10 +95,10 @@ export function ResultsDrawer({
     } else if (!expanded) {
       setCalculatedHeight(null)
     }
-  }, [expanded, venues.length, isDragging])
+  }, [expanded, venues.length, isDragging, isSearchingText])
 
   const n = venues.length
-  const label = n === 1 ? "1 location in this area" : `${n} locations in this area`
+  const label = isSearchingText ? "Searching…" : n === 1 ? "1 location in this area" : `${n} locations in this area`
 
   const COLLAPSED_HEIGHT = 48
   const EXPANDED_HEIGHT_PERCENT = 60 // 60vh
@@ -298,7 +300,11 @@ export function ResultsDrawer({
         )}
         style={{ touchAction: "pan-y" }}
       >
-        {venues.length === 0 && favoritesOnly ? (
+        {isSearchingText ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-sm text-muted-foreground">Searching…</p>
+          </div>
+        ) : venues.length === 0 && favoritesOnly ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm font-medium text-foreground mb-2">No favorites yet.</p>
             <p className="text-xs text-muted-foreground mb-4">

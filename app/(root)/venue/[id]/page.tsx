@@ -247,7 +247,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       endAt: r.endAt,
       seatCount: r.seatCount,
     })),
-    openStatus
+    openStatus,
+    { timeZone: canonical?.timezone }
   )
 
   const venueHeroImages: string[] = (() => {

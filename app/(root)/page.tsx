@@ -231,11 +231,14 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       venues.map(async (v) => {
         const canonical = await getCanonicalVenueHours(v.id)
         const openStatus = canonical ? getOpenStatus(canonical, now) : null
-        return { venueId: v.id, openStatus }
+        return { venueId: v.id, openStatus, timezone: canonical?.timezone ?? null }
       })
     )
     const openStatusByVenueId = Object.fromEntries(
-      openStatusList.map(({ venueId, openStatus }) => [venueId, openStatus])
+      openStatusList.map(({ venueId, openStatus, timezone }) => [
+        venueId,
+        { openStatus, timezone },
+      ])
     )
 
     // Format venues for client component
@@ -315,8 +318,13 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       }
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const openStatus = openStatusByVenueId[venue.id] ?? null
-      const availabilityLabel = computeAvailabilityLabel(capacity, venueReservations, openStatus)
+      const { openStatus, timezone } = openStatusByVenueId[venue.id] ?? { openStatus: null, timezone: null }
+      const availabilityLabel = computeAvailabilityLabel(
+        capacity,
+        venueReservations,
+        openStatus,
+        { timeZone: timezone ?? undefined }
+      )
 
       // Parse and combine image URLs
       // heroImageUrl takes priority as first image, then imageUrls array

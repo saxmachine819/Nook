@@ -791,6 +791,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           </div>
           <ResultsDrawer
             venues={venues}
+            isSearchingText={isSearchingText}
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
             autoExpand={!isSearchingArea && searchQuery.length > 0}
