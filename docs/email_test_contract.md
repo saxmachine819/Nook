@@ -126,7 +126,7 @@ curl -X POST https://your-app.com/api/email/dispatch \
 
 ## Delivery within ~1 minute (cron)
 
-In production, **Vercel Cron** runs every 1 minute and calls both GET `/api/email/dispatch` and GET `/api/cron/booking-end-reminders`, each with `Authorization: Bearer CRON_SECRET`. Both endpoints reject requests with a missing or invalid secret (401). See **Vercel Cron setup and CRON_SECRET** below for exact env vars and Vercel setup.
+In production, **Vercel Cron** runs every 1 minute and calls GET `/api/email/dispatch`, GET `/api/cron/booking-end-reminders`, and GET `/api/cron/booking-reminder-60min`, each with `Authorization: Bearer CRON_SECRET`. All endpoints reject requests with a missing or invalid secret (401). See **Vercel Cron setup and CRON_SECRET** below for exact env vars and Vercel setup.
 
 Booking creation only **enqueues** a notification; it does not wait on sending. So **booking request latency** is not increased by email—only by the enqueue DB write, which is small.
 
@@ -145,13 +145,15 @@ Booking creation only **enqueues** a notification; it does not wait on sending. 
 - **CRON_SECRET** (required in Vercel): Used by Vercel Cron to authenticate GET requests to both cron endpoints. Set in Vercel: Project → Settings → Environment Variables. Can match `DISPATCH_SECRET` or be a separate secret only Vercel cron knows.
 - **DISPATCH_SECRET**: Used for manual POST to `/api/email/dispatch` (header `x-dispatch-secret`). Optional for cron if you use GET with CRON_SECRET.
 - **Optional (local/testing):** `BOOKING_REMINDER_WINDOW_START_MINUTES`, `BOOKING_REMINDER_WINDOW_END_MINUTES` — default 4 and 6; override to e.g. 1 and 3 for local testing of booking-end reminders.
+- **Optional (local/testing):** `BOOKING_REMINDER_60MIN_WINDOW_START`, `BOOKING_REMINDER_60MIN_WINDOW_END` — default 54 and 66; override to e.g. 1 and 3 for local testing of 60-minute booking reminders.
 
 ### Vercel setup steps
 
 1. In Vercel: Project → Settings → Environment Variables. Add **CRON_SECRET** (e.g. same value as `DISPATCH_SECRET`) for Production (and Preview if you want cron in preview).
-2. Cron jobs are defined in `vercel.json`; no UI step required. After deploy, both run every 1 minute:
+2. Cron jobs are defined in `vercel.json`; no UI step required. After deploy, all run every 1 minute:
    - GET `/api/email/dispatch` — sends queued notification emails.
    - GET `/api/cron/booking-end-reminders` — enqueues 5-minute booking-end reminder emails for reservations ending soon.
+   - GET `/api/cron/booking-reminder-60min` — enqueues 60-minute booking reminder emails for reservations starting soon.
 
 ### Local testing with secret header
 
@@ -165,19 +167,54 @@ curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/emai
 
 Expected: `200` and body `{ "processed", "sent", "failed" }`.
 
-**Booking reminders (GET):**
+**Booking end reminders (GET):**
 
 ```bash
 curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/cron/booking-end-reminders
 ```
 
-Expected: `200` and body `{ "enqueued", "skipped" }`.
+**Booking 60min reminders (GET):**
 
-**Missing or wrong secret:** Omit the header or use a wrong token. Expected for both endpoints: **401** and body `{ "error": "Unauthorized" }`.
+```bash
+curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/cron/booking-reminder-60min
+```
+
+Expected for both: `200` and body `{ "enqueued", "skipped" }`.
+
+**Missing or wrong secret:** Omit the header or use a wrong token. Expected for all cron endpoints: **401** and body `{ "error": "Unauthorized" }`.
 
 ### Production: reject missing/invalid secret
 
-In production, GET requests to either endpoint without `Authorization: Bearer <CRON_SECRET>` or with an incorrect token must return **401** and body `{ "error": "Unauthorized" }`. This is already implemented. To confirm: run `curl https://your-production-url.com/api/email/dispatch` (no header) and `curl https://your-production-url.com/api/cron/booking-end-reminders` (no header); both should return 401.
+In production, GET requests to any cron endpoint without `Authorization: Bearer <CRON_SECRET>` or with an incorrect token must return **401** and body `{ "error": "Unauthorized" }`. This is already implemented. To confirm: run `curl https://your-production-url.com/api/email/dispatch`, `curl https://your-production-url.com/api/cron/booking-end-reminders`, and `curl https://your-production-url.com/api/cron/booking-reminder-60min` (no header); all should return 401.
+
+---
+
+## Booking reminder 60min
+
+The cron endpoint `/api/cron/booking-reminder-60min` enqueues `booking_reminder_60min` notification events for active reservations whose `startAt` falls within a window (default: 54–66 minutes from now). Events use `dedupeKey: booking_reminder_60min:<bookingId>` and are idempotent.
+
+### A) Local queue test
+
+1. Set `BOOKING_REMINDER_60MIN_WINDOW_START=1` and `BOOKING_REMINDER_60MIN_WINDOW_END=3` in `.env`.
+2. Create a booking starting in ~2 minutes (or adjust your system clock / mock data).
+3. Hit the cron endpoint: `curl -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/cron/booking-reminder-60min`.
+4. Verify exactly one `NotificationEvent` row with `type` = `booking_reminder_60min` and `dedupeKey` = `booking_reminder_60min:<reservationId>`.
+
+### B) Dedupe test
+
+1. With a booking in the window, call the cron endpoint twice.
+2. Confirm only one `NotificationEvent` row exists per `bookingId` (same `dedupeKey`; second enqueue returns `created: false`).
+
+### C) Dispatch test
+
+1. Seed or enqueue a PENDING `booking_reminder_60min` event (or rely on the cron).
+2. Run `curl -X POST http://localhost:3000/api/email/dispatch` (or GET with CRON_SECRET).
+3. Confirm the reminder email is received with subject "Your Nooc booking starts in 1 hour" and that the row moves to SENT.
+
+### D) Link test
+
+1. Receive a reminder email and click **View Booking**.
+2. Confirm the link opens the venue page with correct seat/table context: `resourceType`, `resourceId`, and `booking` params in the URL, matching the QR deep-link format.
 
 ---
 
@@ -201,7 +238,7 @@ When not signed in, or when signed in as a user whose email is **not** in `ADMIN
 - **Dispatched events:** After running the dispatch endpoint (or cron), processed events move to **SENT** and show a `sentAt` timestamp. Filter by status = SENT.
 - **Failed events:** Events that fail to send (e.g. unknown type, Resend error) are marked **FAILED** and show an error message in the expanded row. Filter by status = FAILED.
 
-You can also filter by **type** (e.g. `booking_confirmation`, `welcome_user`, `booking_end_5min`). Click a row to expand and view derived subject, pretty-printed payload, error (if failed), and sentAt (if sent).
+You can also filter by **type** (e.g. `booking_confirmation`, `welcome_user`, `booking_end_5min`, `booking_reminder_60min`). Click a row to expand and view derived subject, pretty-printed payload, error (if failed), and sentAt (if sent).
 
 ### Manual test checklist
 

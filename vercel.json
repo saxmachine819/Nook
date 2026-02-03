@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/email/dispatch", "schedule": "* * * * *" },
-    { "path": "/api/cron/booking-end-reminders", "schedule": "* * * * *" }
+    { "path": "/api/cron/booking-end-reminders", "schedule": "* * * * *" },
+    { "path": "/api/cron/booking-reminder-60min", "schedule": "* * * * *" }
   ]
 }

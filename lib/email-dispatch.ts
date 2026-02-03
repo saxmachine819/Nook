@@ -8,6 +8,7 @@ import BookingCanceledEmail from "@/emails/BookingCanceledEmail"
 import VenueBookingCreatedEmail from "@/emails/VenueBookingCreatedEmail"
 import VenueBookingCanceledEmail from "@/emails/VenueBookingCanceledEmail"
 import BookingEndReminderEmail from "@/emails/BookingEndReminderEmail"
+import BookingReminder60MinEmail from "@/emails/BookingReminder60MinEmail"
 
 const BATCH_SIZE = 25
 const MAX_ERROR_LENGTH = 1000
@@ -75,6 +76,18 @@ const REGISTRY: Record<string, Handler> = {
         endAt: p.suggestedExtensionStartAt as string | undefined,
         extendUrl: p.extendUrl as string | undefined,
         nextSlotAvailable: p.nextSlotAvailable as boolean | undefined,
+      }),
+  },
+  booking_reminder_60min: {
+    subject: "Your Nooc booking starts in 1 hour",
+    render: (p) =>
+      React.createElement(BookingReminder60MinEmail, {
+        venueName: p.venueName as string | undefined,
+        startAt: p.startAt as string | undefined,
+        endAt: p.endAt as string | undefined,
+        seatLabel: p.seatLabel as string | null | undefined,
+        tableLabel: p.tableLabel as string | undefined,
+        viewBookingUrl: p.viewBookingUrl as string | undefined,
       }),
   },
 }
