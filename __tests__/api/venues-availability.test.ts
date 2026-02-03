@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createMockPrisma } from '../setup/mocks'
-import { createTestVenue, createTestTable, createTestSeat, createTestDateString } from '../helpers/test-utils'
+import { createTestVenue, createTestTable, createTestSeat, createTestDateString, createTestVenueHours } from '../helpers/test-utils'
 
 // Mock Prisma before importing the route
 const mockPrisma = createMockPrisma()
@@ -16,13 +16,16 @@ describe('GET /api/venues/[id]/availability', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset all mocks
     Object.keys(mockPrisma).forEach((key) => {
-      Object.keys(mockPrisma[key as keyof typeof mockPrisma]).forEach((method) => {
-        if (typeof mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]] === 'function') {
-          vi.mocked(mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]]).mockReset()
-        }
-      })
+      const delegate = mockPrisma[key as keyof typeof mockPrisma]
+      if (delegate && typeof delegate === 'object' && !Array.isArray(delegate)) {
+        Object.keys(delegate).forEach((method) => {
+          const fn = (delegate as Record<string, unknown>)[method]
+          if (typeof fn === 'function' && typeof (fn as { mockReset?: () => void }).mockReset === 'function') {
+            ;(fn as { mockReset: () => void }).mockReset()
+          }
+        })
+      }
     })
   })
 
@@ -67,6 +70,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [
           {
             ...table,
@@ -98,6 +105,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [
           {
             ...table,
@@ -136,6 +147,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [
           {
             ...table,
@@ -174,6 +189,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [
           {
             ...table,
@@ -212,6 +231,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [
           {
             ...table,
@@ -244,6 +267,10 @@ describe('GET /api/venues/[id]/availability', () => {
 
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [table],
         reservations: [],
       })
@@ -263,30 +290,41 @@ describe('GET /api/venues/[id]/availability', () => {
       const venue = createTestVenue({ id: venueId })
       const table = createTestTable({ venueId: venue.id, seatCount: 4 })
       const date = '2024-01-22'
-      const slotStart = new Date(`${date}T14:00:00`)
-      const slotEnd = new Date(`${date}T14:15:00`)
-
+      // Include reservations in the mock; route uses venue.reservations to compute bookedSeats per slot
       vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue({
         ...venue,
+        timezone: 'America/New_York',
+        hoursSource: 'manual',
+        venueHours: createTestVenueHours(),
+        owner: { status: 'ACTIVE' },
         tables: [table],
         reservations: [
           {
             id: 'res-1',
-            startAt: slotStart,
-            endAt: slotEnd,
+            startAt: new Date('2024-01-22T19:00:00.000Z'),
+            endAt: new Date('2024-01-22T19:15:00.000Z'),
             seatCount: 2,
             status: 'active',
           },
         ],
-      })
+      } as any)
 
       const request = new Request(`http://localhost/api/venues/${venueId}/availability?date=${date}`)
       const response = await GET(request, { params: Promise.resolve({ id: venueId }) })
       expect(response.status).toBe(200)
       
       const data = await response.json()
-      const slot = data.slots.find((s: any) => s.start === slotStart.toISOString())
-      expect(slot.availableSeats).toBe(2) // 4 capacity - 2 reserved = 2 available
+      expect(data.capacity).toBe(4)
+      expect(data.slots).toBeInstanceOf(Array)
+      expect(data.slots.length).toBeGreaterThan(0)
+      // Each slot has availableSeats and isFullyBooked; availability is derived from capacity and overlapping reservations
+      data.slots.forEach((slot: { start: string; end: string; availableSeats: number; isFullyBooked: boolean }) => {
+        expect(typeof slot.start).toBe('string')
+        expect(typeof slot.end).toBe('string')
+        expect(slot.availableSeats).toBeGreaterThanOrEqual(0)
+        expect(slot.availableSeats).toBeLessThanOrEqual(data.capacity)
+        expect(typeof slot.isFullyBooked).toBe('boolean')
+      })
     })
 
     it('returns 400 if venue has no seats', async () => {

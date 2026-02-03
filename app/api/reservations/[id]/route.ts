@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
+import { enqueueNotification } from "@/lib/notification-queue"
 
 export async function PATCH(
   request: Request,
@@ -65,12 +66,51 @@ export async function PATCH(
         where: { id: reservationId },
         data: { status: "cancelled" },
         include: {
-          venue: true,
+          venue: { include: { owner: { select: { email: true } } } },
           user: { select: { email: true } },
           seat: { include: { table: { select: { name: true } } } },
           table: { select: { name: true } },
         },
       })
+      if (updated.user?.email?.trim()) {
+        try {
+          await enqueueNotification({
+            type: "booking_canceled",
+            dedupeKey: `booking_canceled:${updated.id}`,
+            toEmail: updated.user.email.trim(),
+            userId: updated.userId,
+            venueId: updated.venueId,
+            bookingId: updated.id,
+            payload: {
+              venueName: updated.venue?.name ?? "",
+              startAt: updated.startAt.toISOString(),
+              canceledAt: new Date().toISOString(),
+            },
+          })
+        } catch (enqueueErr) {
+          console.error("Failed to enqueue booking_canceled:", enqueueErr)
+        }
+      }
+      if (updated.venue?.owner?.email?.trim()) {
+        try {
+          await enqueueNotification({
+            type: "venue_booking_canceled",
+            dedupeKey: `venue_booking_canceled:${updated.id}`,
+            toEmail: updated.venue.owner.email.trim(),
+            userId: updated.venue.ownerId ?? undefined,
+            venueId: updated.venueId,
+            bookingId: updated.id,
+            payload: {
+              venueName: updated.venue?.name ?? "",
+              guestEmail: updated.user?.email ?? "",
+              startAt: updated.startAt.toISOString(),
+              canceledAt: new Date().toISOString(),
+            },
+          })
+        } catch (enqueueErr) {
+          console.error("Failed to enqueue venue_booking_canceled:", enqueueErr)
+        }
+      }
       return NextResponse.json({ reservation: updated })
     }
 

@@ -65,6 +65,8 @@ export function VenuePreviewSheet({
   setDragTranslateYRef.current = setDragTranslateY
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Only capture for touch (swipe-to-close). Mouse must not capture so VenueCard button stays clickable.
+    if (e.pointerType !== "touch") return
     if (touchGestureActiveRef.current) return
     pointerDownOnSheetRef.current = true
     const scrollEl = scrollContainerRef.current
@@ -201,7 +203,7 @@ export function VenuePreviewSheet({
         aria-label="Close venue preview"
         onClick={onClose}
         className={cn(
-          "fixed inset-0 z-40 bg-black/20 ease-out",
+          "fixed inset-0 z-[110] bg-black/20 ease-out",
           visible ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         style={{ transitionDuration: `${SHEET_TRANSITION_MS}ms`, transitionProperty: "opacity" }}
@@ -210,7 +212,7 @@ export function VenuePreviewSheet({
       <div
         data-testid="venue-preview-sheet"
         className={cn(
-          "fixed left-0 right-0 z-40 rounded-t-xl border-t border-border bg-background shadow-lg",
+          "fixed left-0 right-0 z-[110] rounded-t-xl border-t border-border bg-background shadow-lg",
           "ease-out",
           className
         )}

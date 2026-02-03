@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -73,10 +73,19 @@ interface ReservationsClientProps {
 
 export function ReservationsClient({ upcoming, past, cancelled }: ReservationsClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast, ToastComponent } = useToast()
   const [activeTab, setActiveTab] = useState<TabType>("upcoming")
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  // When returning from detail page after cancel, refresh list and clean URL
+  useEffect(() => {
+    if (searchParams?.get("refresh") === "1") {
+      router.refresh()
+      router.replace("/reservations", { scroll: false })
+    }
+  }, [searchParams, router])
 
   const handleCancel = async (reservationId: string) => {
     setCancellingId(reservationId)
@@ -91,16 +100,10 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
         throw new Error("Failed to cancel")
       }
 
-      // Wait for response to be fully processed before refreshing
       await response.json().catch(() => null)
-      
       showToast("Reservation cancelled", "success")
-      
-      // Refresh the page to update the reservations list
-      // Use a small delay to ensure the server has processed the cancellation
-      setTimeout(() => {
-        router.refresh()
-      }, 100)
+      // Refresh server data so the list updates (cancel from list page)
+      router.refresh()
     } catch (error) {
       showToast("Failed to cancel reservation", "error")
     } finally {

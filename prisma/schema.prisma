@@ -40,6 +40,12 @@ enum VenueStatus {
   DELETED
 }
 
+enum NotificationEventStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model Venue {
   id              String        @id @default(cuid())
   name            String
@@ -218,6 +224,7 @@ model User {
   image            String?
   status           UserStatus @default(ACTIVE)
   termsAcceptedAt  DateTime?
+  welcomeEmailSentAt DateTime?
   deletedAt        DateTime?
   deletionReason   String?
   accounts         Account[]
@@ -397,4 +404,24 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model NotificationEvent {
+  id        String                   @id @default(uuid())
+  type      String
+  status    NotificationEventStatus   @default(PENDING)
+  dedupeKey String                   @unique
+  toEmail   String
+  userId    String?
+  venueId   String?
+  bookingId String?
+  payload   Json
+  error     String?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+  sentAt   DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("notification_events")
 }

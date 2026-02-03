@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import GoogleProvider from "next-auth/providers/google"
 import EmailProvider from "next-auth/providers/email"
 import { prisma } from "@/lib/prisma"
+import { enqueueNotification } from "@/lib/notification-queue"
 
 // Local dev only: force OAuth callbacks to localhost so sign-in works without .env.local override.
 // Production (NODE_ENV=production on Vercel) is never touched.
@@ -70,7 +71,7 @@ export const authOptions = {
       if (!user) {
         return session
       }
-      
+
       if (session?.user) {
         session.user.id = user.id
         session.user.name = user.name
@@ -78,6 +79,29 @@ export const authOptions = {
         session.user.image = user.image
         session.user.termsAcceptedAt = user.termsAcceptedAt
       }
+
+      // First login: enqueue welcome email once per user (atomic claim).
+      if (user.welcomeEmailSentAt == null && user.email?.trim()) {
+        const result = await prisma.user.updateMany({
+          where: { id: user.id, welcomeEmailSentAt: null },
+          data: { welcomeEmailSentAt: new Date() },
+        })
+        if (result.count > 0) {
+          try {
+            const ctaUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+            await enqueueNotification({
+              type: "welcome_user",
+              dedupeKey: `welcome_user:${user.id}`,
+              toEmail: user.email.trim(),
+              userId: user.id,
+              payload: { userName: user.name ?? undefined, ctaUrl },
+            })
+          } catch (err) {
+            console.error("Failed to enqueue welcome_user:", err)
+          }
+        }
+      }
+
       return session
     },
   },

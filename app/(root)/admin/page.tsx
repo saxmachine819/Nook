@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/venue-auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { CheckCircle2, Building2, Users, QrCode } from "lucide-react"
+import { CheckCircle2, Building2, Users, QrCode, Mail } from "lucide-react"
 
 export default async function AdminPage() {
   const session = await auth()
@@ -92,6 +92,20 @@ export default async function AdminPage() {
               <CardTitle>QR Codes</CardTitle>
               <CardDescription>
                 View inventory, create batches, manage QR assets
+              </CardDescription>
+            </CardHeader>
+          </Link>
+        </Card>
+
+        <Card className="transition-colors hover:bg-accent/50">
+          <Link href="/admin/email-debug" className="block">
+            <CardHeader>
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Mail className="h-5 w-5 text-primary" />
+              </div>
+              <CardTitle>Email Debug</CardTitle>
+              <CardDescription>
+                View recent notification events (read-only)
               </CardDescription>
             </CardHeader>
           </Link>

@@ -18,8 +18,14 @@ vi.mock('@/lib/venue-auth', () => ({
   canEditVenue: vi.fn(),
 }))
 
+// Mock notification queue so cancel path does not hit real prisma.notificationEvent
+vi.mock('@/lib/notification-queue', () => ({
+  enqueueNotification: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Import route after mocks are set up
 const { PATCH } = await import('@/app/api/reservations/[id]/route')
+const { enqueueNotification } = await import('@/lib/notification-queue')
 
 describe('PATCH /api/reservations/[id]', () => {
   let mockRequest: Request
@@ -29,11 +35,15 @@ describe('PATCH /api/reservations/[id]', () => {
     vi.clearAllMocks()
     // Reset all mocks
     Object.keys(mockPrisma).forEach((key) => {
-      Object.keys(mockPrisma[key as keyof typeof mockPrisma]).forEach((method) => {
-        if (typeof mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]] === 'function') {
-          vi.mocked(mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]]).mockReset()
-        }
-      })
+      const delegate = mockPrisma[key as keyof typeof mockPrisma]
+      if (delegate && typeof delegate === 'object' && !Array.isArray(delegate)) {
+        Object.keys(delegate).forEach((method) => {
+          const fn = delegate[method as keyof typeof delegate]
+          if (typeof fn === 'function' && typeof (fn as any).mockReset === 'function') {
+            (fn as any).mockReset()
+          }
+        })
+      }
     })
 
     const { auth } = await import('@/lib/auth')
@@ -180,6 +190,51 @@ describe('PATCH /api/reservations/[id]', () => {
         data: { status: 'cancelled' },
         include: expect.any(Object),
       })
+    })
+
+    it('enqueues booking_canceled and venue_booking_canceled on successful cancel', async () => {
+      vi.mocked(enqueueNotification).mockClear()
+      const startAt = new Date(createTestDateString(60))
+      const endAt = new Date(createTestDateString(120))
+      mockPrisma.reservation.update.mockResolvedValue({
+        ...createTestReservation({ id: reservationId, startAt, endAt }),
+        status: 'cancelled',
+        venueId: 'venue-1',
+        venue: {
+          id: 'venue-1',
+          name: 'Venue Name',
+          ownerId: 'owner-1',
+          owner: { email: 'owner@example.com' },
+        },
+        user: { email: 'guest@example.com' },
+        seat: null,
+        table: null,
+      } as any)
+
+      mockRequest = new Request(`http://localhost/api/reservations/${reservationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' }),
+      })
+
+      const response = await PATCH(mockRequest, { params: Promise.resolve({ id: reservationId }) })
+      expect(response.status).toBe(200)
+      expect(enqueueNotification).toHaveBeenCalledTimes(2)
+      expect(enqueueNotification).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          type: 'booking_canceled',
+          dedupeKey: `booking_canceled:${reservationId}`,
+          toEmail: 'guest@example.com',
+        })
+      )
+      expect(enqueueNotification).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          type: 'venue_booking_canceled',
+          dedupeKey: `venue_booking_canceled:${reservationId}`,
+          toEmail: 'owner@example.com',
+        })
+      )
     })
   })
 

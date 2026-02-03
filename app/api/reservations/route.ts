@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
 import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
+import { enqueueNotification } from "@/lib/notification-queue"
 
 export async function POST(request: Request) {
   try {
@@ -274,6 +275,7 @@ export async function POST(request: Request) {
                   seats: true,
                 },
               },
+              owner: { select: { email: true } },
             },
           },
           table: {
@@ -401,6 +403,7 @@ export async function POST(request: Request) {
                   seats: true,
                 },
               },
+              owner: { select: { email: true } },
             },
           },
           table: {
@@ -462,6 +465,56 @@ export async function POST(request: Request) {
     // Return the reservation (now always a single reservation)
     // The confirmation modal will show the total price
     const reservation = reservations[0]
+
+    // Enqueue booking confirmation email (no inline send).
+    if (userRecord.email?.trim()) {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+        await enqueueNotification({
+          type: "booking_confirmation",
+          dedupeKey: `booking_confirmation:${reservation.id}`,
+          toEmail: userRecord.email.trim(),
+          userId: session.user.id,
+          venueId: reservation.venueId,
+          bookingId: reservation.id,
+          payload: {
+            bookingId: reservation.id,
+            venueId: reservation.venueId,
+            venueName: reservation.venue?.name ?? "",
+            tableId: reservation.tableId ?? null,
+            seatId: reservation.seatId ?? null,
+            startAt: reservation.startAt.toISOString(),
+            endAt: reservation.endAt.toISOString(),
+            ...(baseUrl ? { confirmationUrl: `${baseUrl}/reservations/${reservation.id}` } : {}),
+          },
+        })
+      } catch (enqueueErr) {
+        console.error("Failed to enqueue booking confirmation:", enqueueErr)
+      }
+    }
+
+    // Enqueue venue owner notification (new booking at their venue).
+    if (reservation.venue?.owner?.email?.trim()) {
+      try {
+        await enqueueNotification({
+          type: "venue_booking_created",
+          dedupeKey: `venue_booking_created:${reservation.id}`,
+          toEmail: reservation.venue.owner.email.trim(),
+          userId: reservation.venue.ownerId ?? undefined,
+          venueId: reservation.venueId,
+          bookingId: reservation.id,
+          payload: {
+            venueName: reservation.venue?.name ?? "",
+            guestEmail: userRecord.email ?? "",
+            startAt: reservation.startAt.toISOString(),
+            endAt: reservation.endAt.toISOString(),
+          },
+        })
+      } catch (enqueueErr) {
+        console.error("Failed to enqueue venue_booking_created:", enqueueErr)
+      }
+    }
+
     const reservationWithPricing = {
       ...reservation,
       venue: {

@@ -85,7 +85,7 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
       }
 
       showToast("Reservation cancelled", "success")
-      router.push("/reservations")
+      router.push("/reservations?refresh=1")
     } catch (error) {
       showToast("Failed to cancel reservation", "error")
     } finally {
