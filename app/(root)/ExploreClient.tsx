@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { MapView } from "@/components/explore/MapView"
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls"
+import { ExploreWelcomeBanner } from "@/components/ExploreWelcomeBanner"
+import { safeSet } from "@/lib/storage"
 import { VenuePreviewSheet } from "@/components/explore/VenuePreviewSheet"
 import { ResultsDrawer } from "@/components/explore/ResultsDrawer"
 import { FilterState } from "@/components/explore/FilterPanel"
@@ -257,9 +259,12 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     // No stored filters: venues stay [] until onInitialBounds triggers bounded fetch
   }, [isClient, filters, searchQuery]) // Run when client becomes true (after mount)
 
+  const OUTCOME_KEY = "nooc_location_last_outcome_v1"
+
   const requestLocation = () => {
     if (!navigator.geolocation) {
       setLocationState("unavailable")
+      safeSet(OUTCOME_KEY, "unavailable")
       return
     }
     setLocationState("requesting")
@@ -270,10 +275,14 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
           lng: position.coords.longitude,
         })
         setLocationState("granted")
+        safeSet(OUTCOME_KEY, "granted")
       },
       (error) => {
         console.error("Geolocation error:", error)
+        const outcome =
+          error.code === 1 ? "denied" : error.code === 2 || error.code === 3 ? "error" : "unknown"
         setLocationState("denied")
+        safeSet(OUTCOME_KEY, outcome)
       },
       {
         enableHighAccuracy: true,
@@ -283,26 +292,18 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
     )
   }
   
-  // Auto-request location on mount (only once)
-  useEffect(() => {
-    if (isClient && !hasRequestedLocationRef.current && locationState === "idle" && !userLocation) {
-      hasRequestedLocationRef.current = true
-      requestLocation()
-    }
-  }, [isClient, locationState, userLocation])
+  // Location is requested only when user clicks "Use my location" (map button or banner CTA)
 
-  // Gate map until location is resolved (have coords, denied, unavailable, or timeout after mount)
-  const hasMapReadyTimeoutRef = useRef(false)
+  // Gate map until ready: show immediately when idle (no auto-request), or when location resolved
   useEffect(() => {
     if (!isClient) return
-    if (userLocation !== null || locationState === "denied" || locationState === "unavailable") {
+    if (
+      locationState === "idle" ||
+      userLocation !== null ||
+      locationState === "denied" ||
+      locationState === "unavailable"
+    ) {
       setMapReady(true)
-      return
-    }
-    if (!hasMapReadyTimeoutRef.current) {
-      hasMapReadyTimeoutRef.current = true
-      const timeout = setTimeout(() => setMapReady(true), 4000)
-      return () => clearTimeout(timeout)
     }
   }, [isClient, userLocation, locationState])
 
@@ -698,7 +699,7 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
       )}
       {isClient && !mapReady && (
         <div className="fixed inset-0 z-0 flex items-center justify-center bg-background">
-          <p className="text-sm text-muted-foreground">Getting your location…</p>
+          <p className="text-sm text-muted-foreground">Loading map…</p>
         </div>
       )}
       {isClient && mapReady && (
@@ -743,6 +744,10 @@ export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new S
             </div>
           )}
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
+            <ExploreWelcomeBanner
+              onUseLocation={requestLocation}
+              locationState={locationState}
+            />
             <TopOverlayControls
               onSearch={handleSearch}
               filterPanelOpen={filterPanelOpen}

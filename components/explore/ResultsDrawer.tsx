@@ -192,6 +192,10 @@ export function ResultsDrawer({
       <div className={cn("flex flex-col shrink-0 pointer-events-none", isExpandedOrDraggingUp ? "pt-1 pb-0" : "pt-1.5 pb-1.5")}>
         <div
           onPointerDown={handlePointerDown}
+          onClick={() => {
+            if (hasDraggedRef.current) return
+            toggle()
+          }}
           className="pointer-events-auto flex w-full max-w-sm mx-auto flex-col items-center gap-1 touch-none cursor-grab active:cursor-grabbing select-none"
           role="button"
           tabIndex={0}
@@ -205,20 +209,9 @@ export function ResultsDrawer({
           }}
         >
           <div className="h-1 w-12 shrink-0 rounded-full bg-foreground/40" aria-hidden />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              if (hasDraggedRef.current) return
-              toggle()
-            }}
-            className="text-xs font-medium text-foreground touch-manipulation"
-            aria-hidden="true"
-            tabIndex={-1}
-          >
+          <span className="text-xs font-medium text-foreground touch-manipulation">
             {label}
-          </button>
+          </span>
         </div>
       </div>
       <div
