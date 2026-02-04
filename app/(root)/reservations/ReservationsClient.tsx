@@ -407,6 +407,7 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
             <DialogTitle>Cancel reservation?</DialogTitle>
             <DialogDescription>
               Are you sure you want to cancel this reservation? This action cannot be undone.
+              Reservations can be canceled at any time, but all bookings are non-refundable.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
