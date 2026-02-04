@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/toast"
+import { isBlobSupported } from "@/lib/utils"
 import {
   Calendar,
   Clock,
@@ -116,6 +117,10 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
       "END:VCALENDAR",
     ].join("\r\n")
 
+    if (!isBlobSupported()) {
+      showToast("Calendar download is not supported in this browser", "error")
+      return
+    }
     const blob = new Blob([icsContent], { type: "text/calendar" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")

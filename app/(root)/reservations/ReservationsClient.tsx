@@ -24,7 +24,7 @@ import {
   Navigation,
   Receipt,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, isBlobSupported } from "@/lib/utils"
 
 type TabType = "upcoming" | "past" | "cancelled"
 
@@ -134,6 +134,10 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
       "END:VCALENDAR",
     ].join("\r\n")
 
+    if (!isBlobSupported()) {
+      showToast("Calendar download is not supported in this browser", "error")
+      return
+    }
     const blob = new Blob([icsContent], { type: "text/calendar" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
