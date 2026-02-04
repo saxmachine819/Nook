@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast"
 import { Plus, Trash2, Search, Upload, X, Image as ImageIcon, Expand, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
+import { WelcomeOnboardStep } from "./WelcomeOnboardStep"
 
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -58,7 +59,7 @@ declare global {
 export function VenueOnboardClient() {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
   const [expandedTableId, setExpandedTableId] = useState<string | null>(null) // null + single table => that table expanded
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingScript, setIsLoadingScript] = useState(true)
@@ -657,6 +658,10 @@ export function VenueOnboardClient() {
   }
 
   const handleNext = async () => {
+    if (currentStep === 0) {
+      setCurrentStep(1)
+      return
+    }
     if (currentStep === 1) {
       if (!validateStep1()) return
       setCurrentStep(2)
@@ -674,7 +679,7 @@ export function VenueOnboardClient() {
   }
 
   const handleBack = () => {
-    if (currentStep > 1) setCurrentStep((s) => (s - 1) as 1 | 2 | 3)
+    if (currentStep > 0) setCurrentStep((s) => (s - 1) as 0 | 1 | 2 | 3)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -683,6 +688,7 @@ export function VenueOnboardClient() {
   }
 
   const steps = [
+    { step: 0 as const, label: "Welcome" },
     { step: 1 as const, label: "Venue Info" },
     { step: 2 as const, label: "Photos & Rules" },
     { step: 3 as const, label: "Tables & Seats" },
@@ -706,7 +712,7 @@ export function VenueOnboardClient() {
               <div key={step} className="flex flex-1 items-center">
                 <button
                   type="button"
-                  onClick={() => isClickable && setCurrentStep(step as 1 | 2 | 3)}
+                  onClick={() => isClickable && step <= 3 && setCurrentStep(step as 0 | 1 | 2 | 3)}
                   className={cn(
                     "flex flex-1 flex-col items-center gap-1 rounded-md px-1 py-2 text-center transition-colors",
                     isClickable && "cursor-pointer hover:bg-muted/60",
@@ -739,6 +745,10 @@ export function VenueOnboardClient() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Step 0: Welcome */}
+        {currentStep === 0 && (
+          <WelcomeOnboardStep />
+        )}
         {/* Step 1: Venue Information */}
         {currentStep === 1 && (
         <Card>
@@ -1420,7 +1430,7 @@ export function VenueOnboardClient() {
       {/* Sticky Back / Next */}
       <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
         <div className="container mx-auto flex items-center justify-between gap-4">
-          {currentStep > 1 ? (
+          {currentStep > 0 ? (
             <Button type="button" variant="outline" size="lg" onClick={handleBack}>
               Back
             </Button>
@@ -1436,9 +1446,11 @@ export function VenueOnboardClient() {
           >
             {isSubmitting
               ? "Saving..."
-              : currentStep === 3
-                ? "Next: Stripe"
-                : "Next"}
+              : currentStep === 0
+                ? "Continue"
+                : currentStep === 3
+                  ? "Next: Stripe"
+                  : "Next"}
           </Button>
         </div>
       </div>
