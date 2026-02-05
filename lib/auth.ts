@@ -80,6 +80,34 @@ export const authOptions = {
         session.user.termsAcceptedAt = user.termsAcceptedAt
       }
 
+      // Venue ownership summary for nav (Manage item).
+      try {
+        const count = await prisma.venue.count({
+          where: {
+            ownerId: user.id,
+            status: { not: "DELETED" },
+          },
+        })
+        let singleVenueId: string | null = null
+        if (count === 1) {
+          const venue = await prisma.venue.findFirst({
+            where: {
+              ownerId: user.id,
+              status: { not: "DELETED" },
+            },
+            select: { id: true },
+          })
+          singleVenueId = venue?.id ?? null
+        }
+        if (session?.user) {
+          session.user.venueSummary = { count, singleVenueId }
+        }
+      } catch (err) {
+        if (session?.user) {
+          session.user.venueSummary = { count: 0, singleVenueId: null }
+        }
+      }
+
       // First login: enqueue welcome email once per user (atomic claim).
       if (user.welcomeEmailSentAt == null && user.email?.trim()) {
         const result = await prisma.user.updateMany({

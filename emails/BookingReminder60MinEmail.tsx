@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
 import { emailStyles } from "./shared-styles"
 
 export interface BookingReminder60MinEmailProps {
@@ -19,9 +20,10 @@ export interface BookingReminder60MinEmailProps {
   seatLabel?: string | null
   tableLabel?: string | null
   viewBookingUrl?: string
+  timeZone?: string
 }
 
-const defaultProps: Required<BookingReminder60MinEmailProps> = {
+const defaultProps: Required<Omit<BookingReminder60MinEmailProps, "timeZone">> = {
   venueName: "The Quiet Room",
   startAt: "2025-02-05T10:00:00Z",
   endAt: "2025-02-05T12:00:00Z",
@@ -31,7 +33,7 @@ const defaultProps: Required<BookingReminder60MinEmailProps> = {
 }
 
 export default function BookingReminder60MinEmail(props: BookingReminder60MinEmailProps) {
-  const { venueName, startAt, endAt, seatLabel, tableLabel, viewBookingUrl } = { ...defaultProps, ...props }
+  const { venueName, startAt, endAt, seatLabel, tableLabel, viewBookingUrl, timeZone } = { ...defaultProps, ...props }
   const displayVenueName = venueName?.trim() || defaultProps.venueName
   const resourceLabel = seatLabel?.trim() || tableLabel?.trim() || null
   const s = emailStyles
@@ -49,8 +51,8 @@ export default function BookingReminder60MinEmail(props: BookingReminder60MinEma
               Your booking at <span style={s.highlight}>{displayVenueName}</span>
               {resourceLabel ? ` (${resourceLabel})` : ""} starts in about 1 hour.
             </Text>
-            <Text style={s.timeLine}>Start: {formatDate(startAt)}</Text>
-            <Text style={s.timeLine}>End: {formatDate(endAt)}</Text>
+            <Text style={s.timeLine}>Start: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
+            <Text style={s.timeLine}>End: {formatDateTimeInTimezone(endAt, timeZone)}</Text>
             <Link href={viewBookingUrl} style={s.button}>
               View Booking
             </Link>
@@ -63,12 +65,4 @@ export default function BookingReminder60MinEmail(props: BookingReminder60MinEma
       </Body>
     </Html>
   )
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
 }

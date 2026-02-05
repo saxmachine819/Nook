@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
 import { emailStyles } from "./shared-styles"
 
 export interface BookingConfirmationEmailProps {
@@ -17,9 +18,10 @@ export interface BookingConfirmationEmailProps {
   startAt?: string
   endAt?: string
   confirmationUrl?: string
+  timeZone?: string
 }
 
-const defaultProps: Required<BookingConfirmationEmailProps> = {
+const defaultProps: Required<Omit<BookingConfirmationEmailProps, "timeZone">> = {
   venueName: "The Quiet Room",
   startAt: "2025-02-05T10:00:00Z",
   endAt: "2025-02-05T12:00:00Z",
@@ -27,7 +29,7 @@ const defaultProps: Required<BookingConfirmationEmailProps> = {
 }
 
 export default function BookingConfirmationEmail(props: BookingConfirmationEmailProps) {
-  const { venueName, startAt, endAt, confirmationUrl } = { ...defaultProps, ...props }
+  const { venueName, startAt, endAt, confirmationUrl, timeZone } = { ...defaultProps, ...props }
   const displayVenueName = venueName?.trim() || defaultProps.venueName
   const s = emailStyles
 
@@ -43,8 +45,8 @@ export default function BookingConfirmationEmail(props: BookingConfirmationEmail
             <Text style={s.text}>
               Your booking at <span style={s.highlight}>{displayVenueName}</span> is confirmed.
             </Text>
-            <Text style={s.timeLine}>Start: {formatDate(startAt)}</Text>
-            <Text style={s.timeLine}>End: {formatDate(endAt)}</Text>
+            <Text style={s.timeLine}>Start: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
+            <Text style={s.timeLine}>End: {formatDateTimeInTimezone(endAt, timeZone)}</Text>
             <Link href={confirmationUrl} style={s.button}>
               View reservation
             </Link>
@@ -57,12 +59,4 @@ export default function BookingConfirmationEmail(props: BookingConfirmationEmail
       </Body>
     </Html>
   )
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
 }

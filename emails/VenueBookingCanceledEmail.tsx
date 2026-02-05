@@ -9,6 +9,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
 import { emailStyles } from "./shared-styles"
 
 export interface VenueBookingCanceledEmailProps {
@@ -16,9 +17,10 @@ export interface VenueBookingCanceledEmailProps {
   guestEmail?: string
   startAt?: string
   canceledAt?: string
+  timeZone?: string
 }
 
-const defaultProps: Required<VenueBookingCanceledEmailProps> = {
+const defaultProps: Required<Omit<VenueBookingCanceledEmailProps, "timeZone">> = {
   venueName: "The Quiet Room",
   guestEmail: "guest@example.com",
   startAt: "2025-02-05T10:00:00Z",
@@ -26,7 +28,7 @@ const defaultProps: Required<VenueBookingCanceledEmailProps> = {
 }
 
 export default function VenueBookingCanceledEmail(props: VenueBookingCanceledEmailProps) {
-  const { venueName, guestEmail, startAt, canceledAt } = { ...defaultProps, ...props }
+  const { venueName, guestEmail, startAt, canceledAt, timeZone } = { ...defaultProps, ...props }
   const displayVenueName = venueName?.trim() || defaultProps.venueName
   const s = emailStyles
 
@@ -45,8 +47,8 @@ export default function VenueBookingCanceledEmail(props: VenueBookingCanceledEma
             <Text style={s.timeLine}>
               Guest: <span style={s.highlight}>{guestEmail}</span>
             </Text>
-            <Text style={s.timeLine}>Was: {formatDate(startAt)}</Text>
-            <Text style={s.timeLine}>Canceled at: {formatDate(canceledAt)}</Text>
+            <Text style={s.timeLine}>Was: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
+            <Text style={s.timeLine}>Canceled at: {formatDateTimeInTimezone(canceledAt, timeZone)}</Text>
           </Section>
           <Hr style={s.hr} />
           <Section style={s.footer}>
@@ -56,12 +58,4 @@ export default function VenueBookingCanceledEmail(props: VenueBookingCanceledEma
       </Body>
     </Html>
   )
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
 }

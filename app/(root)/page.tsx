@@ -253,11 +253,12 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         return sum + (tableWithSeats.seatCount || 0)
       }, 0)
       
-      // Cheapest price: min of (all seat prices, all table total prices)
-      const allSeatPrices = venue.tables.flatMap(t => {
-        const tableWithSeats = t as any
-        return (tableWithSeats.seats || []).map((seat: any) => seat.pricePerHour).filter((p: number) => p != null && p > 0)
-      })
+      // Cheapest price: min of (all seat prices from individual tables, all table total prices from group tables)
+      const allSeatPrices = venue.tables
+        .filter(t => (t as any).bookingMode === "individual")
+        .flatMap(t => (t as any).seats || [])
+        .map((seat: any) => seat.pricePerHour)
+        .filter((p: number) => p != null && p > 0)
       const allTablePrices = venue.tables
         .filter(t => (t as any).bookingMode === "group")
         .map(t => (t as any).tablePricePerHour)

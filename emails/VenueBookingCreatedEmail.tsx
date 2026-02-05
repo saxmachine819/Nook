@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
 import { emailStyles } from "./shared-styles"
 
 export interface VenueBookingCreatedEmailProps {
@@ -17,9 +18,10 @@ export interface VenueBookingCreatedEmailProps {
   guestEmail?: string
   startAt?: string
   endAt?: string
+  timeZone?: string
 }
 
-const defaultProps: Required<VenueBookingCreatedEmailProps> = {
+const defaultProps: Required<Omit<VenueBookingCreatedEmailProps, "timeZone">> = {
   venueName: "The Quiet Room",
   guestEmail: "guest@example.com",
   startAt: "2025-02-05T10:00:00Z",
@@ -27,7 +29,7 @@ const defaultProps: Required<VenueBookingCreatedEmailProps> = {
 }
 
 export default function VenueBookingCreatedEmail(props: VenueBookingCreatedEmailProps) {
-  const { venueName, guestEmail, startAt, endAt } = { ...defaultProps, ...props }
+  const { venueName, guestEmail, startAt, endAt, timeZone } = { ...defaultProps, ...props }
   const displayVenueName = venueName?.trim() || defaultProps.venueName
   const s = emailStyles
 
@@ -46,8 +48,8 @@ export default function VenueBookingCreatedEmail(props: VenueBookingCreatedEmail
             <Text style={s.timeLine}>
               Guest: <span style={s.highlight}>{guestEmail}</span>
             </Text>
-            <Text style={s.timeLine}>Start: {formatDate(startAt)}</Text>
-            <Text style={s.timeLine}>End: {formatDate(endAt)}</Text>
+            <Text style={s.timeLine}>Start: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
+            <Text style={s.timeLine}>End: {formatDateTimeInTimezone(endAt, timeZone)}</Text>
             <Link href="https://nooc.io/venue/dashboard" style={s.button}>
               View dashboard
             </Link>
@@ -60,12 +62,4 @@ export default function VenueBookingCreatedEmail(props: VenueBookingCreatedEmail
       </Body>
     </Html>
   )
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
 }

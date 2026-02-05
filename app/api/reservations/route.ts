@@ -481,6 +481,7 @@ export async function POST(request: Request) {
             bookingId: reservation.id,
             venueId: reservation.venueId,
             venueName: reservation.venue?.name ?? "",
+            timeZone: reservation.venue?.timezone ?? undefined,
             tableId: reservation.tableId ?? null,
             seatId: reservation.seatId ?? null,
             startAt: reservation.startAt.toISOString(),
@@ -505,6 +506,7 @@ export async function POST(request: Request) {
           bookingId: reservation.id,
           payload: {
             venueName: reservation.venue?.name ?? "",
+            timeZone: reservation.venue?.timezone ?? undefined,
             guestEmail: userRecord.email ?? "",
             startAt: reservation.startAt.toISOString(),
             endAt: reservation.endAt.toISOString(),

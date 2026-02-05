@@ -83,6 +83,7 @@ export async function PATCH(
             bookingId: updated.id,
             payload: {
               venueName: updated.venue?.name ?? "",
+              timeZone: updated.venue?.timezone ?? undefined,
               startAt: updated.startAt.toISOString(),
               canceledAt: new Date().toISOString(),
             },
@@ -102,6 +103,7 @@ export async function PATCH(
             bookingId: updated.id,
             payload: {
               venueName: updated.venue?.name ?? "",
+              timeZone: updated.venue?.timezone ?? undefined,
               guestEmail: updated.user?.email ?? "",
               startAt: updated.startAt.toISOString(),
               canceledAt: new Date().toISOString(),

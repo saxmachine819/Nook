@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     },
     include: {
       user: { select: { email: true } },
-      venue: { select: { name: true } },
+      venue: { select: { name: true, timezone: true } },
       seat: { select: { label: true, name: true } },
       table: { select: { name: true } },
     },
@@ -93,6 +93,7 @@ export async function GET(request: Request) {
           bookingId: reservation.id,
           venueId: reservation.venueId,
           venueName: reservation.venue?.name ?? "",
+          timeZone: reservation.venue?.timezone ?? undefined,
           seatId: reservation.seatId ?? null,
           tableId: reservation.tableId ?? null,
           seatLabel,

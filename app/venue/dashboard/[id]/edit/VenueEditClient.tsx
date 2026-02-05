@@ -151,6 +151,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [longitude, setLongitude] = useState(venue.longitude?.toString() || "")
   const [tags, setTags] = useState<string[]>(venue.tags || [])
   const [rulesText, setRulesText] = useState(venue.rulesText || "")
+  const [seatCountInputs, setSeatCountInputs] = useState<Record<string, string>>({})
   const [tables, setTables] = useState<Table[]>(() => {
     return venue.tables.map((table, tableIdx) => {
       const bookingMode = (table.bookingMode || "individual") as "group" | "individual"
@@ -733,6 +734,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
 
     // Validate tables
     const validTables = tables.filter((t) => {
+      const displaySeatCount = seatCountInputs[t.id] ?? String(t.seats.length)
+      if (displaySeatCount === "" || parseInt(displaySeatCount, 10) < 1) return false
       if (!t.name.trim() || t.seats.length === 0) return false
 
       if (t.bookingMode === "group") {
@@ -743,7 +746,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     })
 
     if (validTables.length === 0) {
-      showToast("At least one table with name and valid pricing is required", "error")
+      showToast("Each table must have at least 1 seat. Please enter a number of seats for every table.", "error")
       setIsSubmitting(false)
       return
     }
@@ -1314,14 +1317,19 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                         </label>
                         <input
                           type="number"
-                          required
-                          value={table.seats.length}
+                          min={1}
+                          value={seatCountInputs[table.id] !== undefined ? seatCountInputs[table.id] : String(table.seats.length)}
                           onChange={(e) => {
                             const value = e.target.value
-                            if (value === "") return
-                            const numValue = parseInt(value)
+                            setSeatCountInputs((prev) => ({ ...prev, [table.id]: value }))
+                            const numValue = parseInt(value, 10)
                             if (!isNaN(numValue) && numValue >= 1) {
                               updateSeatCount(table.id, numValue)
+                              setSeatCountInputs((prev) => {
+                                const next = { ...prev }
+                                delete next[table.id]
+                                return next
+                              })
                             }
                           }}
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
