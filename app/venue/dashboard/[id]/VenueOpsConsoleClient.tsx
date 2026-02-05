@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Ban,
   Plus,
+  CreditCard,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -53,6 +54,7 @@ interface VenueOpsConsoleClientProps {
     id: string
     name: string
     openingHoursJson?: any
+    stripeAccountId?: string | null
     tables: Array<{
       id: string
       name: string | null
@@ -120,6 +122,22 @@ export function VenueOpsConsoleClient({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isTabVisible, setIsTabVisible] = useState(true)
   const refreshInFlightRef = useRef(false)
+  const [isStripeConnecting, setIsStripeConnecting] = useState(false)
+  const [stripeStatus, setStripeStatus] = useState<{
+    needsOnboarding: boolean
+    messages: string[]
+    disabledReason: string | null
+    status: "missing" | "ok" | "needs_attention" | "error"
+  } | null>(null)
+  const [stripeBalance, setStripeBalance] = useState<{
+    available: number
+    pending: number
+    currency: string
+  } | null>(null)
+  const [isPayoutDialogOpen, setIsPayoutDialogOpen] = useState(false)
+  const [payoutAmount, setPayoutAmount] = useState("")
+  const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false)
+  const [isStripeDashboardOpening, setIsStripeDashboardOpening] = useState(false)
   
   // Refs for intersection observer (sticky header)
   const nowSectionRef = useRef<HTMLDivElement>(null)
@@ -714,6 +732,168 @@ export function VenueOpsConsoleClient({
     return `${minutes} minutes ago`
   }, [lastUpdated])
 
+  useEffect(() => {
+    let isMounted = true
+    fetch(`/api/venues/${venue.id}/stripe/status`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!isMounted || !payload) return
+        setStripeStatus(payload)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setStripeStatus({
+          needsOnboarding: false,
+          messages: ["Unable to load Stripe status. Try again later."],
+          disabledReason: null,
+          status: "error",
+        })
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [venue.id])
+
+  useEffect(() => {
+    let isMounted = true
+    fetch(`/api/venues/${venue.id}/stripe/balance`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (!isMounted || !payload) return
+        setStripeBalance(payload)
+      })
+      .catch(() => {
+        if (!isMounted) return
+        setStripeBalance(null)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [venue.id])
+
+  const handleStripeConnect = useCallback(async () => {
+    if (isStripeConnecting) return
+    setIsStripeConnecting(true)
+    try {
+      const response = await fetch(`/api/venues/${venue.id}/stripe/connect`, {
+        method: "POST",
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to start Stripe onboarding.")
+      }
+      if (!payload?.url) {
+        throw new Error("Stripe onboarding link was missing.")
+      }
+      window.location.assign(payload.url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe onboarding failed."
+      showToast(message, "error")
+      setIsStripeConnecting(false)
+    }
+  }, [isStripeConnecting, showToast, venue.id])
+
+  const stripeButtonLabel = useMemo(() => {
+    if (isStripeConnecting) return "Connecting..."
+    if (!venue.stripeAccountId) return "Connect Stripe"
+    if (stripeStatus?.needsOnboarding) return "Re-onboard Stripe"
+    return "Stripe connected"
+  }, [isStripeConnecting, stripeStatus?.needsOnboarding, venue.stripeAccountId])
+
+  const stripeAlerts = useMemo(() => {
+    if (!stripeStatus) return []
+    if (stripeStatus.status === "ok") return []
+    const messages = [...(stripeStatus.messages || [])]
+    if (stripeStatus.disabledReason) {
+      messages.push(`Stripe disabled: ${stripeStatus.disabledReason}`)
+    }
+    return messages
+  }, [stripeStatus])
+
+  const formatMoney = useCallback((amount: number, currency: string) => {
+    const value = amount / 100
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+      maximumFractionDigits: 2,
+    }).format(value)
+  }, [])
+
+  const payoutAmountCents = useMemo(() => {
+    const parsed = Number(payoutAmount)
+    if (!Number.isFinite(parsed)) return 0
+    return Math.round(parsed * 100)
+  }, [payoutAmount])
+
+  const payoutError = useMemo(() => {
+    if (!payoutAmount) return null
+    if (!Number.isFinite(Number(payoutAmount))) return "Enter a valid number."
+    if (payoutAmountCents < 500) return "Minimum payout is $5.00."
+    if (stripeBalance && payoutAmountCents > stripeBalance.available) {
+      return "Amount exceeds available balance."
+    }
+    return null
+  }, [payoutAmount, payoutAmountCents, stripeBalance])
+
+  const handlePayoutSubmit = useCallback(async () => {
+    if (isPayoutSubmitting) return
+    if (payoutError) {
+      showToast(payoutError, "error")
+      return
+    }
+    if (payoutAmountCents < 500) {
+      showToast("Minimum payout is $5.00.", "error")
+      return
+    }
+    setIsPayoutSubmitting(true)
+    try {
+      const response = await fetch(`/api/venues/${venue.id}/stripe/payouts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: payoutAmountCents }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to request payout.")
+      }
+      showToast("Payout requested.", "success")
+      setIsPayoutDialogOpen(false)
+      setPayoutAmount("")
+      const balanceResponse = await fetch(`/api/venues/${venue.id}/stripe/balance`)
+      if (balanceResponse.ok) {
+        const balancePayload = await balanceResponse.json()
+        setStripeBalance(balancePayload)
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Payout failed."
+      showToast(message, "error")
+    } finally {
+      setIsPayoutSubmitting(false)
+    }
+  }, [isPayoutSubmitting, payoutAmountCents, payoutError, showToast, venue.id])
+
+  const handleStripeDashboard = useCallback(async () => {
+    if (isStripeDashboardOpening) return
+    setIsStripeDashboardOpening(true)
+    try {
+      const response = await fetch(`/api/venues/${venue.id}/stripe/dashboard`, {
+        method: "POST",
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to open Stripe dashboard.")
+      }
+      if (!payload?.url) {
+        throw new Error("Stripe dashboard link missing.")
+      }
+      window.location.assign(payload.url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe dashboard failed."
+      showToast(message, "error")
+      setIsStripeDashboardOpening(false)
+    }
+  }, [isStripeDashboardOpening, showToast, venue.id])
+
   return (
     <div className="min-h-screen bg-background">
       {ToastComponent}
@@ -743,6 +923,15 @@ export function VenueOpsConsoleClient({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStripeConnect}
+                disabled={isStripeConnecting}
+              >
+                <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                {stripeButtonLabel}
+              </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/venue/dashboard/${venue.id}/edit`}>
                   <Settings className="mr-1.5 h-3.5 w-3.5" />
@@ -762,6 +951,21 @@ export function VenueOpsConsoleClient({
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
+        {stripeAlerts.length > 0 && (
+          <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
+            <CardHeader>
+              <CardTitle>Stripe needs attention</CardTitle>
+              <CardDescription className="text-amber-800">
+                Complete onboarding to keep payouts enabled.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {stripeAlerts.map((message, index) => (
+                <div key={`${message}-${index}`}>{message}</div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left Column: Reservations Timeline */}
           <div className="space-y-4">
@@ -939,6 +1143,65 @@ export function VenueOpsConsoleClient({
 
           {/* Right Column: Seat Status + Quick Actions */}
           <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Payouts</CardTitle>
+                <CardDescription>Available Stripe balance</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <div className="text-xs text-muted-foreground">Available</div>
+                    <div className="text-lg font-semibold">
+                      {stripeBalance
+                        ? formatMoney(stripeBalance.available, stripeBalance.currency)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <div className="text-xs text-muted-foreground">Pending</div>
+                    <div className="text-lg font-semibold">
+                      {stripeBalance
+                        ? formatMoney(stripeBalance.pending, stripeBalance.currency)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/40 p-3">
+                    <div className="text-xs text-muted-foreground">Withdrawable</div>
+                    <div className="text-lg font-semibold">
+                      {stripeBalance
+                        ? formatMoney(stripeBalance.available, stripeBalance.currency)
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => setIsPayoutDialogOpen(true)}
+                  disabled={!venue.stripeAccountId || stripeStatus?.needsOnboarding}
+                >
+                  Request payout
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleStripeDashboard}
+                  disabled={!venue.stripeAccountId || isStripeDashboardOpening}
+                >
+                  {isStripeDashboardOpening ? "Opening dashboard..." : "Open Stripe dashboard"}
+                </Button>
+                {!venue.stripeAccountId && (
+                  <p className="text-xs text-muted-foreground">
+                    Connect Stripe to enable payouts.
+                  </p>
+                )}
+                {stripeStatus?.needsOnboarding && (
+                  <p className="text-xs text-amber-700">
+                    Complete Stripe onboarding before requesting payouts.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
             {/* Seat Status Panel */}
             <Card>
               <CardHeader>
@@ -1167,6 +1430,55 @@ export function VenueOpsConsoleClient({
           </div>
         </div>
       </div>
+
+      <Dialog open={isPayoutDialogOpen} onOpenChange={setIsPayoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request payout</DialogTitle>
+            <DialogDescription>
+              Enter the amount you want to withdraw. Minimum payout is $5.00.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="payout-amount">
+              Amount (USD)
+            </label>
+            <input
+              id="payout-amount"
+              type="number"
+              min="5"
+              step="0.01"
+              value={payoutAmount}
+              onChange={(event) => setPayoutAmount(event.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder="5.00"
+            />
+            {stripeBalance && (
+              <p className="text-xs text-muted-foreground">
+                Available: {formatMoney(stripeBalance.available, stripeBalance.currency)}
+              </p>
+            )}
+            {payoutError && (
+              <p className="text-xs text-red-600">{payoutError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsPayoutDialogOpen(false)}
+              disabled={isPayoutSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePayoutSubmit}
+              disabled={isPayoutSubmitting || !!payoutError}
+            >
+              {isPayoutSubmitting ? "Submitting..." : "Submit payout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Reservation Modal */}
       <Dialog open={!!editingReservation} onOpenChange={(open) => !open && setEditingReservation(null)}>
