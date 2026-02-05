@@ -35,7 +35,9 @@ export function VenueDashboardClient() {
     fetch("/api/users/me/venues")
       .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
       .then((data) => {
-        setVenues(data.venues ?? [])
+        const list = (data.venues ?? []) as Venue[]
+        list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }))
+        setVenues(list)
         setIsAdmin(data.isAdmin ?? false)
       })
       .catch(() => {

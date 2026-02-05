@@ -4,7 +4,35 @@
  * Default timezone matches lib/hours DEFAULT_TIMEZONE.
  */
 
-const DEFAULT_TIMEZONE = "America/New_York"
+export const DEFAULT_TIMEZONE = "America/New_York"
+
+/**
+ * Format a Date in a given IANA timezone as local date and time for URL params.
+ * Used by reminder emails so the venue page pre-fills the correct venue-local time.
+ * Returns date as YYYY-MM-DD and time as HHmm (no colon).
+ */
+export function formatDateAndTimeInZone(
+  date: Date,
+  timeZone?: string
+): { date: string; timeHHmm: string } {
+  const tz = timeZone?.trim() || DEFAULT_TIMEZONE
+  const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  })
+  const timeFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+  const dateStr = dateFormatter.format(date) // "YYYY-MM-DD" with en-CA
+  const timeStr = timeFormatter.format(date) // "HH:mm"
+  const timeHHmm = timeStr.replace(":", "")
+  return { date: dateStr, timeHHmm }
+}
 
 /**
  * Format an ISO date-time string for display in a given timezone.

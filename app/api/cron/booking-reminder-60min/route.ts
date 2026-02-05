@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { enqueueNotification } from "@/lib/notification-queue"
+import { formatDateAndTimeInZone, DEFAULT_TIMEZONE } from "@/lib/email-date-utils"
 
 // LOCAL-ONLY: set BOOKING_REMINDER_60MIN_WINDOW_START=1 and BOOKING_REMINDER_60MIN_WINDOW_END=3 for near-term testing
 function getWindowMinutes(): { start: number; end: number } {
@@ -11,13 +12,16 @@ function getWindowMinutes(): { start: number; end: number } {
   return { start: isNaN(start) ? 54 : start, end: isNaN(end) ? 66 : end }
 }
 
-function buildViewBookingUrl(reservation: {
-  venueId: string
-  seatId: string | null
-  tableId: string | null
-  startAt: Date
-  endAt: Date
-}): string {
+function buildViewBookingUrl(
+  reservation: {
+    venueId: string
+    seatId: string | null
+    tableId: string | null
+    startAt: Date
+    endAt: Date
+  },
+  timeZone?: string
+): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
   const params = new URLSearchParams()
   if (reservation.seatId) {
@@ -29,10 +33,10 @@ function buildViewBookingUrl(reservation: {
   }
   const startAt = new Date(reservation.startAt)
   const endAt = new Date(reservation.endAt)
-  const date = `${startAt.getFullYear()}-${String(startAt.getMonth() + 1).padStart(2, "0")}-${String(startAt.getDate()).padStart(2, "0")}`
-  const startTime = `${String(startAt.getHours()).padStart(2, "0")}${String(startAt.getMinutes()).padStart(2, "0")}`
+  const tz = timeZone?.trim() || DEFAULT_TIMEZONE
+  const { date, timeHHmm } = formatDateAndTimeInZone(startAt, tz)
   const duration = Math.max(1, Math.round((endAt.getTime() - startAt.getTime()) / (60 * 60 * 1000)))
-  const booking = JSON.stringify({ date, startTime, duration })
+  const booking = JSON.stringify({ date, startTime: timeHHmm, duration })
   params.set("booking", booking)
   return `${baseUrl}/venue/${reservation.venueId}?${params.toString()}`
 }
@@ -75,13 +79,16 @@ export async function GET(request: Request) {
     try {
       const seatLabel = reservation.seat?.label?.trim() || reservation.seat?.name?.trim() || null
       const tableLabel = reservation.table?.name?.trim() || null
-      const viewBookingUrl = buildViewBookingUrl({
-        venueId: reservation.venueId,
-        seatId: reservation.seatId,
-        tableId: reservation.tableId,
-        startAt: reservation.startAt,
-        endAt: reservation.endAt,
-      })
+      const viewBookingUrl = buildViewBookingUrl(
+        {
+          venueId: reservation.venueId,
+          seatId: reservation.seatId,
+          tableId: reservation.tableId,
+          startAt: reservation.startAt,
+          endAt: reservation.endAt,
+        },
+        reservation.venue?.timezone ?? undefined
+      )
       await enqueueNotification({
         type: "booking_reminder_60min",
         dedupeKey: `booking_reminder_60min:${reservation.id}`,

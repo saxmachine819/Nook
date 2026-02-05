@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { enqueueNotification } from "@/lib/notification-queue"
+import { formatDateAndTimeInZone, DEFAULT_TIMEZONE } from "@/lib/email-date-utils"
 
 function getWindowMinutes(): { start: number; end: number } {
   const startStr = process.env.BOOKING_REMINDER_WINDOW_START_MINUTES
@@ -10,12 +11,15 @@ function getWindowMinutes(): { start: number; end: number } {
   return { start: isNaN(start) ? 4 : start, end: isNaN(end) ? 6 : end }
 }
 
-function buildExtendUrl(reservation: {
-  venueId: string
-  seatId: string | null
-  tableId: string | null
-  endAt: Date
-}): string {
+function buildExtendUrl(
+  reservation: {
+    venueId: string
+    seatId: string | null
+    tableId: string | null
+    endAt: Date
+  },
+  timeZone?: string
+): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
   const params = new URLSearchParams()
   if (reservation.seatId) {
@@ -26,9 +30,9 @@ function buildExtendUrl(reservation: {
     params.set("resourceId", reservation.tableId)
   }
   const endAt = new Date(reservation.endAt)
-  const date = `${endAt.getFullYear()}-${String(endAt.getMonth() + 1).padStart(2, "0")}-${String(endAt.getDate()).padStart(2, "0")}`
-  const startTime = `${String(endAt.getHours()).padStart(2, "0")}${String(endAt.getMinutes()).padStart(2, "0")}`
-  const booking = JSON.stringify({ date, startTime, duration: 1 })
+  const tz = timeZone?.trim() || DEFAULT_TIMEZONE
+  const { date, timeHHmm } = formatDateAndTimeInZone(endAt, tz)
+  const booking = JSON.stringify({ date, startTime: timeHHmm, duration: 1 })
   params.set("booking", booking)
   return `${baseUrl}/venue/${reservation.venueId}?${params.toString()}`
 }
@@ -69,12 +73,15 @@ export async function GET(request: Request) {
     try {
       const resourceType = reservation.seatId ? "seat" : "table"
       const resourceId = reservation.seatId ?? reservation.tableId ?? ""
-      const extendUrl = buildExtendUrl({
-        venueId: reservation.venueId,
-        seatId: reservation.seatId,
-        tableId: reservation.tableId,
-        endAt: reservation.endAt,
-      })
+      const extendUrl = buildExtendUrl(
+        {
+          venueId: reservation.venueId,
+          seatId: reservation.seatId,
+          tableId: reservation.tableId,
+          endAt: reservation.endAt,
+        },
+        reservation.venue?.timezone ?? undefined
+      )
       await enqueueNotification({
         type: "booking_end_5min",
         dedupeKey: `booking_end_5min:${reservation.id}`,
