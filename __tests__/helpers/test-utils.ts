@@ -8,13 +8,56 @@ export function createTestDate(offsetMinutes = 0): Date {
   return date
 }
 
+/**
+ * Returns a Date that is on a 15-minute boundary (:00, :15, :30, :45) with seconds and ms zero.
+ * Uses "now" + offsetMinutes, then rounds down to the previous 15-min boundary (or up if you need future).
+ */
+export function createTestDateOn15Min(offsetMinutes = 0): Date {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() + offsetMinutes)
+  date.setSeconds(0, 0)
+  const min = date.getMinutes()
+  const rounded = Math.floor(min / 15) * 15
+  date.setMinutes(rounded, 0, 0)
+  return date
+}
+
 export function createTestDateString(offsetMinutes = 0): string {
   return createTestDate(offsetMinutes).toISOString()
+}
+
+/** ISO string for a time on a 15-minute boundary (for reservation API which requires :00, :15, :30, :45). */
+export function createTestDateStringOn15Min(offsetMinutes = 0): string {
+  return createTestDateOn15Min(offsetMinutes).toISOString()
+}
+
+/**
+ * Like createTestDateStringOn15Min but rounds UP to the next 15-min boundary.
+ * Use when startAt must not be in the past (e.g. "exactly now" tests).
+ */
+export function createTestDateStringOn15MinRoundUp(offsetMinutes = 0): string {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() + offsetMinutes)
+  date.setSeconds(0, 0)
+  const min = date.getMinutes()
+  const roundedUp = min % 15 === 0 ? min : (Math.floor(min / 15) + 1) * 15
+  if (roundedUp === 60) {
+    date.setHours(date.getHours() + 1)
+    date.setMinutes(0, 0, 0)
+  } else {
+    date.setMinutes(roundedUp, 0, 0)
+  }
+  return date.toISOString()
 }
 
 export function createPastDateString(offsetMinutes: number): string {
   // offsetMinutes should be negative to create a past date
   return createTestDate(offsetMinutes).toISOString()
+}
+
+/** Past time on a 15-minute boundary (e.g. for PAST_TIME validation tests). */
+export function createPastDateStringOn15Min(offsetMinutes: number): string {
+  return createTestDateOn15Min(offsetMinutes).toISOString()
 }
 
 export function createTestUser(overrides?: Partial<any>) {

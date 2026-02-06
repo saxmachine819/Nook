@@ -1259,8 +1259,6 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   const newTime = e.target.value
                   setStartTime(newTime)
-                  
-                  // Validate if date is today and time is in the past
                   if (date === new Date().toISOString().split("T")[0] && newTime) {
                     const selectedDateTime = new Date(`${date}T${newTime}`)
                     const now = new Date()
@@ -1269,8 +1267,9 @@ export function VenueBookingWidget({
                     } else {
                       setError(null)
                     }
+                  } else {
+                    setError(null)
                   }
-                  
                   setAvailableSeats([])
                   setUnavailableSeats([])
                   setAvailableSeatGroups([])
@@ -1279,8 +1278,8 @@ export function VenueBookingWidget({
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
-                min={date === new Date().toISOString().split("T")[0] 
-                  ? `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
+                min={date === new Date().toISOString().split("T")[0]
+                  ? `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`
                   : undefined}
                 required
               />
