@@ -63,6 +63,7 @@ model Venue {
   rulesText        String?
   tags            String[]
   ownerId         String?
+  stripeAccountId String?
   onboardingStatus OnboardingStatus @default(DRAFT)
   venueTermsAcceptedAt DateTime?
   submittedAt     DateTime?

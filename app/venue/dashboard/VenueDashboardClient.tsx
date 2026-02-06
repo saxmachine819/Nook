@@ -29,6 +29,7 @@ function getStatusPill(status: string) {
 export function VenueDashboardClient() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [userInfo, setUserInfo] = useState<{ id: string; email: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,6 +40,9 @@ export function VenueDashboardClient() {
         list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }))
         setVenues(list)
         setIsAdmin(data.isAdmin ?? false)
+        if (data.userId) {
+          setUserInfo({ id: data.userId, email: data.email ?? null })
+        }
       })
       .catch(() => {
         setVenues([])
@@ -50,11 +54,23 @@ export function VenueDashboardClient() {
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+        <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
           </p>
+          {userInfo && (
+            <div className="mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <div>
+                <span className="font-medium text-foreground text-xs uppercase tracking-wider opacity-70">User ID:</span> {userInfo.id}
+              </div>
+              {userInfo.email && (
+                <div>
+                  <span className="font-medium text-foreground text-xs uppercase tracking-wider opacity-70">Email:</span> {userInfo.email}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {!loading && (
           <Button asChild className="shrink-0">

@@ -53,7 +53,7 @@ export async function GET() {
       pausedAt: v.pausedAt,
     }))
 
-    return NextResponse.json({ venues: list, isAdmin: admin })
+    return NextResponse.json({ venues: list, isAdmin: admin, userId: session.user.id, email: session.user.email ?? null })
   } catch (e) {
     console.error("GET /api/users/me/venues:", e)
     return NextResponse.json(
