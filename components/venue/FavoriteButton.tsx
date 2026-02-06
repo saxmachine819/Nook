@@ -2,7 +2,7 @@
 
 import { Heart } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useFavoriteToggle } from "@/hooks/useFavoriteToggle"
+import { useFavoriteToggle } from "@/lib/hooks"
 
 interface FavoriteButtonProps {
   type: "venue" | "table" | "seat"

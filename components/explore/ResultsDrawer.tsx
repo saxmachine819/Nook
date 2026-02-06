@@ -21,19 +21,41 @@ export interface ResultsDrawerVenue {
 
 interface ResultsDrawerProps {
   venues: ResultsDrawerVenue[]
-  isSearchingText?: boolean
+  isLoading?: boolean
+  /** Initial load - pins haven't loaded yet */
+  isInitialLoading?: boolean
+  total?: number
   onSelectVenue: (id: string) => void
   onCenterOnVenue?: (id: string) => void
-  autoExpand?: boolean // Automatically expand when search/filters are active
+  autoExpand?: boolean
   favoritesOnly?: boolean
   onClearFavoritesFilter?: () => void
   favoritedVenueIds?: Set<string>
   onToggleFavorite?: (venueId: string, favorited: boolean) => void
+  /** When true, user is searching/filtering (not browsing map) */
+  isSearchMode?: boolean
+  /** Current search query text */
+  searchQuery?: string
+}
+
+function VenueCardSkeleton() {
+  return (
+    <div className="flex w-full gap-3 rounded-lg border border-border bg-card p-3 animate-pulse">
+      <div className="h-16 w-16 shrink-0 rounded-md bg-muted" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-3/4 rounded bg-muted" />
+        <div className="h-3 w-1/2 rounded bg-muted" />
+        <div className="h-3 w-1/3 rounded bg-muted" />
+      </div>
+    </div>
+  )
 }
 
 export function ResultsDrawer({
   venues,
-  isSearchingText = false,
+  isLoading = false,
+  isInitialLoading = false,
+  total,
   onSelectVenue,
   onCenterOnVenue,
   autoExpand = false,
@@ -41,6 +63,8 @@ export function ResultsDrawer({
   onClearFavoritesFilter,
   favoritedVenueIds = new Set(),
   onToggleFavorite,
+  isSearchMode = false,
+  searchQuery = "",
 }: ResultsDrawerProps) {
   const [expanded, setExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -76,10 +100,41 @@ export function ResultsDrawer({
     } else if (!expanded) {
       setCalculatedHeight(null)
     }
-  }, [expanded, venues.length, isSearchingText, isDragging])
+  }, [expanded, venues.length, isLoading, isDragging])
 
-  const n = venues.length
-  const label = isSearchingText ? "Searching…" : n === 1 ? "1 location in this area" : `${n} locations in this area`
+  const displayCount = total ?? venues.length
+
+  // Different labels for search mode vs browse mode
+  const getLabel = () => {
+    // Initial loading - no data yet
+    if (isInitialLoading) {
+      return "Finding venues nearby…"
+    }
+
+    if (isSearchMode) {
+      // Search/filter mode - show searching or results
+      if (isLoading) {
+        return searchQuery ? `Searching "${searchQuery}"…` : "Searching…"
+      }
+      if (displayCount === 0) {
+        return searchQuery ? `No results for "${searchQuery}"` : "No results"
+      }
+      return displayCount === 1 ? "1 result" : `${displayCount} results`
+    }
+
+    // Browse mode - use pins total
+    const hasCount = total != null && total > 0
+    if (!hasCount && isLoading) {
+      return "Loading…"
+    }
+    return displayCount === 1
+      ? "1 location in this area"
+      : `${displayCount} locations in this area`
+  }
+
+  const label = getLabel()
+
+  const showLoadingContent = isLoading || isInitialLoading
 
   const COLLAPSED_HEIGHT = 48
   const EXPANDED_HEIGHT_PERCENT = 60
@@ -222,10 +277,15 @@ export function ResultsDrawer({
         )}
         style={{ touchAction: "pan-y", pointerEvents: "auto" }}
       >
-        {isSearchingText ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-sm text-muted-foreground">Searching…</p>
-          </div>
+        {/* Loading state */}
+        {showLoadingContent ? (
+          <ul className="space-y-2">
+            {Array.from({ length: Math.min(displayCount || 3, 5) }).map((_, i) => (
+              <li key={i}>
+                <VenueCardSkeleton />
+              </li>
+            ))}
+          </ul>
         ) : venues.length === 0 && favoritesOnly ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-sm font-medium text-foreground mb-2">No favorites yet.</p>
@@ -245,7 +305,11 @@ export function ResultsDrawer({
         ) : venues.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center px-4">
             <p className="text-sm text-muted-foreground">
-              No locations in this area. Tap &quot;Search this area&quot; on the map to search.
+              {isSearchMode
+                ? searchQuery
+                  ? `No venues found for "${searchQuery}". Try a different search.`
+                  : "No venues match your filters."
+                : "No locations in this area. Tap \"Search this area\" on the map to search."}
             </p>
           </div>
         ) : (

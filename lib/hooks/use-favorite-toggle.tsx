@@ -29,25 +29,22 @@ export function useFavoriteToggle({
   const [showSignInModal, setShowSignInModal] = useState(false)
 
   const toggleFavorite = useCallback(async () => {
-    // Check if user is authenticated
     if (status === "loading") {
-      return // Wait for session to load
+      return
     }
 
     if (!session?.user?.id) {
-      // Show sign-in modal
       setShowSignInModal(true)
       return
     }
 
-    // Optimistic update
     const previousState = isFavorited
     setIsFavorited(!previousState)
     setIsToggling(true)
 
     try {
       let url: string
-      let body: any = {}
+      let body: Record<string, string> = {}
 
       if (type === "venue") {
         url = `/api/favorites/venues/${itemId}`
@@ -78,9 +75,8 @@ export function useFavoriteToggle({
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        // Revert optimistic update on error
         setIsFavorited(previousState)
-        
+
         if (response.status === 401) {
           setShowSignInModal(true)
           return
@@ -89,14 +85,11 @@ export function useFavoriteToggle({
         throw new Error(data?.error || "Failed to toggle favorite")
       }
 
-      // Update state with server response
       const favorited = data.favorited ?? !previousState
       setIsFavorited(favorited)
 
-      // Show toast
       showToast(favorited ? "Saved" : "Removed", "success")
 
-      // Call optional callback
       if (onToggle) {
         onToggle(favorited)
       }
@@ -110,7 +103,6 @@ export function useFavoriteToggle({
 
   const handleSignInSuccess = useCallback(() => {
     setShowSignInModal(false)
-    // Retry the toggle after sign-in
     toggleFavorite()
   }, [toggleFavorite])
 

@@ -103,6 +103,9 @@ model Venue {
   @@index([ownerId])
   @@index([onboardingStatus])
   @@index([status])
+  @@index([latitude, longitude])
+  @@index([hourlySeatPrice])
+  @@index([onboardingStatus, status, pausedAt])
   @@map("venues")
 }
 
