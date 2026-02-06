@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
-import { parseGooglePeriodsToVenueHours, upsertVenueHours } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function PATCH(
   request: NextRequest,
@@ -44,10 +44,10 @@ export async function PATCH(
 
     const body = await request.json()
 
-    // Validate required fields
-    if (!body.name || !body.address) {
+    // Validate required fields (name is not required for updates - it's locked after creation)
+    if (!body.address) {
       return NextResponse.json(
-        { error: "Missing required fields: name and address are required" },
+        { error: "Missing required fields: address is required" },
         { status: 400 }
       )
     }
@@ -108,11 +108,17 @@ export async function PATCH(
 
     // Update venue and tables/seats in a transaction
     const updatedVenue = await prisma.$transaction(async (tx) => {
-      // Update venue fields
+      // Update venue fields (name is locked after creation, so don't update it)
+      // Single venue hours pathway: manual edit → hoursSource=manual; "Use Google hours" → hoursSource=google
+      const hoursSourceUpdate =
+        body.venueHours != null
+          ? { hoursSource: body.hoursSource ?? "manual" as string, hoursUpdatedAt: new Date() }
+          : {}
+
       await tx.venue.update({
         where: { id: venueId },
         data: {
-          name: body.name.trim(),
+          // name: body.name.trim(), // Name cannot be changed after creation
           address: body.address.trim(),
           neighborhood: body.neighborhood?.trim() || null,
           city: body.city?.trim() || null,
@@ -125,14 +131,16 @@ export async function PATCH(
           description: body.description?.trim() || null,
           googlePlaceId: body.googlePlaceId?.trim() || null,
           googleMapsUrl: body.googleMapsUrl?.trim() || null,
-          openingHoursJson: body.openingHoursJson || null,
+          openingHoursJson: body.openingHoursJson ?? undefined,
           googlePhotoRefs: body.googlePhotoRefs || null,
           heroImageUrl: body.heroImageUrl?.trim() || null,
+          ...hoursSourceUpdate,
           imageUrls: body.imageUrls || null,
         },
       })
 
-      // Update venue hours if provided
+      // Update venue hours if provided (single pathway: manual → source=manual, Use Google → source=google)
+      const hourSource = body.hoursSource === "google" ? "google" : "manual"
       if (body.venueHours && Array.isArray(body.venueHours)) {
         for (const hourData of body.venueHours) {
           await tx.venueHours.upsert({
@@ -146,7 +154,7 @@ export async function PATCH(
               isClosed: hourData.isClosed,
               openTime: hourData.openTime || null,
               closeTime: hourData.closeTime || null,
-              source: "manual",
+              source: hourSource,
             },
             create: {
               venueId: venueId,
@@ -154,7 +162,7 @@ export async function PATCH(
               isClosed: hourData.isClosed,
               openTime: hourData.openTime || null,
               closeTime: hourData.closeTime || null,
-              source: "manual",
+              source: hourSource,
             },
           })
         }
@@ -182,6 +190,7 @@ export async function PATCH(
               imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
                 ? table.imageUrls
                 : null,
+              directionsText: table.directionsText?.trim() || null,
               seats: {
                 create: (table.seats || []).map((seat: any, index: number) => ({
                   pricePerHour: Number(seat.pricePerHour),
@@ -200,21 +209,29 @@ export async function PATCH(
         }
       }
 
-      // Parse and save venue hours if openingHoursJson changed (only if manual hours not provided)
+      // "Use Google hours" pathway: sync from openingHoursJson and set hoursSource=google
       if (!body.venueHours && body.openingHoursJson !== undefined) {
         try {
           const openingHours = body.openingHoursJson as any
           if (openingHours && openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
+            const current = await tx.venue.findUnique({
+              where: { id: venueId },
+              select: { hoursSource: true },
+            })
             const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venueId, "google")
-            await upsertVenueHours(tx, venueId, hoursData)
+            await syncVenueHoursFromGoogle(tx, venueId, hoursData, current?.hoursSource ?? null)
+            if (body.hoursSource === "google") {
+              await tx.venue.update({
+                where: { id: venueId },
+                data: { hoursSource: "google", hoursUpdatedAt: new Date() },
+              })
+            }
           } else if (body.openingHoursJson === null) {
-            // If openingHoursJson is explicitly set to null, clear venue hours
             await tx.venueHours.deleteMany({
               where: { venueId },
             })
           }
         } catch (error) {
-          // Log error but don't fail venue update
           console.error("Error parsing venue hours:", error)
         }
       }

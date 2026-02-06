@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
-import { Plus, Trash2, Search, Upload, X } from "lucide-react"
+import { Plus, Trash2, Search, Upload, X, Expand } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { parseGooglePeriodsToVenueHours } from "@/lib/venue-hours"
+import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -45,6 +46,7 @@ interface Table {
   defaultPrice: number
   tablePricePerHour?: number
   imageUrls: string[]
+  directionsText: string
   seats: Seat[]
 }
 
@@ -78,6 +80,7 @@ interface VenueEditClientProps {
       bookingMode: string
       tablePricePerHour: number | null
       imageUrls: unknown
+      directionsText: string | null
       seats: Array<{
         id: string
         label: string | null
@@ -97,6 +100,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [isLoadingScript, setIsLoadingScript] = useState(true)
   const autocompleteInputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<any>(null)
+  const venuePhotoInputRef = useRef<HTMLInputElement>(null)
 
   // Parse imageUrls
   const parseImageUrls = (urls: unknown): string[] => {
@@ -115,6 +119,17 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
       }
     }
     return []
+  }
+
+  // URLs from Google Places API (exact match can vary by params); exclude these from owner uploads to avoid duplicates
+  const isGooglePlacesPhotoUrl = (url: string): boolean => {
+    if (!url || typeof url !== "string") return false
+    return (
+      url.includes("places.googleapis.com") ||
+      url.includes("maps.googleapis.com") ||
+      url.includes("photo_reference=") ||
+      url.includes("lh3.googleusercontent.com")
+    )
   }
 
   // Parse seat/tags
@@ -136,6 +151,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [longitude, setLongitude] = useState(venue.longitude?.toString() || "")
   const [tags, setTags] = useState<string[]>(venue.tags || [])
   const [rulesText, setRulesText] = useState(venue.rulesText || "")
+  const [seatCountInputs, setSeatCountInputs] = useState<Record<string, string>>({})
   const [tables, setTables] = useState<Table[]>(() => {
     return venue.tables.map((table, tableIdx) => {
       const bookingMode = (table.bookingMode || "individual") as "group" | "individual"
@@ -153,6 +169,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         defaultPrice,
         tablePricePerHour: table.tablePricePerHour || undefined,
         imageUrls: parseImageUrls(table.imageUrls),
+        directionsText: table.directionsText || "",
         seats: table.seats.map((seat, seatIdx) => ({
           id: seat.id,
           label: seat.label || undefined,
@@ -183,10 +200,11 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     }
     
     // Priority 2: Google hours (openingHoursJson) - parse if available
-    if (venue.openingHoursJson?.periods && Array.isArray(venue.openingHoursJson.periods) && venue.openingHoursJson.periods.length > 0) {
+    const jsonHours = venue.openingHoursJson as { periods?: unknown[] } | null | undefined
+    if (jsonHours?.periods && Array.isArray(jsonHours.periods) && jsonHours.periods.length > 0) {
       try {
         const hoursData = parseGooglePeriodsToVenueHours(
-          venue.openingHoursJson.periods,
+          jsonHours.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
           venue.id,
           "google"
         )
@@ -224,16 +242,43 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     }))
   }
   const [hours, setHours] = useState(initializeHours())
+  // Single venue hours pathway: manual edit → "manual", "Use Google hours" → "google"
+  const [hoursSourceChoice, setHoursSourceChoice] = useState<"manual" | "google">(
+    (venue as { hoursSource?: string | null }).hoursSource === "google" ? "google" : "manual"
+  )
   const [availablePhotos, setAvailablePhotos] = useState<Array<{
     photoUrl: string
     photoReference: string | null
     name: string
   }>>([])
-  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState<Set<number>>(new Set())
+  const [ownerUploadedUrls, setOwnerUploadedUrls] = useState<string[]>([])
+  const [selectedCatalogIndices, setSelectedCatalogIndices] = useState<number[]>([])
   const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false)
   const [uploadingImages, setUploadingImages] = useState<Set<string>>(new Set())
+  const [uploadingVenuePhoto, setUploadingVenuePhoto] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
+
+  // Catalog = Google photos + owner uploads (same order as onboard)
+  const catalog: Array<
+    | { source: "google"; photoUrl: string; photoReference: string | null; name: string; indexInGoogle: number }
+    | { source: "upload"; photoUrl: string }
+  > = [
+    ...availablePhotos.map((p, i) => ({ source: "google" as const, photoUrl: p.photoUrl, photoReference: p.photoReference, name: p.name, indexInGoogle: i })),
+    ...ownerUploadedUrls.map((url) => ({ source: "upload" as const, photoUrl: url })),
+  ]
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+  // Initialize owner uploads and selection when venue has no Google place (all images are owner uploads)
+  useEffect(() => {
+    if (venue.googlePlaceId) return
+    const urls = [
+      ...new Set(parseImageUrls(venue.imageUrls).filter((u) => !isGooglePlacesPhotoUrl(u))),
+    ]
+    setOwnerUploadedUrls(urls)
+    setSelectedCatalogIndices(urls.map((_, i) => i))
+  }, [venue.googlePlaceId, venue.imageUrls])
 
   // Load Google photos if venue has a googlePlaceId
   useEffect(() => {
@@ -248,31 +293,41 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         if (response.ok && data) {
           if (data.photos && data.photos.length > 0) {
             setAvailablePhotos(data.photos)
-            // Pre-select photos that match existing venue images
             const venueImageUrls = parseImageUrls(venue.imageUrls)
             const heroImageUrl = venue.heroImageUrl
-            const selected = new Set<number>()
-            
-            data.photos.forEach((photo: { photoUrl: string }, index: number) => {
-              if (heroImageUrl && photo.photoUrl === heroImageUrl) {
-                selected.add(index)
-              } else if (venueImageUrls.includes(photo.photoUrl)) {
-                selected.add(index)
-              }
-            })
+            const googleUrls = (data.photos as Array<{ photoUrl: string }>).map((p) => p.photoUrl)
+            const ownerUploaded = [
+              ...new Set(
+                venueImageUrls.filter((u) => !isGooglePlacesPhotoUrl(u) && !googleUrls.includes(u))
+              ),
+            ]
+            setOwnerUploadedUrls(ownerUploaded)
 
-            // If no matches, select first few photos by default
-            if (selected.size === 0 && data.photos.length > 0) {
-              const defaultCount = Math.min(5, Math.max(3, data.photos.length))
-              for (let i = 0; i < defaultCount; i++) {
-                selected.add(i)
-              }
+            const builtCatalog: Array<{ source: "google"; photoUrl: string } | { source: "upload"; photoUrl: string }> = [
+              ...data.photos.map((p: { photoUrl: string }) => ({ source: "google" as const, photoUrl: p.photoUrl })),
+              ...ownerUploaded.map((url: string) => ({ source: "upload" as const, photoUrl: url })),
+            ]
+            const desiredOrder = [
+              ...(heroImageUrl ? [heroImageUrl] : []),
+              ...venueImageUrls.filter((u) => u !== heroImageUrl),
+            ]
+            const selected: number[] = []
+            for (const url of desiredOrder) {
+              const idx = builtCatalog.findIndex((item) => item.photoUrl === url)
+              if (idx >= 0 && !selected.includes(idx)) selected.push(idx)
             }
-
-            setSelectedPhotoIndices(selected)
+            if (selected.length === 0 && builtCatalog.length > 0) {
+              const defaultCount = Math.min(5, Math.max(3, builtCatalog.length))
+              for (let i = 0; i < defaultCount; i++) selected.push(i)
+            }
+            setSelectedCatalogIndices(selected)
           } else {
             setAvailablePhotos([])
-            setSelectedPhotoIndices(new Set())
+            const urls = [
+              ...new Set(parseImageUrls(venue.imageUrls).filter((u) => !isGooglePlacesPhotoUrl(u))),
+            ]
+            setOwnerUploadedUrls(urls)
+            setSelectedCatalogIndices(urls.map((_, i) => i))
           }
         }
       } catch (error) {
@@ -343,7 +398,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         return
       }
 
-      if (place.name) setName(place.name)
+      // Don't update name - venue name is locked after creation
+      // if (place.name) setName(place.name)
       if (place.formatted_address) setAddress(place.formatted_address)
 
       let streetNumber = ""
@@ -395,11 +451,11 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             if (data.photos && data.photos.length > 0) {
               setAvailablePhotos(data.photos)
               const defaultCount = Math.min(5, Math.max(3, data.photos.length))
-              setSelectedPhotoIndices(new Set(Array.from({ length: defaultCount }, (_, i) => i)))
+              setSelectedCatalogIndices(Array.from({ length: defaultCount }, (_, i) => i))
               showToast(`Place details loaded! Found ${data.photos.length} photos.`, "success")
             } else {
               setAvailablePhotos([])
-              setSelectedPhotoIndices(new Set())
+              setSelectedCatalogIndices([])
               showToast("Place details loaded! (No photos available)", "success")
             }
           }
@@ -423,6 +479,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         bookingMode: "individual",
         defaultPrice,
         imageUrls: [],
+        directionsText: "",
         seats: [{ id: Date.now().toString() + "-1", position: 1, pricePerHour: defaultPrice, tags: [], imageUrls: [] }],
       },
     ])
@@ -540,20 +597,46 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     )
   }
 
-  const togglePhotoSelection = (index: number) => {
-    setSelectedPhotoIndices((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(index)) {
-        newSet.delete(index)
-      } else {
-        if (newSet.size < 8) {
-          newSet.add(index)
-        } else {
-          showToast("You can select up to 8 photos", "error")
-        }
+  const toggleCatalogPhotoSelection = (catalogIndex: number) => {
+    setSelectedCatalogIndices((prev) => {
+      const idx = prev.indexOf(catalogIndex)
+      if (idx >= 0) return prev.filter((i) => i !== catalogIndex)
+      if (prev.length >= 8) {
+        showToast("You can select up to 8 photos", "error")
+        return prev
       }
-      return newSet
+      return [...prev, catalogIndex]
     })
+  }
+
+  const handleVenuePhotoUpload = async (file: File) => {
+    setUploadingVenuePhoto(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", "venue")
+      formData.append("id", venue.id)
+      const response = await fetch("/api/upload", { method: "POST", body: formData })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Upload failed.")
+      if (!data.url) throw new Error("No URL returned from upload")
+      setOwnerUploadedUrls((prev) => (prev.includes(data.url) ? prev : [...prev, data.url]))
+      showToast("Image uploaded successfully", "success")
+    } catch (err: any) {
+      showToast(err.message || "Failed to upload image.", "error")
+    } finally {
+      setUploadingVenuePhoto(false)
+    }
+  }
+
+  const removeOwnerUpload = (url: string) => {
+    const idx = ownerUploadedUrls.indexOf(url)
+    if (idx < 0) return
+    const catalogIndexToRemove = availablePhotos.length + idx
+    setOwnerUploadedUrls((prev) => prev.filter((u) => u !== url))
+    setSelectedCatalogIndices((prev) =>
+      prev.filter((i) => i !== catalogIndexToRemove).map((i) => (i > catalogIndexToRemove ? i - 1 : i))
+    )
   }
 
   const handleImageUpload = async (
@@ -642,13 +725,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     
     setIsSubmitting(true)
 
-    // Validation
-    if (!name.trim()) {
-      showToast("Venue name is required", "error")
-      setIsSubmitting(false)
-      return
-    }
-
+    // Validation (name is locked, so we don't validate it)
     if (!address.trim()) {
       showToast("Address is required", "error")
       setIsSubmitting(false)
@@ -657,6 +734,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
 
     // Validate tables
     const validTables = tables.filter((t) => {
+      const displaySeatCount = seatCountInputs[t.id] ?? String(t.seats.length)
+      if (displaySeatCount === "" || parseInt(displaySeatCount, 10) < 1) return false
       if (!t.name.trim() || t.seats.length === 0) return false
 
       if (t.bookingMode === "group") {
@@ -667,7 +746,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     })
 
     if (validTables.length === 0) {
-      showToast("At least one table with name and valid pricing is required", "error")
+      showToast("Each table must have at least 1 seat. Please enter a number of seats for every table.", "error")
       setIsSubmitting(false)
       return
     }
@@ -695,6 +774,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             bookingMode: table.bookingMode,
             tablePricePerHour: table.bookingMode === "group" ? table.tablePricePerHour : null,
             imageUrls: table.imageUrls.length > 0 ? table.imageUrls : null,
+            directionsText: table.directionsText.trim() || null,
             seats: table.seats.map((seat, index) => ({
               pricePerHour: seat.pricePerHour,
               position: seat.position ?? index + 1,
@@ -706,6 +786,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           googlePlaceId: googlePlaceId || null,
           googleMapsUrl: googleMapsUrl || null,
           openingHoursJson: openingHoursJson || null,
+          hoursSource: hoursSourceChoice,
           venueHours: hours.map(h => ({
             dayOfWeek: h.dayOfWeek,
             isClosed: h.isClosed,
@@ -713,21 +794,19 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             closeTime: h.isClosed ? null : h.closeTime || null,
           })),
           googlePhotoRefs:
-            availablePhotos.length > 0
-              ? availablePhotos.map((photo) => ({
-                  name: photo.name,
-                  photoReference: photo.photoReference,
-                }))
+            selectedCatalogIndices.length > 0
+              ? selectedCatalogIndices
+                  .map((i) => catalog[i])
+                  .filter((item): item is typeof catalog[0] & { source: "google" } => item?.source === "google")
+                  .map((item) => ({ name: item.name, photoReference: item.photoReference }))
               : null,
           heroImageUrl:
-            selectedPhotoIndices.size > 0
-              ? availablePhotos[Array.from(selectedPhotoIndices)[0]]?.photoUrl || null
+            selectedCatalogIndices.length > 0 && catalog[selectedCatalogIndices[0]]
+              ? catalog[selectedCatalogIndices[0]].photoUrl
               : venue.heroImageUrl,
           imageUrls:
-            selectedPhotoIndices.size > 0
-              ? Array.from(selectedPhotoIndices)
-                  .map((idx) => availablePhotos[idx]?.photoUrl)
-                  .filter(Boolean)
+            selectedCatalogIndices.length > 0
+              ? (selectedCatalogIndices.map((i) => catalog[i]?.photoUrl).filter(Boolean) as string[])
               : parseImageUrls(venue.imageUrls),
         }),
       })
@@ -744,7 +823,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
 
       showToast("Venue updated successfully!", "success")
       setTimeout(() => {
-        router.push("/profile")
+        router.push(`/venue/dashboard/${venue.id}`)
       }, 1000)
     } catch (error) {
       console.error("Error updating venue:", error)
@@ -769,46 +848,6 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {apiKey && (
-                <div
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }
-                  }}
-                >
-                  <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                    Find on Google <span className="text-muted-foreground">(optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      id="place-search"
-                      ref={autocompleteInputRef}
-                      type="text"
-                      autoComplete="off"
-                      disabled={isLoadingScript || isLoadingPlaceDetails}
-                      placeholder={
-                        isLoadingScript
-                          ? "Loading..."
-                          : isLoadingPlaceDetails
-                            ? "Loading place details..."
-                            : "Search for your venue or address"
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          return false
-                        }
-                      }}
-                      className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    />
-                  </div>
-                </div>
-              )}
-
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium">
                   Venue Name <span className="text-destructive">*</span>
@@ -818,10 +857,14 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                   type="text"
                   required
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  readOnly
+                  disabled
+                  className="w-full rounded-md border border-input bg-muted px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
                   placeholder="The Cozy Corner"
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Venue name cannot be changed after creation
+                </p>
               </div>
 
               <div>
@@ -884,28 +927,53 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           </CardContent>
         </Card>
 
-        {/* Google Places Photos */}
-        {(availablePhotos.length > 0 || isLoadingPlaceDetails || googlePlaceId) && (
+        {/* Venue Photos (Google + owner uploads) — always show on edit so owner can add first photo */}
+        {(catalog.length > 0 || isLoadingPlaceDetails || googlePlaceId || true) && (
           <Card>
             <CardHeader>
               <CardTitle>Venue Photos</CardTitle>
-              <CardDescription>Select the best interior shots (3–8 photos)</CardDescription>
+              <CardDescription>Select the best interior shots (3–8 photos). You can add your own.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingPlaceDetails ? (
                 <p className="text-sm text-muted-foreground">Loading photos...</p>
-              ) : availablePhotos.length === 0 && googlePlaceId ? (
-                <p className="text-sm text-muted-foreground">No photos available for this place</p>
+              ) : catalog.length === 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {googlePlaceId ? "No photos available for this place. Add your own below." : "Add your first photo below."}
+                  </p>
+                  <input
+                    ref={venuePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleVenuePhotoUpload(file)
+                      e.target.value = ""
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingVenuePhoto}
+                    onClick={() => venuePhotoInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                    {availablePhotos.map((photo, index) => {
-                      const isSelected = selectedPhotoIndices.has(index)
+                    {catalog.map((item, catalogIndex) => {
+                      const isSelected = selectedCatalogIndices.includes(catalogIndex)
+                      const orderIndex = selectedCatalogIndices.indexOf(catalogIndex)
                       return (
                         <button
-                          key={index}
+                          key={catalogIndex}
                           type="button"
-                          onClick={() => togglePhotoSelection(index)}
+                          onClick={() => toggleCatalogPhotoSelection(catalogIndex)}
                           className={cn(
                             "group relative aspect-square overflow-hidden rounded-lg border-2 transition-all",
                             isSelected
@@ -914,23 +982,72 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           )}
                         >
                           <img
-                            src={photo.photoUrl}
-                            alt={`Venue photo ${index + 1}`}
+                            src={item.photoUrl}
+                            alt={item.source === "google" ? item.name : "Your photo"}
                             className="h-full w-full object-cover"
                           />
                           {isSelected && (
                             <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
                               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                                <span className="text-xs font-semibold">
-                                  {Array.from(selectedPhotoIndices).indexOf(index) + 1}
-                                </span>
+                                <span className="text-xs font-semibold">{orderIndex + 1}</span>
                               </div>
                             </div>
+                          )}
+                          <button
+                            type="button"
+                            aria-label="View full size"
+                            className="absolute right-1 top-1 rounded bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setGalleryInitialIndex(catalogIndex)
+                              setGalleryOpen(true)
+                            }}
+                          >
+                            <Expand className="h-3.5 w-3.5" />
+                          </button>
+                          {item.source === "upload" && (
+                            <button
+                              type="button"
+                              aria-label="Remove photo"
+                              className="absolute left-1 top-1 rounded bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeOwnerUpload(item.photoUrl)
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </button>
                       )
                     })}
                   </div>
+                  <ImageGalleryModal
+                    images={catalog.map((c) => c.photoUrl)}
+                    initialIndex={galleryInitialIndex}
+                    isOpen={galleryOpen}
+                    onClose={() => setGalleryOpen(false)}
+                  />
+                  <input
+                    ref={venuePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleVenuePhotoUpload(file)
+                      e.target.value = ""
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingVenuePhoto || selectedCatalogIndices.length >= 8}
+                    onClick={() => venuePhotoInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -986,7 +1103,45 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         <Card>
           <CardHeader>
             <CardTitle>Opening Hours</CardTitle>
-            <CardDescription>Set your venue&apos;s weekly schedule</CardDescription>
+            <CardDescription>Set your venue&apos;s weekly schedule. Manual edits set source to manual; use Google hours to pull from your place listing.</CardDescription>
+            {openingHoursJson?.periods && Array.isArray(openingHoursJson.periods) && openingHoursJson.periods.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  try {
+                    const hoursData = parseGooglePeriodsToVenueHours(
+                      openingHoursJson.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
+                      venue.id,
+                      "google"
+                    )
+                    const hoursMap = new Map(hoursData.map((h) => [h.dayOfWeek, h]))
+                    setHours(
+                      Array.from({ length: 7 }, (_, i) => {
+                        const existing = hoursMap.get(i)
+                        if (existing) {
+                          return {
+                            dayOfWeek: existing.dayOfWeek,
+                            isClosed: existing.isClosed,
+                            openTime: existing.openTime || "",
+                            closeTime: existing.closeTime || "",
+                          }
+                        }
+                        return { dayOfWeek: i, isClosed: true, openTime: "", closeTime: "" }
+                      })
+                    )
+                    setHoursSourceChoice("google")
+                    showToast("Hours updated from Google. Save to apply.", "success")
+                  } catch (e) {
+                    console.error(e)
+                    showToast("Could not parse Google hours.", "error")
+                  }
+                }}
+              >
+                Use Google hours
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -1005,6 +1160,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           newHours[index].closeTime = ""
                         }
                         setHours(newHours)
+                        setHoursSourceChoice("manual")
                       }}
                       className="h-4 w-4 rounded border-gray-300"
                     />
@@ -1019,6 +1175,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           const newHours = [...hours]
                           newHours[index].openTime = e.target.value
                           setHours(newHours)
+                          setHoursSourceChoice("manual")
                         }}
                         className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
                       />
@@ -1030,6 +1187,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           const newHours = [...hours]
                           newHours[index].closeTime = e.target.value
                           setHours(newHours)
+                          setHoursSourceChoice("manual")
                         }}
                         className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
                       />
@@ -1068,6 +1226,22 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           placeholder="Table 1"
                         />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Directions to your seat
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={table.directionsText}
+                          onChange={(e) => updateTable(table.id, "directionsText", e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="e.g., Enter through the lobby, take the stairs to the mezzanine, table by the window."
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Help guests find their seat at this table
+                        </p>
                       </div>
 
                       <div>
@@ -1143,14 +1317,19 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                         </label>
                         <input
                           type="number"
-                          required
-                          value={table.seats.length}
+                          min={1}
+                          value={seatCountInputs[table.id] !== undefined ? seatCountInputs[table.id] : String(table.seats.length)}
                           onChange={(e) => {
                             const value = e.target.value
-                            if (value === "") return
-                            const numValue = parseInt(value)
+                            setSeatCountInputs((prev) => ({ ...prev, [table.id]: value }))
+                            const numValue = parseInt(value, 10)
                             if (!isNaN(numValue) && numValue >= 1) {
                               updateSeatCount(table.id, numValue)
+                              setSeatCountInputs((prev) => {
+                                const next = { ...prev }
+                                delete next[table.id]
+                                return next
+                              })
                             }
                           }}
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -1337,7 +1516,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         </Card>
 
         <div className="flex justify-end gap-4 pb-8">
-          <Button type="submit" disabled={isSubmitting} size="lg">
+          <Button type="submit" loading={isSubmitting} size="lg">
             {isSubmitting ? "Saving..." : "Save changes"}
           </Button>
         </div>

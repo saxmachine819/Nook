@@ -45,6 +45,67 @@ export function createMockPrisma() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    auditLog: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+    favoriteVenue: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    favoriteTable: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    favoriteSeat: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    $transaction: vi.fn((callback) => {
+      // Mock transaction: execute callback with a mock transaction client
+      const tx = {
+        user: { findUnique: vi.fn(), update: vi.fn() },
+        venue: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+        reservation: { findMany: vi.fn(), updateMany: vi.fn() },
+        table: { updateMany: vi.fn() },
+        seat: { updateMany: vi.fn() },
+        auditLog: { create: vi.fn() },
+        favoriteVenue: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+        favoriteTable: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+        favoriteSeat: {
+          findUnique: vi.fn(),
+          create: vi.fn(),
+          upsert: vi.fn(),
+          delete: vi.fn(),
+          deleteMany: vi.fn(),
+        },
+      }
+      return callback(tx)
+    }),
   }
 }
 

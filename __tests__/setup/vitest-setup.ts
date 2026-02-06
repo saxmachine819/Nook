@@ -1,4 +1,5 @@
-import { vi } from 'vitest'
+import { vi, beforeEach } from 'vitest'
+import '@testing-library/jest-dom'
 
 // Mock environment variables
 process.env.NEXTAUTH_SECRET = 'test-secret'

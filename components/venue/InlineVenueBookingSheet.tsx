@@ -1,9 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useToast } from "@/components/ui/toast"
+import { SignInModal } from "@/components/auth/SignInModal"
 
 interface InlineVenue {
   id: string
@@ -30,6 +33,8 @@ interface Slot {
 }
 
 export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSheetProps) {
+  const router = useRouter()
+  const pathname = usePathname()
   const { showToast, ToastComponent } = useToast()
 
   const [date, setDate] = useState<string>("")
@@ -42,6 +47,13 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
   const [seats, setSeats] = useState<number>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [showSignInModal, setShowSignInModal] = useState(false)
+  const pendingReservationPayloadRef = useRef<{
+    venueId: string
+    startAt: string
+    endAt: string
+    seatCount: number
+  } | null>(null)
 
   // Initialize date to today
   useEffect(() => {
@@ -133,11 +145,30 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        setSubmitError(data?.error || "Failed to create reservation.")
+        if (response.status === 401) {
+          pendingReservationPayloadRef.current = {
+            venueId: venue.id,
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+            seatCount: seats,
+          }
+          setShowSignInModal(true)
+          return
+        }
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setSubmitError(data?.error || "Failed to create reservation.")
+        }
         return
       }
 
       showToast("Reservation confirmed.", "success")
+
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
 
       // Refresh slots to reflect new booking
       setTimeout(() => {
@@ -153,6 +184,44 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
       setIsSubmitting(false)
     }
   }
+
+  const retryReservation = useCallback(async () => {
+    const payload = pendingReservationPayloadRef.current
+    if (!payload) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setSubmitError(data?.error || "Failed to create reservation.")
+        }
+        pendingReservationPayloadRef.current = null
+        return
+      }
+      pendingReservationPayloadRef.current = null
+      showToast("Reservation confirmed.", "success")
+      if (pathname === "/reservations") router.refresh()
+      setTimeout(() => {
+        setSelectedSlot(null)
+        setSubmitError(null)
+        setDate((prev) => prev)
+      }, 400)
+    } catch (error) {
+      console.error("Error creating reservation:", error)
+      setSubmitError("Something went wrong while creating your reservation.")
+      pendingReservationPayloadRef.current = null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [venue.id, pathname, router, showToast])
 
   const locationDisplay =
     venue.address ||
@@ -196,6 +265,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
                 className="mt-0.5 w-full rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
               />
             </div>
             <div className="flex flex-col">
@@ -251,7 +321,10 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
             </p>
             <div className="no-scrollbar flex gap-1 overflow-x-auto pb-1">
               {isLoadingSlots && (
-                <p className="text-xs text-muted-foreground">Loading times…</p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <LoadingSpinner size="sm" className="shrink-0" />
+                  Loading times…
+                </p>
               )}
               {!isLoadingSlots && slotsError && (
                 <p className="text-xs text-red-600">{slotsError}</p>
@@ -317,7 +390,8 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
             <Button
               size="sm"
               className="px-4 text-xs"
-              disabled={isSubmitting || !selectedSlot}
+              disabled={!selectedSlot}
+              loading={isSubmitting}
               onClick={handleBook}
             >
               {isSubmitting ? "Reserving..." : "Reserve"}
@@ -325,6 +399,16 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
           </div>
         </div>
       </div>
+
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={(open) => {
+          setShowSignInModal(open)
+          if (!open) pendingReservationPayloadRef.current = null
+        }}
+        onSignInSuccess={retryReservation}
+        description="Sign in to complete your reservation."
+      />
 
       {ToastComponent}
     </>

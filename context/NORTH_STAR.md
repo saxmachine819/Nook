@@ -1,7 +1,7 @@
-# Nook — North Star
+# Nooc — North Star
 
 ## One-liner
-Nook is a marketplace that lets people reserve calm, professional spaces to work by the hour — bringing structure and trust to a behavior that already exists (working from cafés, hotel lobbies, and other shared public environments). In simple terms: **Resy for workspaces**.
+Nooc is a marketplace that lets people reserve calm, professional spaces to work by the hour — bringing structure and trust to a behavior that already exists (working from cafés, hotel lobbies, and other shared public environments). In simple terms: **Resy for workspaces**.
 
 ## The problem we solve
 People want to work in beautiful public places, but today it’s unreliable:
@@ -9,16 +9,16 @@ People want to work in beautiful public places, but today it’s unreliable:
 - Is it okay to stay for hours?
 - Is it quiet enough for real work?
 - Is there Wi-Fi and power?
-Nook makes the experience predictable, trusted, and professional.
+Nooc makes the experience predictable, trusted, and professional.
 
 ## The promise
-When a user books on Nook, they should feel:
+When a user books on Nooc, they should feel:
 - I will have a seat.
 - I belong here.
 - This place supports real work.
 - I’m not guessing.
 
-## What Nook is
+## What Nooc is
 - A two-sided marketplace for reservable workspaces
 - Coffee shops and hotel lobbies first
 - Inventory is seats at tables, booked hourly
@@ -31,7 +31,7 @@ When a user books on Nook, they should feel:
 - Calm, modern UX designed for productivity
 
 ## Long-term vision
-Nook becomes the default “work layer” for cities:
+Nooc becomes the default “work layer” for cities:
 - Trusted map of workspaces
 - Standardized expectations (quiet, calls, duration)
 - Payments, reviews, subscriptions

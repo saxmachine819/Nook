@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -13,6 +14,7 @@ export interface FilterState {
   seatCount: number | null
   bookingMode: ("communal" | "full-table")[]
   dealsOnly: boolean
+  favoritesOnly: boolean
 }
 
 interface FilterPanelProps {
@@ -41,6 +43,7 @@ export function FilterPanel({
   onApply,
   onClear,
 }: FilterPanelProps) {
+  const { data: session } = useSession()
   const [localFilters, setLocalFilters] = useState<FilterState>(filters)
 
   // Sync local state with props when dialog opens
@@ -98,6 +101,7 @@ export function FilterPanel({
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
+      favoritesOnly: false,
     }
     setLocalFilters(clearedFilters)
     onFiltersChange(clearedFilters)
@@ -112,7 +116,8 @@ export function FilterPanel({
     (localFilters.availableNow ? 1 : 0) +
     (localFilters.seatCount !== null ? 1 : 0) +
     localFilters.bookingMode.length +
-    (localFilters.dealsOnly ? 1 : 0)
+    (localFilters.dealsOnly ? 1 : 0) +
+    (localFilters.favoritesOnly ? 1 : 0)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,6 +127,33 @@ export function FilterPanel({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
+          {/* Favorites Only */}
+          <div>
+            <label className={cn(
+              "flex items-center gap-2",
+              !session?.user?.id && "opacity-50 cursor-not-allowed"
+            )}>
+              <input
+                type="checkbox"
+                checked={localFilters.favoritesOnly}
+                disabled={!session?.user?.id}
+                onChange={() => {
+                  setLocalFilters((prev) => ({
+                    ...prev,
+                    favoritesOnly: !prev.favoritesOnly,
+                  }))
+                }}
+                className="h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring disabled:cursor-not-allowed"
+              />
+              <span className="text-sm font-medium">Favorites</span>
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {session?.user?.id 
+                ? "Show only your favorited venues"
+                : "Sign in to view favorites"}
+            </p>
+          </div>
+
           {/* Deals Only */}
           <div>
             <label className="flex items-center gap-2">

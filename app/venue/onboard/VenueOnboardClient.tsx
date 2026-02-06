@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
-import { Plus, Trash2, Search, Upload, X, Image as ImageIcon } from "lucide-react"
+import { Plus, Trash2, Search, Upload, X, Image as ImageIcon, Expand, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
+import { WelcomeOnboardStep } from "./WelcomeOnboardStep"
 
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -44,6 +46,7 @@ interface Table {
   defaultPrice: number
   tablePricePerHour?: number // For group bookings
   imageUrls: string[]
+  directionsText: string
   seats: Seat[]
 }
 
@@ -56,10 +59,13 @@ declare global {
 export function VenueOnboardClient() {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
+  const [expandedTableId, setExpandedTableId] = useState<string | null>(null) // null + single table => that table expanded
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingScript, setIsLoadingScript] = useState(true)
   const autocompleteInputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<any>(null)
+  const venuePhotoInputRef = useRef<HTMLInputElement>(null)
 
   // Form state
   const [name, setName] = useState("")
@@ -78,6 +84,7 @@ export function VenueOnboardClient() {
       bookingMode: "individual",
       defaultPrice: 0,
       imageUrls: [],
+      directionsText: "",
       seats: [{ id: "1", position: 1, pricePerHour: 0, tags: [], imageUrls: [] }],
     },
   ])
@@ -91,11 +98,24 @@ export function VenueOnboardClient() {
     photoReference: string | null
     name: string
   }>>([])
-  const [selectedPhotoIndices, setSelectedPhotoIndices] = useState<Set<number>>(new Set())
+  const [ownerUploadedUrls, setOwnerUploadedUrls] = useState<string[]>([])
+  const [selectedCatalogIndices, setSelectedCatalogIndices] = useState<number[]>([])
   const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false)
+
+  // Catalog = Google photos + owner uploads (ordered: Google first, then uploads)
+  const catalog: Array<
+    | { source: "google"; photoUrl: string; photoReference: string | null; name: string; indexInGoogle: number }
+    | { source: "upload"; photoUrl: string }
+  > = [
+    ...availablePhotos.map((p, i) => ({ source: "google" as const, photoUrl: p.photoUrl, photoReference: p.photoReference, name: p.name, indexInGoogle: i })),
+    ...ownerUploadedUrls.map((url) => ({ source: "upload" as const, photoUrl: url })),
+  ]
 
   // Upload state
   const [uploadingImages, setUploadingImages] = useState<Set<string>>(new Set())
+  const [uploadingVenuePhoto, setUploadingVenuePhoto] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -116,7 +136,8 @@ export function VenueOnboardClient() {
     script.async = true
     script.defer = true
     script.onload = () => {
-      setIsLoadingScript(false)
+      // Yield so window.google is set before we mark script ready (avoids init race)
+      setTimeout(() => setIsLoadingScript(false), 0)
     }
     script.onerror = () => {
       console.error("Failed to load Google Maps script")
@@ -125,12 +146,19 @@ export function VenueOnboardClient() {
     document.head.appendChild(script)
   }, [apiKey])
 
-  // Initialize Places Autocomplete
+  // Initialize Places Autocomplete (retry briefly if script just loaded and google isn't ready yet)
+  const [autocompleteRetry, setAutocompleteRetry] = useState(0)
   useEffect(() => {
-    if (!autocompleteInputRef.current || isLoadingScript || !window.google?.maps?.places) {
+    if (!autocompleteInputRef.current || isLoadingScript) {
       return
     }
-
+    if (!window.google?.maps?.places) {
+      if (apiKey && autocompleteRetry < 3) {
+        const t = setTimeout(() => setAutocompleteRetry((n) => n + 1), 300)
+        return () => clearTimeout(t)
+      }
+      return
+    }
     if (autocompleteRef.current) {
       return
     }
@@ -209,11 +237,11 @@ export function VenueOnboardClient() {
             if (data.photos && data.photos.length > 0) {
               setAvailablePhotos(data.photos)
               const defaultCount = Math.min(5, Math.max(3, data.photos.length))
-              setSelectedPhotoIndices(new Set(Array.from({ length: defaultCount }, (_, i) => i)))
+              setSelectedCatalogIndices(Array.from({ length: defaultCount }, (_, i) => i))
               showToast(`Place details loaded! Found ${data.photos.length} photos.`, "success")
             } else {
               setAvailablePhotos([])
-              setSelectedPhotoIndices(new Set())
+              setSelectedCatalogIndices([])
               showToast("Place details loaded! (No photos available)", "success")
             }
           }
@@ -224,21 +252,24 @@ export function VenueOnboardClient() {
         }
       }
     })
-  }, [isLoadingScript, showToast])
+  }, [apiKey, isLoadingScript, showToast, autocompleteRetry])
 
   const addTable = () => {
     const defaultPrice = 0
+    const newId = Date.now().toString()
     setTables([
       ...tables,
       {
-        id: Date.now().toString(),
+        id: newId,
         name: "",
         bookingMode: "individual",
         defaultPrice,
         imageUrls: [],
-        seats: [{ id: Date.now().toString() + "-1", position: 1, pricePerHour: defaultPrice, tags: [], imageUrls: [] }],
+        directionsText: "",
+        seats: [{ id: newId + "-1", position: 1, pricePerHour: defaultPrice, tags: [], imageUrls: [] }],
       },
     ])
+    setExpandedTableId(newId) // Expand new table and collapse others
   }
 
   const removeTable = (id: string) => {
@@ -362,20 +393,48 @@ export function VenueOnboardClient() {
     )
   }
 
-  const togglePhotoSelection = (index: number) => {
-    setSelectedPhotoIndices((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(index)) {
-        newSet.delete(index)
-      } else {
-        if (newSet.size < 8) {
-          newSet.add(index)
-        } else {
-          showToast("You can select up to 8 photos", "error")
-        }
+  const toggleCatalogPhotoSelection = (catalogIndex: number) => {
+    setSelectedCatalogIndices((prev) => {
+      const idx = prev.indexOf(catalogIndex)
+      if (idx >= 0) {
+        return prev.filter((i) => i !== catalogIndex)
       }
-      return newSet
+      if (prev.length >= 8) {
+        showToast("You can select up to 8 photos", "error")
+        return prev
+      }
+      return [...prev, catalogIndex]
     })
+  }
+
+  const handleVenuePhotoUpload = async (file: File) => {
+    setUploadingVenuePhoto(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", "venue")
+      formData.append("id", "draft")
+      const response = await fetch("/api/upload", { method: "POST", body: formData })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Upload failed.")
+      if (!data.url) throw new Error("No URL returned from upload")
+      setOwnerUploadedUrls((prev) => (prev.includes(data.url) ? prev : [...prev, data.url]))
+      showToast("Image uploaded successfully", "success")
+    } catch (err: any) {
+      showToast(err.message || "Failed to upload image.", "error")
+    } finally {
+      setUploadingVenuePhoto(false)
+    }
+  }
+
+  const removeOwnerUpload = (url: string) => {
+    const idx = ownerUploadedUrls.indexOf(url)
+    if (idx < 0) return
+    const catalogIndexToRemove = availablePhotos.length + idx
+    setOwnerUploadedUrls((prev) => prev.filter((u) => u !== url))
+    setSelectedCatalogIndices((prev) =>
+      prev.filter((i) => i !== catalogIndexToRemove).map((i) => (i > catalogIndexToRemove ? i - 1 : i))
+    )
   }
 
   const handleImageUpload = async (
@@ -454,24 +513,17 @@ export function VenueOnboardClient() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-
-    // Validation
+  // Validation helper function
+  const validateForm = (): boolean => {
     if (!name.trim()) {
       showToast("Venue name is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
 
     if (!address.trim()) {
       showToast("Address is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
-
-    // Pricing validation is now done per table/seat, not at venue level
 
     // Validate tables based on booking mode
     const validTables = tables.filter((t) => {
@@ -488,11 +540,30 @@ export function VenueOnboardClient() {
 
     if (validTables.length === 0) {
       showToast("At least one table with name and valid pricing is required", "error")
-      setIsSubmitting(false)
-      return
+      return false
     }
 
+    return true
+  }
+
+  const saveDraft = async (): Promise<string | null> => {
+    if (!validateForm()) {
+      return null
+    }
+
+    setIsSubmitting(true)
+
     try {
+      const validTables = tables.filter((t) => {
+        if (!t.name.trim() || t.seats.length === 0) return false
+        
+        if (t.bookingMode === "group") {
+          return t.tablePricePerHour && t.tablePricePerHour > 0
+        } else {
+          return t.seats.every((s) => s.pricePerHour > 0)
+        }
+      })
+
       const response = await fetch("/api/venues", {
         method: "POST",
         headers: {
@@ -510,15 +581,17 @@ export function VenueOnboardClient() {
           hourlySeatPrice: 0, // Deprecated - pricing is now per table/seat
           tags,
           rulesText: rulesText.trim() || null,
+          onboardingStatus: "DRAFT", // Save as draft
           tables: validTables.map((table) => ({
             name: table.name.trim(),
             seatCount: table.seats.length,
             bookingMode: table.bookingMode,
             tablePricePerHour: table.bookingMode === "group" ? table.tablePricePerHour : null,
             imageUrls: table.imageUrls.length > 0 ? table.imageUrls : null,
+            directionsText: table.directionsText.trim() || null,
             seats: table.seats.map((seat, index) => ({
               pricePerHour: seat.pricePerHour,
-              position: seat.position ?? index + 1, // Auto-assign position if missing
+              position: seat.position ?? index + 1,
               label: seat.label?.trim() || null,
               tags: seat.tags.length > 0 ? seat.tags : null,
               imageUrls: seat.imageUrls.length > 0 ? seat.imageUrls : null,
@@ -528,21 +601,26 @@ export function VenueOnboardClient() {
           googleMapsUrl: googleMapsUrl || null,
           openingHoursJson: openingHoursJson || null,
           googlePhotoRefs:
-            availablePhotos.length > 0
-              ? availablePhotos.map((photo) => ({
-                  name: photo.name,
-                  photoReference: photo.photoReference,
-                }))
+            selectedCatalogIndices.length > 0
+              ? selectedCatalogIndices
+                  .map((i) => catalog[i])
+                  .filter((item): item is typeof catalog[0] & { source: "google" } => item.source === "google")
+                  .map((item) => ({ name: item.name, photoReference: item.photoReference }))
+                  .filter((ref) => ref.photoReference != null)
+                  .length > 0
+                ? selectedCatalogIndices
+                    .map((i) => catalog[i])
+                    .filter((item): item is typeof catalog[0] & { source: "google" } => item.source === "google")
+                    .map((item) => ({ name: item.name, photoReference: item.photoReference }))
+                : null
               : null,
           heroImageUrl:
-            selectedPhotoIndices.size > 0
-              ? availablePhotos[Array.from(selectedPhotoIndices)[0]]?.photoUrl || null
+            selectedCatalogIndices.length > 0 && catalog[selectedCatalogIndices[0]]
+              ? catalog[selectedCatalogIndices[0]].photoUrl
               : null,
           imageUrls:
-            selectedPhotoIndices.size > 0
-              ? Array.from(selectedPhotoIndices)
-                  .map((idx) => availablePhotos[idx]?.photoUrl)
-                  .filter(Boolean)
+            selectedCatalogIndices.length > 0
+              ? selectedCatalogIndices.map((i) => catalog[i]?.photoUrl).filter(Boolean) as string[]
               : null,
         }),
       })
@@ -550,31 +628,129 @@ export function VenueOnboardClient() {
       const data = await response.json()
 
       if (!response.ok) {
-        const errorMessage = data.error || "Failed to create venue. Please try again."
+        const errorMessage = data.error || "Failed to save venue. Please try again."
         console.error("API Error:", data)
         showToast(errorMessage, "error")
         setIsSubmitting(false)
-        return
+        return null
       }
 
-      showToast("Venue created successfully!", "success")
-      setTimeout(() => {
-        router.push(`/venue/${data.venue.id}`)
-      }, 1000)
+      setIsSubmitting(false)
+      return data.venue.id
     } catch (error) {
-      console.error("Error creating venue:", error)
+      console.error("Error saving venue:", error)
       showToast("An error occurred. Please try again.", "error")
       setIsSubmitting(false)
+      return null
     }
   }
+
+  const validateStep1 = (): boolean => {
+    if (!name.trim()) {
+      showToast("Venue name is required", "error")
+      return false
+    }
+    if (!address.trim()) {
+      showToast("Address is required", "error")
+      return false
+    }
+    return true
+  }
+
+  const handleNext = async () => {
+    if (currentStep === 0) {
+      setCurrentStep(1)
+      return
+    }
+    if (currentStep === 1) {
+      if (!validateStep1()) return
+      setCurrentStep(2)
+      return
+    }
+    if (currentStep === 2) {
+      setCurrentStep(3)
+      return
+    }
+    // Step 3: save draft and redirect to Stripe
+    const venueId = await saveDraft()
+    if (venueId) {
+      router.push(`/venue/onboard/stripe?venueId=${venueId}`)
+    }
+  }
+
+  const handleBack = () => {
+    if (currentStep > 0) setCurrentStep((s) => (s - 1) as 0 | 1 | 2 | 3)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await handleNext()
+  }
+
+  const steps = [
+    { step: 0 as const, label: "Welcome" },
+    { step: 1 as const, label: "Venue Info" },
+    { step: 2 as const, label: "Photos & Rules" },
+    { step: 3 as const, label: "Tables & Seats" },
+    { step: 4 as const, label: "Stripe" },
+  ]
 
   return (
     <div className="container mx-auto px-4 py-6">
       {ToastComponent}
-      <h1 className="mb-6 text-3xl font-semibold tracking-tight">Onboard your venue</h1>
+      <h1 className="mb-4 text-3xl font-semibold tracking-tight">Onboard your venue</h1>
+
+      {/* Progress bar: 4 steps, clickable to go back */}
+      <div className="mb-6">
+        <div className="flex items-center gap-1">
+          {steps.map(({ step, label }, i) => {
+            const isPast = step < currentStep
+            const isCurrent = step === currentStep
+            const isFuture = step > currentStep
+            const isClickable = step < currentStep
+            return (
+              <div key={step} className="flex flex-1 items-center">
+                <button
+                  type="button"
+                  onClick={() => isClickable && step <= 3 && setCurrentStep(step as 0 | 1 | 2 | 3)}
+                  className={cn(
+                    "flex flex-1 flex-col items-center gap-1 rounded-md px-1 py-2 text-center transition-colors",
+                    isClickable && "cursor-pointer hover:bg-muted/60",
+                    !isClickable && "cursor-default",
+                    (isPast || isCurrent) && "text-primary",
+                    isFuture && "text-muted-foreground"
+                  )}
+                >
+                  <span className="text-xs font-medium">{label}</span>
+                  <span
+                    className={cn(
+                      "h-1.5 w-full max-w-12 rounded-full",
+                      (isPast || isCurrent) && "bg-primary",
+                      isFuture && "bg-muted"
+                    )}
+                  />
+                </button>
+                {i < steps.length - 1 && (
+                  <div
+                    className={cn(
+                      "h-0.5 w-4 shrink-0 rounded",
+                      step < currentStep ? "bg-primary" : "bg-muted"
+                    )}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Venue Information Card */}
+        {/* Step 0: Welcome */}
+        {currentStep === 0 && (
+          <WelcomeOnboardStep />
+        )}
+        {/* Step 1: Venue Information */}
+        {currentStep === 1 && (
         <Card>
           <CardHeader>
             <CardTitle>Venue Information</CardTitle>
@@ -582,30 +758,35 @@ export function VenueOnboardClient() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {apiKey && (
-                <div>
-                  <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                    Find on Google <span className="text-muted-foreground">(optional)</span>
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      id="place-search"
-                      ref={autocompleteInputRef}
-                      type="text"
-                      disabled={isLoadingScript || isLoadingPlaceDetails}
-                      placeholder={
-                        isLoadingScript
+              <div>
+                <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
+                  Find on Google <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    id="place-search"
+                    ref={autocompleteInputRef}
+                    type="text"
+                    disabled={!apiKey || isLoadingScript || isLoadingPlaceDetails}
+                    placeholder={
+                      !apiKey
+                        ? "Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable"
+                        : isLoadingScript
                           ? "Loading..."
                           : isLoadingPlaceDetails
                             ? "Loading place details..."
                             : "Search for your venue or address"
-                      }
-                      className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    />
-                  </div>
+                    }
+                    className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  />
                 </div>
-              )}
+                {!apiKey && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env and enable Maps JavaScript API and Places API in Google Cloud.
+                  </p>
+                )}
+              </div>
 
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium">
@@ -681,30 +862,58 @@ export function VenueOnboardClient() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-
-        {/* Google Places Photos */}
-        {(availablePhotos.length > 0 || isLoadingPlaceDetails || googlePlaceId) && (
+        {/* Step 2: Venue Photos, Tags, Rules */}
+        {currentStep === 2 && (
+        <>
+        {/* Venue Photos (Google + owner uploads) — show even when empty so owner can add first photo */}
+        {(catalog.length > 0 || isLoadingPlaceDetails || googlePlaceId || true) && (
           <Card>
             <CardHeader>
               <CardTitle>Venue Photos</CardTitle>
-              <CardDescription>Select the best interior shots (3–8 photos)</CardDescription>
+              <CardDescription>Select the best interior shots (3–8 photos). You can add your own.</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingPlaceDetails ? (
                 <p className="text-sm text-muted-foreground">Loading photos...</p>
-              ) : availablePhotos.length === 0 && googlePlaceId ? (
-                <p className="text-sm text-muted-foreground">No photos available for this place</p>
+              ) : catalog.length === 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {googlePlaceId ? "No photos available for this place. Add your own below." : "Add your first photo below."}
+                  </p>
+                  <input
+                    ref={venuePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleVenuePhotoUpload(file)
+                      e.target.value = ""
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingVenuePhoto}
+                    onClick={() => venuePhotoInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                    {availablePhotos.map((photo, index) => {
-                      const isSelected = selectedPhotoIndices.has(index)
+                    {catalog.map((item, catalogIndex) => {
+                      const isSelected = selectedCatalogIndices.includes(catalogIndex)
+                      const orderIndex = selectedCatalogIndices.indexOf(catalogIndex)
                       return (
                         <button
-                          key={index}
+                          key={catalogIndex}
                           type="button"
-                          onClick={() => togglePhotoSelection(index)}
+                          onClick={() => toggleCatalogPhotoSelection(catalogIndex)}
                           className={cn(
                             "group relative aspect-square overflow-hidden rounded-lg border-2 transition-all",
                             isSelected
@@ -713,23 +922,72 @@ export function VenueOnboardClient() {
                           )}
                         >
                           <img
-                            src={photo.photoUrl}
-                            alt={`Venue photo ${index + 1}`}
+                            src={item.photoUrl}
+                            alt={item.source === "google" ? item.name : "Your photo"}
                             className="h-full w-full object-cover"
                           />
                           {isSelected && (
                             <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
                               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                                <span className="text-xs font-semibold">
-                                  {Array.from(selectedPhotoIndices).indexOf(index) + 1}
-                                </span>
+                                <span className="text-xs font-semibold">{orderIndex + 1}</span>
                               </div>
                             </div>
+                          )}
+                          <button
+                            type="button"
+                            aria-label="View full size"
+                            className="absolute right-1 top-1 rounded bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setGalleryInitialIndex(catalogIndex)
+                              setGalleryOpen(true)
+                            }}
+                          >
+                            <Expand className="h-3.5 w-3.5" />
+                          </button>
+                          {item.source === "upload" && (
+                            <button
+                              type="button"
+                              aria-label="Remove photo"
+                              className="absolute left-1 top-1 rounded bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeOwnerUpload(item.photoUrl)
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </button>
                       )
                     })}
                   </div>
+                  <ImageGalleryModal
+                    images={catalog.map((c) => c.photoUrl)}
+                    initialIndex={galleryInitialIndex}
+                    isOpen={galleryOpen}
+                    onClose={() => setGalleryOpen(false)}
+                  />
+                  <input
+                    ref={venuePhotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleVenuePhotoUpload(file)
+                      e.target.value = ""
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={uploadingVenuePhoto || selectedCatalogIndices.length >= 8}
+                    onClick={() => venuePhotoInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -780,8 +1038,11 @@ export function VenueOnboardClient() {
             />
           </CardContent>
         </Card>
+        </>
+        )}
 
-        {/* Tables & Seats Editor */}
+        {/* Step 3: Tables & Seats Editor */}
+        {currentStep === 3 && (
         <Card>
           <CardHeader>
             <CardTitle>Tables & Seats</CardTitle>
@@ -789,8 +1050,24 @@ export function VenueOnboardClient() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {tables.map((table, tableIndex) => (
-                <div key={table.id} className="space-y-4 rounded-lg border p-4">
+              {tables.map((table, tableIndex) => {
+                const isExpanded = tables.length === 1 ? true : expandedTableId === table.id
+                return (
+                <div key={table.id} className="rounded-lg border p-4">
+                  {!isExpanded ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedTableId(table.id)}
+                      className="flex w-full items-center justify-between rounded-md py-2 text-left hover:bg-muted/50"
+                    >
+                      <span className="text-sm font-medium">
+                        Table {tableIndex + 1}: {table.name || "Unnamed"} · {table.seats.length} seat{table.seats.length !== 1 ? "s" : ""}
+                        {table.bookingMode === "group" ? " · Group" : " · Individual"}
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  ) : (
+                  <div className="space-y-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-4">
                       <div>
@@ -805,6 +1082,22 @@ export function VenueOnboardClient() {
                           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           placeholder="Table 1"
                         />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium">
+                          Directions to your seat
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={table.directionsText}
+                          onChange={(e) => updateTable(table.id, "directionsText", e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="e.g., Enter through the lobby, take the stairs to the mezzanine, table by the window."
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Help guests find their seat at this table
+                        </p>
                       </div>
 
                       {/* Booking Mode Selector */}
@@ -1105,8 +1398,23 @@ export function VenueOnboardClient() {
                       </div>
                     </div>
                   )}
+                {tables.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExpandedTableId(null)}
+                    className="mt-2"
+                  >
+                    <ChevronDown className="mr-1.5 h-4 w-4" />
+                    Collapse
+                  </Button>
+                )}
+                  </div>
+                  )}
                 </div>
-              ))}
+              );
+              })}
 
               <Button type="button" variant="outline" onClick={addTable} className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
@@ -1115,13 +1423,39 @@ export function VenueOnboardClient() {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <div className="flex justify-end gap-4 pb-8">
-          <Button type="submit" disabled={isSubmitting} size="lg">
-            {isSubmitting ? "Creating..." : "Publish venue"}
+      </form>
+
+      {/* Sticky Back / Next */}
+      <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
+        <div className="container mx-auto flex items-center justify-between gap-4">
+          {currentStep > 0 ? (
+            <Button type="button" variant="outline" size="lg" onClick={handleBack}>
+              Back
+            </Button>
+          ) : (
+            <div />
+          )}
+          <Button
+            type="button"
+            onClick={handleNext}
+            disabled={isSubmitting}
+            size="lg"
+            className="w-full sm:w-auto sm:min-w-[8rem]"
+          >
+            {isSubmitting
+              ? "Saving..."
+              : currentStep === 0
+                ? "Continue"
+                : currentStep === 3
+                  ? "Next: Stripe"
+                  : "Next"}
           </Button>
         </div>
-      </form>
+      </div>
+      {/* Add padding to bottom of content to prevent overlap with sticky button */}
+      <div className="h-20" />
     </div>
   )
 }

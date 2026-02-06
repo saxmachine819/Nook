@@ -1,6 +1,6 @@
-import { isVenueOpenNow, getNextOpenTime } from "./venue-hours"
+import type { OpenStatus } from "@/lib/hours"
 
-function roundUpToNext15Minutes(date: Date): Date {
+export function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
   const minutes = result.getMinutes()
   const remainder = minutes % 15
@@ -14,124 +14,125 @@ function roundUpToNext15Minutes(date: Date): Date {
   return result
 }
 
-function formatTimeLabel(date: Date): string {
+function formatTimeLabel(date: Date, timeZone?: string): string {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    ...(timeZone && { timeZone }),
   }).format(date)
 }
 
+/** Get date parts (year, month, day) for a moment in a timezone. */
+function getDatePartsInTimezone(at: Date, tz: string): { year: number; month: number; day: number } {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  })
+  const parts = formatter.formatToParts(at)
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10)
+  return { year: get("year"), month: get("month"), day: get("day") }
+}
+
+/** Get weekday 0-6 (Sun-Sat) for a moment in a timezone. */
+function getWeekdayInTimezone(at: Date, tz: string): number {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+  })
+  const short = formatter.format(at)
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  }
+  return map[short] ?? 0
+}
+
+export type ComputeAvailabilityLabelOptions = {
+  /** Venue timezone (e.g. America/New_York). When provided, "opens at" time and today/tomorrow/day name use this zone. */
+  timeZone?: string
+}
+
+/**
+ * Compute availability label using the shared hours engine (getOpenStatus).
+ * openStatus must come from getCanonicalVenueHours + getOpenStatus; no raw Google payload.
+ * Pass options.timeZone (venue timezone) so the displayed time and today/tomorrow/day are correct regardless of server TZ.
+ */
 export function computeAvailabilityLabel(
   capacity: number,
   reservations: { startAt: Date; endAt: Date; seatCount: number }[],
-  venueHours?: Array<{
-    dayOfWeek: number
-    isClosed: boolean
-    openTime: string | null
-    closeTime: string | null
-  }> | null,
-  openingHoursJson?: any
+  openStatus: OpenStatus | null,
+  options?: ComputeAvailabilityLabelOptions
 ): string {
-  // If no capacity, always sold out
   if (capacity <= 0) return "Sold out for now"
 
   const now = new Date()
+  const timeZone = options?.timeZone
 
-  // Check if venue is currently open
-  const openStatus = isVenueOpenNow(openingHoursJson, undefined, venueHours)
-
-  // If we can't determine open status and have no hours data, assume open (backward compatibility)
-  if (!openStatus.canDetermine && !venueHours && !openingHoursJson) {
-    // Fall back to original logic - check availability based on reservations only
-    const startBase = roundUpToNext15Minutes(now)
-    const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
-    const slotMs = 15 * 60 * 1000 // 15 minutes
-
-    for (let offset = 0; offset < horizonMs; offset += slotMs) {
-      const windowStart = new Date(startBase.getTime() + offset)
-      const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
-
-      const bookedSeats = reservations.reduce((sum, res) => {
-        if (res.startAt < windowEnd && res.endAt > windowStart) {
-          return sum + res.seatCount
-        }
-        return sum
-      }, 0)
-
-      if (bookedSeats < capacity) {
-        if (offset === 0) {
-          return "Available now"
-        }
-        return `Next available at ${formatTimeLabel(windowStart)}`
-      }
-    }
-
-    return "Sold out for now"
+  // No hours data: cannot determine open status
+  if (!openStatus) {
+    return "Currently Closed"
   }
 
-  // Venue is closed - find when it opens next
+  // Venue is closed - use nextOpenAt from engine
   if (!openStatus.isOpen) {
-    const nextOpenTime = getNextOpenTime(venueHours, openingHoursJson)
-    
-    // If getNextOpenTime returns null, it might mean the venue is actually open
-    // (defensive check in getNextOpenTime). Re-check open status to be sure.
+    const nextOpenTime = openStatus.nextOpenAt
     if (!nextOpenTime) {
-      // Double-check: if we have hours data and getNextOpenTime returned null,
-      // it might be because the venue is actually open (bug in isVenueOpenNow)
-      // In that case, fall through to open logic
-      if (venueHours || openingHoursJson) {
-        // Re-check one more time - if still can't determine, show "Currently Closed"
-        const recheck = isVenueOpenNow(openingHoursJson, undefined, venueHours)
-        if (recheck.isOpen) {
-          // Venue is actually open - fall through to open logic below
-        } else {
-          return "Currently Closed"
-        }
-      } else {
-        return "Currently Closed"
-      }
+      return "Currently Closed"
+    }
+    let isToday: boolean
+    let isTomorrow: boolean
+    let dayName: string
+    if (timeZone) {
+      const nowParts = getDatePartsInTimezone(now, timeZone)
+      const nextParts = getDatePartsInTimezone(nextOpenTime, timeZone)
+      const todayKey = `${nowParts.year}-${nowParts.month}-${nowParts.day}`
+      const nextKey = `${nextParts.year}-${nextParts.month}-${nextParts.day}`
+      isToday = todayKey === nextKey
+      const tomorrowParts = getDatePartsInTimezone(
+        new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        timeZone
+      )
+      const tomorrowKey = `${tomorrowParts.year}-${tomorrowParts.month}-${tomorrowParts.day}`
+      isTomorrow = nextKey === tomorrowKey
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      dayName = dayNames[getWeekdayInTimezone(nextOpenTime, timeZone)]
     } else {
       const today = new Date()
       today.setHours(0, 0, 0, 0)
       const nextOpenDate = new Date(nextOpenTime)
       nextOpenDate.setHours(0, 0, 0, 0)
-
-      const isToday = nextOpenDate.getTime() === today.getTime()
-      const isTomorrow = nextOpenDate.getTime() === today.getTime() + 24 * 60 * 60 * 1000
-
-      if (isToday) {
-        return `Opens at ${formatTimeLabel(nextOpenTime)}`
-      } else if (isTomorrow) {
-        return `Opens tomorrow at ${formatTimeLabel(nextOpenTime)}`
-      } else {
-        const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-        const dayName = dayNames[nextOpenTime.getDay()]
-        return `Opens ${dayName} at ${formatTimeLabel(nextOpenTime)}`
-      }
+      isToday = nextOpenDate.getTime() === today.getTime()
+      isTomorrow = nextOpenDate.getTime() === today.getTime() + 24 * 60 * 60 * 1000
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      dayName = dayNames[nextOpenTime.getDay()]
     }
+    if (isToday) {
+      return `Opens at ${formatTimeLabel(nextOpenTime, timeZone)}`
+    }
+    if (isTomorrow) {
+      return `Opens tomorrow at ${formatTimeLabel(nextOpenTime, timeZone)}`
+    }
+    return `Opens ${dayName} at ${formatTimeLabel(nextOpenTime, timeZone)}`
   }
 
   // Venue is open - check availability considering reservations
   const startBase = roundUpToNext15Minutes(now)
-  const horizonMs = 12 * 60 * 60 * 1000 // 12 hours
-  const slotMs = 15 * 60 * 1000 // 15 minutes
+  const horizonMs = 12 * 60 * 60 * 1000
+  const slotMs = 15 * 60 * 1000
 
   for (let offset = 0; offset < horizonMs; offset += slotMs) {
     const windowStart = new Date(startBase.getTime() + offset)
-    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000) // 1 hour window
-
+    const windowEnd = new Date(windowStart.getTime() + 60 * 60 * 1000)
     const bookedSeats = reservations.reduce((sum, res) => {
       if (res.startAt < windowEnd && res.endAt > windowStart) {
         return sum + res.seatCount
       }
       return sum
     }, 0)
-
     if (bookedSeats < capacity) {
-      if (offset === 0) {
-        return "Available now"
-      }
-      return `Next availability @ ${formatTimeLabel(windowStart)}`
+      if (offset === 0) return "Available now"
+      return `Next availability @ ${formatTimeLabel(windowStart, timeZone)}`
     }
   }
 

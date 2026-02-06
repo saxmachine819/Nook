@@ -1,4 +1,4 @@
-# Cursor Instructions — Nook
+# Cursor Instructions — Nooc
 
 Read and follow all context files before making changes.
 

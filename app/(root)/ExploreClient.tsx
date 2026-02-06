@@ -4,10 +4,13 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { MapView } from "@/components/explore/MapView"
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls"
+import { ExploreWelcomeBanner } from "@/components/ExploreWelcomeBanner"
+import { safeSet } from "@/lib/storage"
 import { VenuePreviewSheet } from "@/components/explore/VenuePreviewSheet"
 import { ResultsDrawer } from "@/components/explore/ResultsDrawer"
 import { FilterState } from "@/components/explore/FilterPanel"
 import { Button } from "@/components/ui/button"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 
 interface Venue {
   id: string
@@ -23,6 +26,8 @@ interface Venue {
   capacity: number
   rulesText?: string
   availabilityLabel?: string
+  /** From hours engine: OPEN_NOW | CLOSED_NOW | OPENS_LATER | CLOSED_TODAY; use for map pin color. */
+  openStatus?: { status: string; todayHoursText: string } | null
   imageUrls?: string[]
   hourlySeatPrice?: number
   dealBadge?: {
@@ -35,6 +40,7 @@ interface Venue {
 
 interface ExploreClientProps {
   venues: Venue[]
+  favoritedVenueIds?: Set<string>
 }
 
 type LocationState = "idle" | "requesting" | "granted" | "denied" | "unavailable"
@@ -55,6 +61,10 @@ function normalizeVenue(v: Record<string, unknown>): Venue {
     capacity: typeof v.capacity === "number" ? v.capacity : 0,
     rulesText: v.rulesText != null ? String(v.rulesText) : undefined,
     availabilityLabel: v.availabilityLabel != null ? String(v.availabilityLabel) : undefined,
+    openStatus:
+      v.openStatus && typeof v.openStatus === "object" && v.openStatus !== null
+        ? { status: String((v.openStatus as { status?: string }).status ?? ""), todayHoursText: String((v.openStatus as { todayHoursText?: string }).todayHoursText ?? "") }
+        : undefined,
     imageUrls: Array.isArray(v.imageUrls) ? (v.imageUrls as string[]) : undefined,
     hourlySeatPrice: h,
     dealBadge: v.dealBadge && typeof v.dealBadge === "object" && v.dealBadge !== null
@@ -63,7 +73,7 @@ function normalizeVenue(v: Record<string, unknown>): Venue {
   }
 }
 
-const FILTER_STORAGE_KEY = "nook_explore_filters"
+const FILTER_STORAGE_KEY = "nooc_explore_filters"
 
 // Helper function to load filters from localStorage (with SSR guard)
 function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState } {
@@ -78,6 +88,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
         seatCount: null,
         bookingMode: [],
         dealsOnly: false,
+        favoritesOnly: false,
       },
     }
   }
@@ -96,6 +107,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
           seatCount: typeof parsed.filters?.seatCount === "number" ? parsed.filters.seatCount : null,
           bookingMode: Array.isArray(parsed.filters?.bookingMode) ? parsed.filters.bookingMode : [],
           dealsOnly: parsed.filters?.dealsOnly === true,
+          favoritesOnly: parsed.filters?.favoritesOnly === true,
         },
       }
     }
@@ -113,6 +125,7 @@ function loadFiltersFromStorage(): { searchQuery: string; filters: FilterState }
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
+      favoritesOnly: false,
     },
   }
 }
@@ -131,7 +144,7 @@ function saveFiltersToStorage(searchQuery: string, filters: FilterState) {
   }
 }
 
-export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
+export function ExploreClient({ venues: initialVenues, favoritedVenueIds = new Set() }: ExploreClientProps) {
   const router = useRouter()
   const [isClient, setIsClient] = useState(false)
   
@@ -144,23 +157,34 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   // Start with empty venues to avoid flash of wrong content
   // They'll be populated after filters are restored and search is performed
   const [venues, setVenues] = useState<Venue[]>([])
+  const [favoritedVenueIdsState, setFavoritedVenueIdsState] = useState<Set<string>>(favoritedVenueIds)
   const hasInitializedVenuesRef = useRef(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationState, setLocationState] = useState<LocationState>("idle")
+  const hasRequestedLocationRef = useRef(false)
+  const [mapReady, setMapReady] = useState(false) // Gate map until location resolved or timeout
   const [isSearching, setIsSearching] = useState(false)
   const [isSearchingText, setIsSearchingText] = useState(false)
+  const [isSearchingArea, setIsSearchingArea] = useState(false) // Track if we're searching by area (not text)
   
   const filtersRef = useRef<FilterState>(initialFilterState.filters)
+  const searchQueryRef = useRef<string>(initialFilterState.searchQuery)
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
+  const [venueLoadingOverlay, setVenueLoadingOverlay] = useState(false)
   const [centerOnVenueId, setCenterOnVenueId] = useState<string | null>(null)
   const currentBoundsRef = useRef<{ north: number; south: number; east: number; west: number } | null>(null)
+  const hasReceivedInitialBoundsRef = useRef(false)
   const [shouldFitMapBounds, setShouldFitMapBounds] = useState<boolean>(false) // Signal to map that it should fit bounds
   const [mapRefreshTrigger, setMapRefreshTrigger] = useState<number>(0) // Increment to force map refresh
-  
-  // Keep filtersRef in sync with filters state and save to localStorage
+  const didAreaSearchRef = useRef(false) // Track if we just completed an area search (synchronous, no batching delay)
+  const [debugBounds, setDebugBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null)
+  const venuesCountRef = useRef(0) // Current venue count for performSearch (avoid remount on first load)
+
+  // Keep filtersRef and searchQueryRef in sync and save to localStorage
   useEffect(() => {
     filtersRef.current = filters
+    searchQueryRef.current = searchQuery
     // Save filters to localStorage whenever they change
     saveFiltersToStorage(searchQuery, filters)
     console.log("📝 Filters state updated and saved to storage:", {
@@ -173,9 +197,12 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     })
   }, [filters, searchQuery])
 
-  
+  useEffect(() => {
+    venuesCountRef.current = venues.length
+  }, [venues])
+
   // Store performSearch in ref for verification and initial load
-  const performSearchRef = useRef<((query: string, bounds?: { north: number; south: number; east: number; west: number } | null, currentFilters?: FilterState) => Promise<void>) | null>(null)
+  const performSearchRef = useRef<((query: string, bounds?: { north: number; south: number; east: number; west: number } | null, currentFilters?: FilterState, skipSetIsSearchingText?: boolean, isInitialLoad?: boolean) => Promise<void>) | null>(null)
 
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
   const hasMapboxToken = !!mapboxToken
@@ -190,18 +217,11 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   useEffect(() => {
     if (typeof window === "undefined" || !isClient || hasInitializedVenuesRef.current) return
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:180',message:'Filter restoration useEffect triggered',data:{isClient,currentFilters:filters,currentQuery:searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-    
     const stored = loadFiltersFromStorage()
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:186',message:'Loaded filters from storage',data:{stored,hasStoredFilters:stored.searchQuery.length > 0 || stored.filters.dealsOnly || stored.filters.tags.length > 0 || stored.filters.priceMin != null || stored.filters.priceMax != null || stored.filters.seatCount != null || stored.filters.bookingMode.length > 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     
     const hasStoredFilters = stored.searchQuery.length > 0 || 
                             stored.filters.dealsOnly || 
+                            stored.filters.favoritesOnly ||
                             stored.filters.tags.length > 0 || 
                             stored.filters.priceMin != null || 
                             stored.filters.priceMax != null || 
@@ -212,6 +232,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     if (hasStoredFilters) {
       const filtersMatch = 
         filters.dealsOnly === stored.filters.dealsOnly &&
+        filters.favoritesOnly === stored.filters.favoritesOnly &&
         filters.tags.length === stored.filters.tags.length &&
         filters.tags.every(t => stored.filters.tags.includes(t)) &&
         filters.priceMin === stored.filters.priceMin &&
@@ -222,72 +243,28 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         filters.availableNow === stored.filters.availableNow &&
         searchQuery === stored.searchQuery
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:203',message:'Filter match check',data:{filtersMatch,stored,currentFilters:filters},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
-      
       if (!filtersMatch) {
         console.log("🔄 Restoring filters from localStorage:", stored)
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:210',message:'Restoring filters from localStorage',data:{stored,hasPerformSearchRef:!!performSearchRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         
         setSearchQuery(stored.searchQuery)
         setFilters(stored.filters)
         filtersRef.current = stored.filters
         
-        // Re-apply search with restored filters
+        // Re-apply search with restored filters (full DB; don't send bounds)
         if (performSearchRef.current) {
-          performSearchRef.current(stored.searchQuery, currentBoundsRef.current ?? undefined, stored.filters)
-        } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:220',message:'performSearchRef is null, cannot restore',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-          // #endregion
+          performSearchRef.current(stored.searchQuery, undefined, stored.filters)
         }
-      } else {
-        // Filters match, but we still need to initialize venues
-        // If we have active filters, search will be triggered by the initialVenues useEffect
-        // Otherwise, set initial venues
-        if (!hasStoredFilters && !hasInitializedVenuesRef.current) {
-          setVenues(initialVenues)
-          hasInitializedVenuesRef.current = true
-        }
-      }
-    } else {
-      // No stored filters, use initial venues
-      if (!hasInitializedVenuesRef.current) {
-        setVenues(initialVenues)
-        hasInitializedVenuesRef.current = true
       }
     }
+    // No stored filters: venues stay [] until onInitialBounds triggers bounded fetch
   }, [isClient, filters, searchQuery]) // Run when client becomes true (after mount)
 
-  // Initialize venues after filters are restored (to avoid flash of wrong content)
-  useEffect(() => {
-    if (typeof window === "undefined" || hasInitializedVenuesRef.current) return
-    
-    const hasActiveFilters = filters.dealsOnly || filters.tags.length > 0 || 
-                            filters.priceMin != null || filters.priceMax != null || 
-                            filters.seatCount != null || filters.bookingMode.length > 0 ||
-                            filters.availableNow || searchQuery.length > 0
-    
-    if (hasActiveFilters && performSearchRef.current) {
-      // Filters are active, search will populate venues
-      console.log("🔄 Initializing with active filters, will search")
-      performSearchRef.current(searchQuery, currentBoundsRef.current ?? undefined, filters)
-      hasInitializedVenuesRef.current = true
-    } else if (!hasActiveFilters) {
-      // No filters, use initialVenues
-      console.log("🔄 Initializing with no filters, using initialVenues")
-      setVenues(initialVenues)
-      hasInitializedVenuesRef.current = true
-    }
-  }, [filters, searchQuery, initialVenues]) // Run when filters/searchQuery are ready
+  const OUTCOME_KEY = "nooc_location_last_outcome_v1"
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
       setLocationState("unavailable")
+      safeSet(OUTCOME_KEY, "unavailable")
       return
     }
     setLocationState("requesting")
@@ -298,10 +275,14 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           lng: position.coords.longitude,
         })
         setLocationState("granted")
+        safeSet(OUTCOME_KEY, "granted")
       },
       (error) => {
         console.error("Geolocation error:", error)
+        const outcome =
+          error.code === 1 ? "denied" : error.code === 2 || error.code === 3 ? "error" : "unknown"
         setLocationState("denied")
+        safeSet(OUTCOME_KEY, outcome)
       },
       {
         enableHighAccuracy: true,
@@ -310,6 +291,21 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       }
     )
   }
+  
+  // Location is requested only when user clicks "Use my location" (map button or banner CTA)
+
+  // Gate map until ready: show immediately when idle (no auto-request), or when location resolved
+  useEffect(() => {
+    if (!isClient) return
+    if (
+      locationState === "idle" ||
+      userLocation !== null ||
+      locationState === "denied" ||
+      locationState === "unavailable"
+    ) {
+      setMapReady(true)
+    }
+  }, [isClient, userLocation, locationState])
 
   const handleSearchArea = async (bounds: {
     north: number
@@ -318,20 +314,41 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     west: number
   }) => {
     currentBoundsRef.current = bounds
+    if (process.env.NODE_ENV !== "production") setDebugBounds(bounds)
+    // Mark that we're searching by area (not text) to prevent auto-expand
+    setIsSearchingArea(true)
     setIsSearching(true)
+    // Set ref immediately (synchronous, no batching delay) so map can read it
+    didAreaSearchRef.current = true
     try {
-      await performSearch(searchQuery, bounds, filters)
+      // Use performSearch with skipSetIsSearchingText=true to prevent auto-expand
+      await performSearch(searchQuery, bounds, filters, true)
+    } catch (error) {
+      console.error("Error in handleSearchArea:", error)
     } finally {
       setIsSearching(false)
+      // Clear the ref after delay so map's interval has time to see loaded() and run repaint
+      setTimeout(() => {
+        didAreaSearchRef.current = false
+      }, 2000)
+      // Reset the flag after a longer delay to allow venues useEffect and auto-center checks to run with skipFitBounds=true
+      // Use a longer delay to ensure all map operations complete before allowing auto-center again
+      setTimeout(() => {
+        setIsSearchingArea(false)
+      }, 2000) // Increased to 2 seconds to ensure all map operations complete
     }
   }
 
   const performSearch = useCallback(async (
     query: string,
     bounds?: { north: number; south: number; east: number; west: number } | null,
-    currentFilters?: FilterState
+    currentFilters?: FilterState,
+    skipSetIsSearchingText?: boolean,
+    isInitialLoad?: boolean
   ) => {
-    setIsSearchingText(true)
+    if (!skipSetIsSearchingText) {
+      setIsSearchingText(true)
+    }
     try {
       const params = new URLSearchParams()
       if (bounds) {
@@ -355,11 +372,24 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       if (activeFilters.dealsOnly) {
         params.append("dealsOnly", "true")
       }
+      if (activeFilters.favoritesOnly) {
+        params.append("favoritesOnly", "true")
+      }
       if (activeFilters.availableNow) {
         params.append("availableNow", "true")
       }
 
       const url = `/api/venues/search?${params.toString()}`
+      if (process.env.NODE_ENV !== "production") {
+        const trigger = skipSetIsSearchingText ? "search_area" : (bounds ? "filters" : "initial")
+        console.log("[Explore search] request", {
+          trigger,
+          hasBounds: !!bounds,
+          bounds: bounds ?? null,
+          q: query || "(none)",
+          url,
+        })
+      }
       console.log("🔍 Searching with filters:", { dealsOnly: activeFilters.dealsOnly, url, currentVenueCount: venues.length })
       const res = await fetch(url)
       const data = await res.json().catch(() => null)
@@ -368,10 +398,17 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         return
       }
       const raw = (data.venues ?? []) as Record<string, unknown>[]
-      const newVenues = raw.map(normalizeVenue)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:376',message:'About to set venues state',data:{newVenueCount:newVenues.length,activeFilters,venueIds:newVenues.map(v=>v.id).slice(0,5)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+      const normalized = raw.map(normalizeVenue)
+      const newVenues = normalized.filter((v) => v.latitude != null && v.longitude != null)
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Explore search] response", {
+          total: newVenues.length,
+          first3: newVenues.slice(0, 3).map((v) => ({ id: v.id, lat: v.latitude, lng: v.longitude })),
+        })
+      }
+      const favoritedIds = Array.isArray(data.favoritedVenueIds) 
+        ? new Set(data.favoritedVenueIds as string[])
+        : new Set<string>()
       console.log("✅ Received venues:", newVenues.length, "with dealsOnly:", activeFilters.dealsOnly)
       console.log("🗺️ Setting venues state, map should update...")
       console.log("📍 Venue IDs:", newVenues.map(v => v.id).slice(0, 5))
@@ -384,16 +421,18 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
         bookingMode: activeFilters.bookingMode.length
       })
       setVenues(newVenues)
-      // Force map refresh when search results update
-      setMapRefreshTrigger(prev => prev + 1)
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:388',message:'setVenues called',data:{newVenueCount:newVenues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
+      // Update favorite states from search results
+      // Merge with existing favorites to preserve favorites from initial page load
+      setFavoritedVenueIdsState(prev => {
+        const merged = new Set([...prev, ...favoritedIds])
+        return merged
+      })
     } catch (e) {
       console.error("Error searching venues:", e)
     } finally {
-      setIsSearchingText(false)
+      if (!skipSetIsSearchingText) {
+        setIsSearchingText(false)
+      }
     }
   }, []) // Empty deps - use filtersRef.current and venues.length inside
   
@@ -401,8 +440,20 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   useEffect(() => {
     performSearchRef.current = performSearch
   }, [performSearch])
-  
-  // This is now handled in the URL params loading useEffect above
+
+  const handleInitialBounds = useCallback(
+    (bounds: { north: number; south: number; east: number; west: number }) => {
+      if (hasReceivedInitialBoundsRef.current) return
+      hasReceivedInitialBoundsRef.current = true
+      currentBoundsRef.current = bounds
+      if (process.env.NODE_ENV !== "production") setDebugBounds(bounds)
+      // Run first search so venues load for the visible area; map overlay clears after paint
+      if (performSearchRef.current) {
+        performSearchRef.current("", bounds, filtersRef.current, false, true)
+      }
+    },
+    []
+  )
 
   const handleSearch = useCallback(
     async (query: string) => {
@@ -415,24 +466,23 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           filters.seatCount != null ||
           filters.bookingMode.length > 0 ||
           filters.dealsOnly ||
+          filters.favoritesOnly ||
           filters.availableNow
         if (!hasActive) {
           setIsSearchingText(false)
           if (currentBoundsRef.current) {
             await performSearch("", currentBoundsRef.current)
           } else {
-            // Only reset to initialVenues if we truly have no filters and no search
-            console.log("🔄 Resetting to initialVenues (no active filters, no search)")
-            setVenues(initialVenues)
-            // Force map refresh when clearing search
+            setVenues([])
             setMapRefreshTrigger(prev => prev + 1)
           }
           return
         }
       }
-      await performSearch(query, currentBoundsRef.current ?? undefined)
+      // Text search = full DB; don't send bounds
+      await performSearch(query, undefined)
     },
-    [initialVenues, filters]
+    [filters]
   )
 
   const handleFiltersChange = useCallback((f: FilterState) => {
@@ -440,10 +490,6 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
   }, [])
   
   const handleApplyFilters = useCallback(async (appliedFilters?: FilterState) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:349',message:'handleApplyFilters called',data:{hasAppliedFilters:!!appliedFilters,appliedFilters,currentVenueCount:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
     // Accept filters as parameter to avoid timing issues with ref updates
     const filtersToUse = appliedFilters ?? filtersRef.current
     console.log("🔍 Applying filters:", { appliedFilters: !!appliedFilters, filtersToUse })
@@ -460,16 +506,8 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       setMapRefreshTrigger(prev => prev + 1)
     }
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:365',message:'About to call performSearch',data:{filtersToUse,searchQuery},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    
-    // Perform search with the filters - this will update venues and trigger map refresh
-    await performSearch(searchQuery, currentBoundsRef.current ?? undefined, filtersToUse)
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ExploreClient.tsx:370',message:'performSearch completed',data:{venueCountAfter:venues.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
+    // Filter apply = full DB; don't send bounds
+    await performSearch(searchQuery, undefined, filtersToUse)
   }, [searchQuery])
 
   const handleClearFilters = useCallback(async () => {
@@ -481,6 +519,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
       seatCount: null,
       bookingMode: [],
       dealsOnly: false,
+      favoritesOnly: false,
     }
     setFilters(cleared)
     setSearchQuery("") // Also clear search query
@@ -488,14 +527,9 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     setMapRefreshTrigger(prev => prev + 1)
     // Save cleared filters to localStorage
     saveFiltersToStorage("", cleared)
-    if (searchQuery.length > 0 || currentBoundsRef.current) {
-      await performSearch("", currentBoundsRef.current ?? undefined, cleared)
-    } else {
-      // Only reset to initialVenues when explicitly clearing all filters with no search/bounds
-      console.log("🔄 Resetting to initialVenues (clear filters, no search/bounds)")
-      setVenues(initialVenues)
-    }
-  }, [searchQuery, initialVenues])
+    // Clear = full DB; don't send bounds
+    await performSearch("", undefined, cleared)
+  }, [searchQuery])
 
   const activeFilterCount =
     filters.tags.length +
@@ -504,11 +538,26 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     (filters.availableNow ? 1 : 0) +
     (filters.seatCount != null ? 1 : 0) +
     filters.bookingMode.length +
-    (filters.dealsOnly ? 1 : 0)
+    (filters.dealsOnly ? 1 : 0) +
+    (filters.favoritesOnly ? 1 : 0)
 
   // Generate individual filter chips
   const getFilterChips = () => {
     const chips: Array<{ id: string; label: string; onRemove: () => void }> = []
+    
+    if (filters.favoritesOnly) {
+      chips.push({
+        id: "favoritesOnly",
+        label: "Favorites",
+        onRemove: async () => {
+          const newFilters = { ...filters, favoritesOnly: false }
+          setFilters(newFilters)
+          filtersRef.current = newFilters
+          setMapRefreshTrigger(prev => prev + 1)
+          await performSearch(searchQuery, undefined, newFilters)
+        }
+      })
+    }
     
     if (filters.dealsOnly) {
       chips.push({
@@ -519,7 +568,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -533,7 +582,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     })
@@ -547,7 +596,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -561,7 +610,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -575,7 +624,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -589,7 +638,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     })
@@ -603,7 +652,7 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           setFilters(newFilters)
           filtersRef.current = newFilters
           setMapRefreshTrigger(prev => prev + 1)
-          await performSearch(searchQuery, currentBoundsRef.current ?? undefined, newFilters)
+          await performSearch(searchQuery, undefined, newFilters)
         }
       })
     }
@@ -626,6 +675,17 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
     setCenterOnVenueId(id)
   }, [])
 
+  // Brief loading overlay when venue card is clicked (until preview sheet animates in)
+  useEffect(() => {
+    if (selectedVenueId) {
+      setVenueLoadingOverlay(true)
+      const t = setTimeout(() => setVenueLoadingOverlay(false), 250)
+      return () => clearTimeout(t)
+    } else {
+      setVenueLoadingOverlay(false)
+    }
+  }, [selectedVenueId])
+
   useEffect(() => {
     if (!centerOnVenueId) return
     const t = setTimeout(() => setCenterOnVenueId(null), 800)
@@ -634,7 +694,15 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
 
   return (
     <div className="fixed inset-0 flex flex-col">
-      {isClient && (
+      {venueLoadingOverlay && (
+        <LoadingOverlay zIndex={40} className="pointer-events-none" />
+      )}
+      {isClient && !mapReady && (
+        <div className="fixed inset-0 z-0 flex items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Loading map…</p>
+        </div>
+      )}
+      {isClient && mapReady && (
         <>
           <MapView
             key={`map-${mapRefreshTrigger}`}
@@ -653,14 +721,33 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
             centerOnVenueId={centerOnVenueId}
             hasMapboxToken={hasMapboxToken}
             shouldFitBounds={shouldFitMapBounds}
+            skipFitBounds={isSearchingArea}
             onBoundsFitted={() => {
               // Reset the flag after bounds are fitted
               setShouldFitMapBounds(false)
             }}
             onRequestLocation={requestLocation}
             locationState={locationState}
+            isSearchingArea={isSearchingArea}
+            onBoundsChange={setDebugBounds}
+            onInitialBounds={handleInitialBounds}
+            didAreaSearch={didAreaSearchRef.current}
+            initialLoadingComplete={venues.length > 0}
           />
+          {process.env.NODE_ENV !== "production" && (
+            <div className="fixed bottom-20 left-2 z-10 rounded bg-background/90 px-2 py-1 text-xs font-mono text-muted-foreground shadow">
+              bounds:{" "}
+              {debugBounds
+                ? `${debugBounds.north.toFixed(4)}/${debugBounds.south.toFixed(4)}/${debugBounds.east.toFixed(4)}/${debugBounds.west.toFixed(4)}`
+                : "—"}{" "}
+              | results: {venues.length}
+            </div>
+          )}
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
+            <ExploreWelcomeBanner
+              onUseLocation={requestLocation}
+              locationState={locationState}
+            />
             <TopOverlayControls
               onSearch={handleSearch}
               filterPanelOpen={filterPanelOpen}
@@ -707,9 +794,38 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
           </div>
           <ResultsDrawer
             venues={venues}
+            isSearchingText={isSearchingText}
             onSelectVenue={(id) => setSelectedVenueId(id)}
             onCenterOnVenue={handleCenterOnVenue}
-            autoExpand={searchQuery.length > 0 || isSearchingText || activeFilterCount > 0}
+            autoExpand={!isSearchingArea && searchQuery.length > 0}
+            favoritesOnly={filters.favoritesOnly}
+            favoritedVenueIds={favoritedVenueIdsState}
+            onToggleFavorite={async (venueId, favorited) => {
+              // Update favorite state
+              setFavoritedVenueIdsState(prev => {
+                const newSet = new Set(prev)
+                if (favorited) {
+                  newSet.add(venueId)
+                } else {
+                  newSet.delete(venueId)
+                }
+                return newSet
+              })
+              
+              // If favoritesOnly filter is active and venue was unfavorited, remove it from list
+              if (filters.favoritesOnly && !favorited) {
+                setVenues(prev => prev.filter(v => v.id !== venueId))
+                // Refresh search to sync with server
+                await performSearch(searchQuery, undefined, filters)
+              }
+            }}
+            onClearFavoritesFilter={async () => {
+              const newFilters = { ...filters, favoritesOnly: false }
+              setFilters(newFilters)
+              filtersRef.current = newFilters
+              setMapRefreshTrigger(prev => prev + 1)
+              await performSearch(searchQuery, undefined, newFilters)
+            }}
           />
           <VenuePreviewSheet
             open={!!selectedVenueId && !!selectedVenue}
@@ -729,6 +845,30 @@ export function ExploreClient({ venues: initialVenues }: ExploreClientProps) {
               dealBadge: selectedVenue.dealBadge,
             } : null}
             initialSeatCount={filters.seatCount && filters.seatCount > 0 ? filters.seatCount : undefined}
+            isFavorited={selectedVenue ? favoritedVenueIdsState.has(selectedVenue.id) : false}
+            onToggleFavorite={async () => {
+              // Optimistically update favorite state
+              if (selectedVenue) {
+                const wasFavorited = favoritedVenueIdsState.has(selectedVenue.id)
+                setFavoritedVenueIdsState(prev => {
+                  const newSet = new Set(prev)
+                  if (wasFavorited) {
+                    newSet.delete(selectedVenue.id)
+                  } else {
+                    newSet.add(selectedVenue.id)
+                  }
+                  return newSet
+                })
+                
+                // If favoritesOnly filter is active and venue was unfavorited, refresh search
+                if (filters.favoritesOnly && wasFavorited) {
+                  // Remove venue from list immediately
+                  setVenues(prev => prev.filter(v => v.id !== selectedVenue.id))
+                  // Refresh search to get updated results
+                  await performSearch(searchQuery, undefined, filters)
+                }
+              }
+            }}
             onClose={() => {
               console.log("🔒 Closing venue sheet, filters should persist:", filters)
               console.log("📍 Current venues count:", venues.length)

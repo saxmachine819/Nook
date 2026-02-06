@@ -11,6 +11,19 @@ interface Venue {
   name: string
   address: string
   thumbnail: string | null
+  onboardingStatus: string
+  pausedAt: string | null
+}
+
+function getStatusPill(status: string) {
+  const config: Record<string, { label: string; className: string }> = {
+    DRAFT: { label: "Draft", className: "bg-muted text-muted-foreground" },
+    SUBMITTED: { label: "Pending Review", className: "bg-yellow-100 text-yellow-800" },
+    APPROVED: { label: "Active", className: "bg-green-100 text-green-800" },
+    REJECTED: { label: "Rejected", className: "bg-red-100 text-red-800" },
+  }
+  const { label, className } = config[status] || config.DRAFT
+  return { label, className }
 }
 
 export function VenueDashboardClient() {
@@ -23,7 +36,9 @@ export function VenueDashboardClient() {
     fetch("/api/users/me/venues")
       .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
       .then((data) => {
-        setVenues(data.venues ?? [])
+        const list = (data.venues ?? []) as Venue[]
+        list.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" }))
+        setVenues(list)
         setIsAdmin(data.isAdmin ?? false)
         if (data.userId) {
           setUserInfo({ id: data.userId, email: data.email ?? null })
@@ -38,22 +53,32 @@ export function VenueDashboardClient() {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
-        </p>
-        {userInfo && (
-          <div className="mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <div>
-              <span className="font-medium text-foreground">User ID:</span> {userInfo.id}
-            </div>
-            {userInfo.email && (
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
+          </p>
+          {userInfo && (
+            <div className="mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <div>
-                <span className="font-medium text-foreground">Email:</span> {userInfo.email}
+                <span className="font-medium text-foreground text-xs uppercase tracking-wider opacity-70">User ID:</span> {userInfo.id}
               </div>
-            )}
-          </div>
+              {userInfo.email && (
+                <div>
+                  <span className="font-medium text-foreground text-xs uppercase tracking-wider opacity-70">Email:</span> {userInfo.email}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {!loading && (
+          <Button asChild className="shrink-0">
+            <Link href="/venue/onboard">
+              <Plus className="mr-2 h-4 w-4" />
+              Add venue
+            </Link>
+          </Button>
         )}
       </div>
 
@@ -87,9 +112,21 @@ export function VenueDashboardClient() {
                     <p className="line-clamp-1 text-sm text-muted-foreground">
                       {v.address || "No address"}
                     </p>
-                    <span className="inline-block rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                      Published
-                    </span>
+                    {(() => {
+                      if (v.pausedAt != null) {
+                        return (
+                          <span className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Paused
+                          </span>
+                        )
+                      }
+                      const { label, className } = getStatusPill(v.onboardingStatus)
+                      return (
+                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
+                          {label}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -99,12 +136,20 @@ export function VenueDashboardClient() {
                       View
                     </Link>
                   </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/venue/dashboard/${v.id}/edit`}>
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Edit
-                    </Link>
-                  </Button>
+                  {v.onboardingStatus === "DRAFT" ? (
+                    <Button size="sm" asChild>
+                      <Link href={`/venue/onboard/stripe?venueId=${v.id}`}>
+                        Continue onboarding
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/venue/dashboard/${v.id}/edit`}>
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Edit
+                      </Link>
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" asChild>
                     <Link href={`/venue/dashboard/${v.id}`}>
                       <Settings className="mr-1.5 h-3.5 w-3.5" />

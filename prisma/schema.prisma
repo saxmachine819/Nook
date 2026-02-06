@@ -2,6 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Use DATABASE_URL only (no directUrl). Local: use pooler (port 6543) + ?pgbouncer=true; add ?sslmode=require if connection fails.
+// Vercel/production: unchanged — use whatever DATABASE_URL you already have. No DIRECT_URL required anywhere.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -12,6 +14,36 @@ enum DealType {
   PERCENT_OFF
   AMOUNT_OFF
   TIME_WINDOW
+}
+
+enum OnboardingStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum QRAssetStatus {
+  UNREGISTERED
+  ACTIVE
+  RETIRED
+}
+
+enum UserStatus {
+  ACTIVE
+  DELETED
+}
+
+enum VenueStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+}
+
+enum NotificationEventStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 model Venue {
@@ -32,11 +64,31 @@ model Venue {
   tags            String[]
   ownerId         String?
   stripeAccountId String?
+  onboardingStatus OnboardingStatus @default(DRAFT)
+  venueTermsAcceptedAt DateTime?
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  approvedByUserId String?
+  rejectedByUserId String?
+  status           VenueStatus  @default(ACTIVE)
+  pausedAt         DateTime?
+  deletedAt       DateTime?
+  pauseMessage    String?
   reservations    Reservation[]
   tables          Table[]
   seatBlocks      SeatBlock[]
   deals           Deal[]
   venueHours      VenueHours[]
+  favoriteVenues  FavoriteVenue[]
+  favoriteTables  FavoriteTable[]
+  favoriteSeats   FavoriteSeat[]
+  qrAssets        QRAsset[]
+  // Hours: canonical source and timezone (see docs/HOURS_AUDIT.md)
+  timezone        String?
+  hoursSource    String?       // "google" | "manual"; null = use google
+  hoursUpdatedAt DateTime?
   // Google Places enrichment fields
   googlePlaceId   String?       @unique
   googleMapsUrl   String?
@@ -45,8 +97,12 @@ model Venue {
   heroImageUrl    String?
   imageUrls       Json?
   owner           User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  approvedBy      User?         @relation("ApprovedVenues", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  rejectedBy      User?         @relation("RejectedVenues", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
 
   @@index([ownerId])
+  @@index([onboardingStatus])
+  @@index([status])
   @@map("venues")
 }
 
@@ -60,9 +116,12 @@ model Table {
   bookingMode     String        @default("individual") // "group" | "individual"
   tablePricePerHour Float?      // For group bookings
   isCommunal      Boolean       @default(false) // For communal spaces like bars
+  isActive        Boolean       @default(true)
   imageUrls        Json?
+  directionsText  String?       // "Directions to your seat"
   reservations    Reservation[]
   seats            Seat[]
+  favoriteTables   FavoriteTable[]
   venue            Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@map("tables")
@@ -75,34 +134,37 @@ model Seat {
   label        String?
   position     Int?          // Position within table (1, 2, 3...) for adjacency checking
   pricePerHour Float
+  isActive     Boolean       @default(true)
   tags         Json?
   imageUrls    Json?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   reservations Reservation[]
   seatBlocks  SeatBlock[]
+  favoriteSeats FavoriteSeat[]
   table        Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@map("seats")
 }
 
 model Reservation {
-  id        String   @id @default(cuid())
-  venueId   String
-  tableId   String?
-  seatId    String?
-  userId    String?
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  endAt     DateTime
-  seatCount Int      @default(1)
-  startAt   DateTime
-  seat      Seat?    @relation(fields: [seatId], references: [id])
-  table     Table?   @relation(fields: [tableId], references: [id])
-  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  dealRedemptions DealRedemption[]
+  id                 String   @id @default(cuid())
+  venueId            String
+  tableId            String?
+  seatId             String?
+  userId             String?
+  status             String   @default("active")
+  cancellationReason String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  endAt              DateTime
+  seatCount          Int      @default(1)
+  startAt            DateTime
+  seat               Seat?    @relation(fields: [seatId], references: [id])
+  table              Table?   @relation(fields: [tableId], references: [id])
+  venue              Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user               User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  dealRedemptions    DealRedemption[]
 
   @@map("reservations")
 }
@@ -156,18 +218,30 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name           String?
-  email          String?   @unique
-  emailVerified  DateTime?
-  image          String?
-  accounts       Account[]
-  sessions       Session[]
-  reservations   Reservation[]
-  venues         Venue[]
+  id               String     @id @default(cuid())
+  name             String?
+  email            String?    @unique
+  emailVerified    DateTime?
+  image            String?
+  status           UserStatus @default(ACTIVE)
+  termsAcceptedAt  DateTime?
+  welcomeEmailSentAt DateTime?
+  deletedAt        DateTime?
+  deletionReason   String?
+  accounts         Account[]
+  sessions         Session[]
+  reservations     Reservation[]
+  venues           Venue[]
   createdSeatBlocks SeatBlock[]
-  dealRedemptions DealRedemption[]
+  dealRedemptions  DealRedemption[]
+  favoriteVenues   FavoriteVenue[]
+  favoriteTables   FavoriteTable[]
+  favoriteSeats    FavoriteSeat[]
+  approvedVenues   Venue[]    @relation("ApprovedVenues")
+  rejectedVenues   Venue[]    @relation("RejectedVenues")
+  auditLogs        AuditLog[] @relation("AuditLogActor")
 
+  @@index([status])
   @@map("users")
 }
 
@@ -227,4 +301,128 @@ model VenueHours {
   @@unique([venueId, dayOfWeek])
   @@index([venueId])
   @@map("venue_hours")
+}
+
+model FavoriteVenue {
+  id        String   @id @default(cuid())
+  userId    String
+  venueId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, venueId])
+  @@index([userId])
+  @@map("favorite_venues")
+}
+
+model FavoriteTable {
+  id        String   @id @default(cuid())
+  userId    String
+  tableId   String
+  venueId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  table     Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tableId])
+  @@index([userId])
+  @@map("favorite_tables")
+}
+
+model FavoriteSeat {
+  id        String   @id @default(cuid())
+  userId    String
+  seatId    String
+  venueId   String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seat      Seat     @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seatId])
+  @@index([userId])
+  @@map("favorite_seats")
+}
+
+model QRAsset {
+  id               String         @id @default(uuid())
+  token            String         @unique
+  status           QRAssetStatus  @default(UNREGISTERED)
+  batchId          String?
+  reservedOrderId  String?        // Reserved for an order or short-lived allocation claim
+  venueId          String?
+  resourceType     String?        // 'seat' | 'table' | 'area'
+  resourceId       String?        // Foreign key to seat/table or area identifier
+  activatedAt      DateTime?
+  activatedBy      String?        // User id or email when activated
+  activationSource String?        @map("activation_source") // 'venue_print' | 'scan_register' | 'order_fulfillment'
+  retiredAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  venue            Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  qrEvents         QREvent[]
+
+  @@index([venueId])
+  @@index([status])
+  @@index([batchId])
+  @@index([status, reservedOrderId])
+  @@map("qr_assets")
+}
+
+model QREvent {
+  id          String    @id @default(uuid())
+  token       String
+  qrAssetId   String?
+  eventType   String    // 'scan' only for now
+  venueId     String?
+  resourceType String?
+  resourceId  String?
+  userId      String?
+  sessionId   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  qrAsset     QRAsset?  @relation(fields: [qrAssetId], references: [id], onDelete: SetNull)
+
+  @@index([token, createdAt])
+  @@index([venueId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("qr_events")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  actorUserId  String?
+  action       String
+  entityType   String
+  entityId     String?
+  metadata     Json?
+  actor        User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model NotificationEvent {
+  id        String                   @id @default(uuid())
+  type      String
+  status    NotificationEventStatus   @default(PENDING)
+  dedupeKey String                   @unique
+  toEmail   String
+  userId    String?
+  venueId   String?
+  bookingId String?
+  payload   Json
+  error     String?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+  sentAt   DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("notification_events")
 }

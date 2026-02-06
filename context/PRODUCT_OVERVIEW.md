@@ -1,7 +1,7 @@
-# Product Overview — Nook
+# Product Overview — Nooc
 
 ## Core thesis
-Nook is Resy for workspaces: reserve a seat by the hour in calm, professional public environments.
+Nooc is Resy for workspaces: reserve a seat by the hour in calm, professional public environments.
 
 ## Inventory model
 - Venue

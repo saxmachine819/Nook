@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/toast"
+import { isBlobSupported } from "@/lib/utils"
 import {
   Calendar,
   Clock,
@@ -52,11 +53,15 @@ interface ReservationDetailClientProps {
       pricePerHour: number
       table: {
         name: string | null
+        directionsText: string | null
       } | null
     } | null
     table: {
       name: string | null
       seatCount: number | null
+      tablePricePerHour: number | null
+      directionsText: string | null
+      seats?: { id: string }[]
     } | null
   }
 }
@@ -81,7 +86,7 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
       }
 
       showToast("Reservation cancelled", "success")
-      router.push("/reservations")
+      router.push("/reservations?refresh=1")
     } catch (error) {
       showToast("Failed to cancel reservation", "error")
     } finally {
@@ -100,9 +105,9 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
     const icsContent = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Nook//Reservation//EN",
+      "PRODID:-//Nooc//Reservation//EN",
       "BEGIN:VEVENT",
-      `UID:${reservation.id}@nook`,
+      `UID:${reservation.id}@nooc`,
       `DTSTART:${formatICSDate(start)}`,
       `DTEND:${formatICSDate(end)}`,
       `SUMMARY:Reservation at ${reservation.venue.name}`,
@@ -112,6 +117,10 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
       "END:VCALENDAR",
     ].join("\r\n")
 
+    if (!isBlobSupported()) {
+      showToast("Calendar download is not supported in this browser", "error")
+      return
+    }
     const blob = new Blob([icsContent], { type: "text/calendar" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -143,15 +152,19 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
     const end = new Date(reservation.endAt)
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
 
-    // If multiple seats booked, use venue price * seat count
-    if (reservation.seatCount > 1) {
-      return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
+    // GROUP table booking: tableId exists and seatId is null
+    // Use table's tablePricePerHour (total price for the table, not per-seat)
+    if (reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour) {
+      return reservation.table.tablePricePerHour * hours
     }
+
     // For single seat bookings, use seat price if available
     if (reservation.seatId && reservation.seat) {
       return reservation.seat.pricePerHour * hours
     }
-    // Fallback to venue price * seat count
+
+    // Fallback: multiple seats or individual booking without seat data
+    // Use venue price * seat count
     return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
   }
 
@@ -173,9 +186,12 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
 
   const getSeatInfo = (): string => {
     // For group table bookings (seatId is null, tableId exists)
-    // Use table's actual seat count as the source of truth
-    if (!reservation.seatId && reservation.tableId && reservation.table?.seatCount) {
-      const actualSeatCount = reservation.table.seatCount
+    // Use table's seats.length when available, else fall back to seatCount column
+    if (!reservation.seatId && reservation.tableId && reservation.table) {
+      const actualSeatCount =
+        reservation.table.seats?.length ??
+        reservation.table.seatCount ??
+        1
       const tableName = reservation.table.name
       return tableName ? `Table ${tableName} for ${actualSeatCount}` : `Table for ${actualSeatCount}`
     }
@@ -192,6 +208,20 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
     }
     // Fallback to seat count
     return `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""}`
+  }
+
+  // Helper function to derive directions from reservation
+  const getDirectionsText = (): string | null => {
+    // If reservation has seatId, look up the seat's table and use Table.directionsText
+    if (reservation.seatId && reservation.seat?.table?.directionsText) {
+      return reservation.seat.table.directionsText
+    }
+    // Else if reservation has tableId, use Table.directionsText
+    if (reservation.tableId && reservation.table?.directionsText) {
+      return reservation.table.directionsText
+    }
+    // Else return null
+    return null
   }
 
   const imageUrl =
@@ -268,6 +298,16 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
                 <p className="text-sm text-muted-foreground">{getSeatInfo()}</p>
               </div>
 
+              {/* Directions */}
+              {getDirectionsText() && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium">Directions to your seat</h3>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {getDirectionsText()}
+                  </p>
+                </div>
+              )}
+
               {/* Status */}
               <div className="space-y-2">
                 <h3 className="text-sm font-medium">Status</h3>
@@ -288,18 +328,22 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      {reservation.seatCount > 1
-                        ? `${reservation.seatCount} seats (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
-                        : reservation.seatId && reservation.seat
-                          ? `Seat (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
-                          : `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`}
+                      {reservation.tableId && !reservation.seatId
+                        ? `Table${reservation.table?.name ? ` ${reservation.table.name}` : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                        : reservation.seatCount > 1
+                          ? `${reservation.seatCount} seats (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                          : reservation.seatId && reservation.seat
+                            ? `Seat (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`
+                            : `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} (${formatTime(new Date(reservation.startAt))} – ${formatTime(new Date(reservation.endAt))})`}
                     </span>
                     <span className="font-medium">
-                      {reservation.seatCount > 1
-                        ? `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour × ${reservation.seatCount}`
-                        : reservation.seatId && reservation.seat
-                          ? `${reservation.seat.pricePerHour.toFixed(0)}/hour`
-                          : `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour`}
+                      {reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour
+                        ? `$${reservation.table.tablePricePerHour.toFixed(0)}/hour (total)`
+                        : reservation.seatCount > 1
+                          ? `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour × ${reservation.seatCount}`
+                          : reservation.seatId && reservation.seat
+                            ? `${reservation.seat.pricePerHour.toFixed(0)}/hour`
+                            : `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour`}
                     </span>
                   </div>
                   <div className="border-t pt-2">
@@ -371,6 +415,7 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
             <DialogTitle>Cancel reservation?</DialogTitle>
             <DialogDescription>
               Are you sure you want to cancel this reservation? This action cannot be undone.
+              Reservations can be canceled at any time, but all bookings are non-refundable.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

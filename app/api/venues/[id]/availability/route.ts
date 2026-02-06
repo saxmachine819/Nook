@@ -1,120 +1,11 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getOpenIntervalsFromVenueHours, isReservationWithinHours } from "@/lib/venue-hours"
-
-type OpeningHoursPeriod = {
-  open: { day: number; hour: number; minute: number }
-  close?: { day: number; hour: number; minute: number }
-}
-
-function minutesSinceMidnight(hour: number, minute: number) {
-  return hour * 60 + minute
-}
-
-// Returns booking intervals (in minutes since midnight) for the given local date.
-// Prefers VenueHours if available, falls back to openingHoursJson, then default 8:00–20:00.
-function getOpenIntervalsForDate(
-  dateStr: string,
-  venueHours: Array<{
-    dayOfWeek: number
-    isClosed: boolean
-    openTime: string | null
-    closeTime: string | null
-  }> | null,
-  openingHoursJson: any
-): Array<{ startMin: number; endMin: number }> {
-  // Fallback window (MVP)
-  const fallback = [{ startMin: 8 * 60, endMin: 20 * 60 }]
-
-  // Prefer VenueHours if available
-  if (venueHours && venueHours.length > 0) {
-    const intervals = getOpenIntervalsFromVenueHours(venueHours, dateStr)
-    if (intervals.length > 0) {
-      return intervals
-    }
-    // If day is closed, return empty array (no slots available)
-    return []
-  }
-
-  // Fallback to openingHoursJson parsing
-  const periods: OpeningHoursPeriod[] | undefined =
-    openingHoursJson?.periods && Array.isArray(openingHoursJson.periods)
-      ? openingHoursJson.periods
-      : undefined
-
-  if (!periods || periods.length === 0) return fallback
-
-  const dayStart = new Date(`${dateStr}T00:00:00`)
-  const weekday = dayStart.getDay() // 0=Sun ... 6=Sat
-
-  const intervals: Array<{ startMin: number; endMin: number }> = []
-
-  for (const p of periods) {
-    if (!p?.open) continue
-    const openDay = p.open.day
-    const openMin = minutesSinceMidnight(p.open.hour, p.open.minute)
-    const closeDay = p.close?.day
-    const closeMin =
-      p.close ? minutesSinceMidnight(p.close.hour, p.close.minute) : null
-
-    // If the period starts today
-    if (openDay === weekday) {
-      // If no close, treat as open until end of day
-      if (closeMin === null || closeDay === undefined) {
-        intervals.push({ startMin: openMin, endMin: 24 * 60 })
-        continue
-      }
-
-      // Close same day
-      if (closeDay === weekday) {
-        if (closeMin > openMin) {
-          intervals.push({ startMin: openMin, endMin: closeMin })
-        }
-        continue
-      }
-
-      // Close next day (overnight): open until midnight for this day
-      intervals.push({ startMin: openMin, endMin: 24 * 60 })
-      continue
-    }
-
-    // If the period started yesterday and closes today (overnight spillover)
-    const yesterday = (weekday + 6) % 7
-    if (openDay === yesterday && closeDay === weekday && closeMin !== null) {
-      intervals.push({ startMin: 0, endMin: closeMin })
-    }
-  }
-
-  // If we couldn't map anything, fall back
-  if (intervals.length === 0) return fallback
-
-  // Normalize/clip and sort
-  const normalized = intervals
-    .map((i) => ({
-      startMin: Math.max(0, Math.min(24 * 60, i.startMin)),
-      endMin: Math.max(0, Math.min(24 * 60, i.endMin)),
-    }))
-    .filter((i) => i.endMin > i.startMin)
-    .sort((a, b) => a.startMin - b.startMin)
-
-  return normalized.length ? normalized : fallback
-}
-
-// Check if a time window falls within venue opening hours
-function isTimeWindowWithinOpeningHours(
-  startAt: Date,
-  endAt: Date,
-  venueHours: Array<{
-    dayOfWeek: number
-    isClosed: boolean
-    openTime: string | null
-    closeTime: string | null
-  }> | null,
-  openingHoursJson: any
-): boolean {
-  const result = isReservationWithinHours(startAt, endAt, venueHours, openingHoursJson)
-  return result.isValid
-}
+import {
+  getCanonicalVenueHours,
+  isReservationWithinCanonicalHours,
+  getSlotTimesForDate,
+} from "@/lib/hours"
+import { getVenueBookability } from "@/lib/booking-guard"
 
 export async function GET(
   request: Request,
@@ -182,10 +73,19 @@ export async function GET(
         return NextResponse.json({ error: "Venue not found." }, { status: 404 })
       }
 
-      // Calculate total capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+      const bookability = await getVenueBookability(venueId)
+      if (bookability.status === "DELETED") {
+        return NextResponse.json({ error: "Venue not found." }, { status: 404 })
+      }
+      const bookingDisabled = !bookability.canBook
+      const pauseMessage = bookability.pauseMessage ?? null
+
+      // Calculate total capacity: only active tables/seats; use actual Seat records if available, otherwise fall back to table.seatCount
       const totalCapacity = venue.tables.reduce((sum, table) => {
-        if (table.seats.length > 0) {
-          return sum + table.seats.length
+        if ((table as any).isActive === false) return sum
+        const activeSeats = table.seats.filter((s: any) => s.isActive !== false)
+        if (activeSeats.length > 0) {
+          return sum + activeSeats.length
         }
         // Fallback for older venues without Seat records
         return sum + (table.seatCount || 0)
@@ -199,22 +99,30 @@ export async function GET(
             availableSeatGroups: [],
             unavailableSeatIds: [],
             error: `This venue only has ${totalCapacity} seat${totalCapacity > 1 ? "s" : ""} available. Please select ${totalCapacity} or fewer seats.`,
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
       }
 
-      // Check if time window is within opening hours
-      const openingHoursJson = (venue as any).openingHoursJson
-      const venueHours = (venue as any).venueHours || null
-      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, venueHours, openingHoursJson)
-      
+      // Validate time window against canonical hours (single shared hours engine)
+      const canonical = await getCanonicalVenueHours(venueId)
+      if (!canonical) {
+        return NextResponse.json(
+          { error: "Venue not found." },
+          { status: 404 }
+        )
+      }
+      const hoursCheck = isReservationWithinCanonicalHours(parsedStart, parsedEnd, canonical)
       if (!hoursCheck.isValid) {
         return NextResponse.json(
           {
             availableSeats: [],
             unavailableSeatIds: [],
-            error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours.",
+            error: hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours.",
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
@@ -318,6 +226,7 @@ export async function GET(
 
       console.log(`📊 Processing ${venue.tables.length} tables for venue ${venue.id}`)
       venue.tables.forEach((table) => {
+        if ((table as any).isActive === false) return
         const bookingMode = (table as any).bookingMode || "individual"
         const tablePricePerHour = (table as any).tablePricePerHour
         console.log(`📋 Table "${table.name || 'unnamed'}" (id: ${table.id}): bookingMode=${bookingMode}, tablePricePerHour=${tablePricePerHour}, seats=${table.seats.length}`)
@@ -339,6 +248,7 @@ export async function GET(
         const isCommunal = (table as any).isCommunal || false
 
         table.seats.forEach((seat) => {
+          if ((seat as any).isActive === false) return
           const seatImageUrls = Array.isArray(seat.imageUrls)
             ? seat.imageUrls
             : seat.imageUrls
@@ -382,6 +292,7 @@ export async function GET(
 
       console.log(`\n🔍 BUILDING GROUP TABLES - Processing ${venue.tables.length} tables`)
       venue.tables.forEach((table) => {
+        if ((table as any).isActive === false) return
         const bookingMode = (table as any).bookingMode || "individual"
         const tablePricePerHour = (table as any).tablePricePerHour
         const rawBookingMode = (table as any).bookingMode
@@ -577,6 +488,8 @@ export async function GET(
             availableGroupTables: availableGroupTablesFiltered,
             unavailableGroupTables,
             unavailableSeatIds: Array.from(unavailableSeatIds),
+            bookingDisabled,
+            pauseMessage,
           },
           { status: 200 }
         )
@@ -659,6 +572,8 @@ export async function GET(
           availableGroupTables: availableGroupTablesFiltered,
           unavailableGroupTables,
           unavailableSeatIds: Array.from(unavailableSeatIds),
+          bookingDisabled,
+          pauseMessage,
         },
         { status: 200 }
       )
@@ -712,51 +627,31 @@ export async function GET(
       )
     }
 
-    // Build the day range in local time (MVP approximation)
-    const dayStart = new Date(`${date}T00:00:00`)
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
-
-    // Filter reservations that intersect this day
-    const reservations = venue.reservations.filter(
-      (r) => r.startAt < dayEnd && r.endAt > dayStart
-    )
-
-    // Define booking windows for slots from VenueHours (prefer) or Google opening hours (fallback to 8:00–20:00)
-    const slots = []
-    const venueHours = (venue as any).venueHours || null
-    const openingHoursJson = (venue as any).openingHoursJson
-    const openIntervals = getOpenIntervalsForDate(date, venueHours, openingHoursJson)
-
-    for (const interval of openIntervals) {
-      for (let m = interval.startMin; m < interval.endMin; m += 15) {
-        const slotStart = new Date(dayStart)
-        slotStart.setMinutes(m, 0, 0)
-
-        const slotEnd = new Date(slotStart.getTime() + 15 * 60 * 1000)
-
-        // Skip slots that start outside interval (e.g., last slot spills past close)
-        if (slotEnd.getTime() > dayStart.getTime() + interval.endMin * 60 * 1000) {
-          continue
-        }
-
-        // Overlap: existing.startAt < slotEnd AND existing.endAt > slotStart
-        const bookedSeats = reservations.reduce((sum, r) => {
-          if (r.startAt < slotEnd && r.endAt > slotStart) {
-            return sum + r.seatCount
-          }
-          return sum
-        }, 0)
-
-        const availableSeats = Math.max(capacity - bookedSeats, 0)
-
-        slots.push({
-          start: slotStart.toISOString(),
-          end: slotEnd.toISOString(),
-          availableSeats,
-          isFullyBooked: availableSeats <= 0,
-        })
-      }
+    // Slots from canonical hours (venue timezone); no raw Google payload
+    const canonical = await getCanonicalVenueHours(venueId)
+    if (!canonical) {
+      return NextResponse.json({ error: "Venue not found." }, { status: 404 })
     }
+    const slotTimes = getSlotTimesForDate(canonical, date)
+    const dayStart = slotTimes[0]?.start
+    const dayEnd = slotTimes[slotTimes.length - 1]?.end
+    const reservations = dayStart && dayEnd
+      ? venue.reservations.filter((r) => r.startAt < dayEnd && r.endAt > dayStart)
+      : []
+
+    const slots = slotTimes.map((slot) => {
+      const bookedSeats = reservations.reduce((sum, r) => {
+        if (r.startAt < slot.end && r.endAt > slot.start) return sum + r.seatCount
+        return sum
+      }, 0)
+      const availableSeats = Math.max(capacity - bookedSeats, 0)
+      return {
+        start: slot.start.toISOString(),
+        end: slot.end.toISOString(),
+        availableSeats,
+        isFullyBooked: availableSeats <= 0,
+      }
+    })
 
     return NextResponse.json(
       {

@@ -9,8 +9,8 @@ import Link from "next/link"
 
 function ErrorContent() {
   const searchParams = useSearchParams()
-  const error = searchParams.get("error")
-  const errorDescription = searchParams.get("error_description")
+  const error = searchParams?.get("error")
+  const errorDescription = searchParams?.get("error_description")
 
   const errorMessages: Record<string, string> = {
     Configuration: "There is a problem with the server configuration. Check if your options are correct.",
@@ -46,7 +46,7 @@ function ErrorContent() {
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Full URL params: {searchParams.toString() || "none"}
+              Full URL params: {searchParams?.toString() || "none"}
             </p>
           </div>
           <div className="space-y-2">

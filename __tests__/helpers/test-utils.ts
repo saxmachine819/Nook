@@ -12,6 +12,11 @@ export function createTestDateString(offsetMinutes = 0): string {
   return createTestDate(offsetMinutes).toISOString()
 }
 
+export function createPastDateString(offsetMinutes: number): string {
+  // offsetMinutes should be negative to create a past date
+  return createTestDate(offsetMinutes).toISOString()
+}
+
 export function createTestUser(overrides?: Partial<any>) {
   return {
     id: 'test-user-id',
@@ -30,6 +35,28 @@ export function createTestVenue(overrides?: Partial<any>) {
     ownerId: 'test-owner-id',
     ...overrides,
   }
+}
+
+/**
+ * Default venue hours row shape for a single day (used by getEffectiveVenueHours / getCanonicalVenueHours).
+ */
+export function createTestVenueHoursRow(dayOfWeek: number, overrides?: Partial<any>) {
+  return {
+    dayOfWeek,
+    isClosed: false,
+    openTime: '00:00',
+    closeTime: '23:59',
+    source: 'manual',
+    ...overrides,
+  }
+}
+
+/**
+ * Seven-day venue hours (dayOfWeek 0–6) open 00:00–23:59, source "manual".
+ * Use so getCanonicalVenueHours returns non-empty weeklyHours and slot/seat availability passes.
+ */
+export function createTestVenueHours(overrides?: Partial<ReturnType<typeof createTestVenueHoursRow>>) {
+  return [0, 1, 2, 3, 4, 5, 6].map((d) => ({ ...createTestVenueHoursRow(d), ...overrides }))
 }
 
 export function createTestTable(overrides?: Partial<any>) {
@@ -70,6 +97,38 @@ export function createTestReservation(overrides?: Partial<any>) {
     endAt,
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteVenue(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-venue-id',
+    userId: 'test-user-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteTable(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-table-id',
+    userId: 'test-user-id',
+    tableId: 'test-table-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
+    ...overrides,
+  }
+}
+
+export function createTestFavoriteSeat(overrides?: Partial<any>) {
+  return {
+    id: 'test-favorite-seat-id',
+    userId: 'test-user-id',
+    seatId: 'test-seat-id',
+    venueId: 'test-venue-id',
+    createdAt: new Date(),
     ...overrides,
   }
 }

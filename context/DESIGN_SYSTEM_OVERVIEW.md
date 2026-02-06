@@ -1,4 +1,4 @@
-# Design System Overview — Nook
+# Design System Overview — Nooc
 
 ## Brand vibe
 Calm, premium, minimal, cozy

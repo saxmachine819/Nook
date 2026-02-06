@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { isReservationWithinHours } from "@/lib/venue-hours"
+import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
+import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
+import { enqueueNotification } from "@/lib/notification-queue"
 
 export async function POST(request: Request) {
   try {
@@ -69,13 +71,25 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify user exists in database
-    const userExists = await prisma.user.findUnique({
+    // Validate that start time is not in the past
+    const now = new Date()
+    if (parsedStart < now) {
+      return NextResponse.json(
+        {
+          code: "PAST_TIME",
+          error: "This date/time is in the past. Please select a current or future time.",
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify user exists in database and has accepted terms
+    const userRecord = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true },
+      select: { id: true, email: true, termsAcceptedAt: true },
     })
 
-    if (!userExists) {
+    if (!userRecord) {
       console.error("❌ User not found in database:", {
         userId: session.user.id,
         email: session.user.email,
@@ -86,7 +100,14 @@ export async function POST(request: Request) {
       )
     }
 
-    // Fetch venue to check hours
+    if (!userRecord.termsAcceptedAt) {
+      return NextResponse.json(
+        { error: "You must accept the Terms & Conditions to make a reservation." },
+        { status: 403 }
+      )
+    }
+
+    // Fetch venue to check hours and approval status
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
       include: {
@@ -105,37 +126,60 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check if reservation is within venue hours (only if hours data exists and is complete)
-    // IMPORTANT: Don't block reservations if hours data is incomplete or missing
-    const venueHours = (venue as any).venueHours || null
-    const openingHoursJson = (venue as any).openingHoursJson
-    
-    // Only enforce hours if we have complete hours data - be lenient to avoid blocking valid bookings
-    if (venueHours && venueHours.length === 7) {
-      // Only check if we have all 7 days of hours
-      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, venueHours, openingHoursJson)
-      if (!hoursCheck.isValid) {
+    // Only allow booking for APPROVED venues
+    if (venue.onboardingStatus !== "APPROVED") {
+      return NextResponse.json(
+        { error: "This venue is not available for booking." },
+        { status: 403 }
+      )
+    }
+
+    // Enforce venue/owner status (ACTIVE, not deleted/paused; owner not deleted)
+    try {
+      await canBookVenue(venueId, {
+        userId: session.user.id,
+        timeRange: { startAt: parsedStart, endAt: parsedEnd },
+      })
+    } catch (err) {
+      if (err instanceof BookingNotAllowedError) {
         return NextResponse.json(
-          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
-          { status: 400 }
+          { error: err.publicMessage ?? err.message },
+          { status: 403 }
         )
       }
-    } else if (openingHoursJson?.periods && Array.isArray(openingHoursJson.periods) && openingHoursJson.periods.length > 0) {
-      // Fallback to JSON hours if VenueHours not available but JSON exists
-      const hoursCheck = isReservationWithinHours(parsedStart, parsedEnd, null, openingHoursJson)
+      throw err
+    }
+
+    // Validate reservation window against canonical hours (single shared hours engine)
+    const canonical = await getCanonicalVenueHours(venueId)
+    if (canonical && canonical.weeklyHours.length > 0) {
+      const hoursCheck = isReservationWithinCanonicalHours(parsedStart, parsedEnd, canonical)
       if (!hoursCheck.isValid) {
         return NextResponse.json(
-          { error: hoursCheck.error || "This venue is not open during the requested time. Please check opening hours." },
+          { error: hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours." },
           { status: 400 }
         )
       }
     }
-    // If no hours data or incomplete hours, allow booking (backward compatibility - don't break existing flow)
 
     let reservations: any[]
 
     if (isGroupBooking) {
       // Group table booking
+      // Reject if tableId is actually a seat ID (prevents ID type mix-up)
+      const seatWithSameId = await prisma.seat.findUnique({
+        where: { id: tableId },
+      })
+      if (seatWithSameId) {
+        return NextResponse.json(
+          {
+            error:
+              "Invalid table ID. Did you mean to book a specific seat? Please select a table from the booking options.",
+          },
+          { status: 400 }
+        )
+      }
+
       const table = await prisma.table.findUnique({
         where: { id: tableId },
         include: {
@@ -163,6 +207,13 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Table does not belong to this venue." },
           { status: 400 }
+        )
+      }
+
+      if (table.isActive === false) {
+        return NextResponse.json(
+          { error: "This table is no longer available for booking." },
+          { status: 403 }
         )
       }
 
@@ -224,14 +275,31 @@ export async function POST(request: Request) {
                   seats: true,
                 },
               },
+              owner: { select: { email: true } },
             },
           },
           table: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              seatCount: true,
+              bookingMode: true,
+              tablePricePerHour: true,
+              directionsText: true,
               seats: true,
             },
           },
-          seat: true,
+          seat: {
+            include: {
+              table: {
+                select: {
+                  id: true,
+                  name: true,
+                  directionsText: true,
+                },
+              },
+            },
+          },
         },
       })
 
@@ -269,12 +337,18 @@ export async function POST(request: Request) {
         )
       }
 
-      // Validate all seats belong to the same venue
+      // Validate all seats belong to the same venue and are active
       for (const seat of seats) {
         if (seat.table.venueId !== venueId) {
           return NextResponse.json(
             { error: "One or more seats do not belong to this venue." },
             { status: 400 }
+          )
+        }
+        if (seat.isActive === false || seat.table.isActive === false) {
+          return NextResponse.json(
+            { error: "One or more seats are no longer available for booking." },
+            { status: 403 }
           )
         }
       }
@@ -329,14 +403,31 @@ export async function POST(request: Request) {
                   seats: true,
                 },
               },
+              owner: { select: { email: true } },
             },
           },
           table: {
-            include: {
+            select: {
+              id: true,
+              name: true,
+              seatCount: true,
+              bookingMode: true,
+              tablePricePerHour: true,
+              directionsText: true,
               seats: true,
             },
           },
-          seat: true,
+          seat: {
+            include: {
+              table: {
+                select: {
+                  id: true,
+                  name: true,
+                  directionsText: true,
+                },
+              },
+            },
+          },
         },
       })
 
@@ -374,6 +465,58 @@ export async function POST(request: Request) {
     // Return the reservation (now always a single reservation)
     // The confirmation modal will show the total price
     const reservation = reservations[0]
+
+    // Enqueue booking confirmation email (no inline send).
+    if (userRecord.email?.trim()) {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+        await enqueueNotification({
+          type: "booking_confirmation",
+          dedupeKey: `booking_confirmation:${reservation.id}`,
+          toEmail: userRecord.email.trim(),
+          userId: session.user.id,
+          venueId: reservation.venueId,
+          bookingId: reservation.id,
+          payload: {
+            bookingId: reservation.id,
+            venueId: reservation.venueId,
+            venueName: reservation.venue?.name ?? "",
+            timeZone: reservation.venue?.timezone ?? undefined,
+            tableId: reservation.tableId ?? null,
+            seatId: reservation.seatId ?? null,
+            startAt: reservation.startAt.toISOString(),
+            endAt: reservation.endAt.toISOString(),
+            ...(baseUrl ? { confirmationUrl: `${baseUrl}/reservations/${reservation.id}` } : {}),
+          },
+        })
+      } catch (enqueueErr) {
+        console.error("Failed to enqueue booking confirmation:", enqueueErr)
+      }
+    }
+
+    // Enqueue venue owner notification (new booking at their venue).
+    if (reservation.venue?.owner?.email?.trim()) {
+      try {
+        await enqueueNotification({
+          type: "venue_booking_created",
+          dedupeKey: `venue_booking_created:${reservation.id}`,
+          toEmail: reservation.venue.owner.email.trim(),
+          userId: reservation.venue.ownerId ?? undefined,
+          venueId: reservation.venueId,
+          bookingId: reservation.id,
+          payload: {
+            venueName: reservation.venue?.name ?? "",
+            timeZone: reservation.venue?.timezone ?? undefined,
+            guestEmail: userRecord.email ?? "",
+            startAt: reservation.startAt.toISOString(),
+            endAt: reservation.endAt.toISOString(),
+          },
+        })
+      } catch (enqueueErr) {
+        console.error("Failed to enqueue venue_booking_created:", enqueueErr)
+      }
+    }
+
     const reservationWithPricing = {
       ...reservation,
       venue: {

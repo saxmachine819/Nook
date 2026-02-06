@@ -25,6 +25,11 @@ Copy `.env.example` to `.env` and fill in the following variables:
 - `EMAIL_SERVER`: SMTP server configuration (see examples in `.env.example`)
 - `EMAIL_FROM`: Email address to send from
 
+### Local vs Production (Supabase + Vercel)
+
+- **Local:** Use Supabase **connection pooler** for `DATABASE_URL` (port 6543, from Dashboard → Settings → Database → Connection pooling). OAuth in development uses `http://localhost:3000` automatically. Add `?sslmode=require` to `DATABASE_URL` if connection fails.
+- **Vercel (production):** Change nothing. Use whatever `DATABASE_URL` you already have; no `DIRECT_URL` or other env changes required. Set `NEXTAUTH_URL` to your production URL (e.g. `https://your-app.vercel.app`).
+
 ## Database Migration
 
 After setting up environment variables, run Prisma migrations to create the auth tables:
@@ -47,8 +52,9 @@ npx prisma db push
 3. Enable the Google+ API
 4. Go to "Credentials" → "Create Credentials" → "OAuth client ID"
 5. Choose "Web application"
-6. Add authorized redirect URIs:
-   - `http://localhost:3000/api/auth/callback/google` (for development)
+6. Add authorized redirect URIs (click "+ ADD URI" for each):
+   - `http://localhost:3000/api/auth/callback/google` (for development on port 3000)
+   - `http://localhost:3001/api/auth/callback/google` (for development on port 3001)
    - `https://yourdomain.com/api/auth/callback/google` (for production)
 7. Copy the Client ID and Client Secret to your `.env` file
 
@@ -119,7 +125,8 @@ EMAIL_FROM="noreply@yourdomain.com"
 
 ### Database errors
 - Run `npx prisma generate` to regenerate Prisma client
-- Verify `DATABASE_URL` is correct
+- Verify `DATABASE_URL` is correct (local: use pooler; production: no change needed)
+- If local connection fails, add `?sslmode=require` to `DATABASE_URL`
 - Check that migrations have been applied: `npx prisma migrate status`
 
 ### Session not persisting

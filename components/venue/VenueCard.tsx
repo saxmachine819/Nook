@@ -1,14 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { useToast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { MapPin, X } from "lucide-react"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
+import { SignInModal } from "@/components/auth/SignInModal"
 import { VenueImageCarousel } from "./VenueImageCarousel"
+import { FavoriteButton } from "./FavoriteButton"
 
 interface VenueCardProps {
   id: string
@@ -27,9 +31,11 @@ interface VenueCardProps {
   imageUrls?: string[]
   isExpanded?: boolean
   isDeemphasized?: boolean
+  isFavorited?: boolean
   onSelect?: () => void
   onClose?: () => void
   onBookingSuccess?: () => void
+  onToggleFavorite?: () => void
   dealBadge?: {
     title: string
     description: string
@@ -63,13 +69,17 @@ export function VenueCard({
   imageUrls = [],
   isExpanded = false,
   isDeemphasized = false,
+  isFavorited = false,
   onSelect,
   onClose,
   onBookingSuccess,
+  onToggleFavorite,
   dealBadge,
   initialSeatCount,
 }: VenueCardProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const [isPending, startTransition] = useTransition()
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
@@ -83,6 +93,8 @@ export function VenueCard({
   const [seats, setSeats] = useState<number>(initialSeatCount ?? 1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [showSignInModal, setShowSignInModal] = useState(false)
+  const pendingReservationPayloadRef = useRef<{ venueId: string; startAt: string; endAt: string; seatCount: number } | null>(null)
 
   // Format location display: prefer address, then city/state
   const locationDisplay = address || (city && state ? `${city}, ${state}` : city || "")
@@ -184,26 +196,20 @@ export function VenueCard({
       const data = await response.json().catch(() => null)
 
       if (!response.ok) {
-        // Handle authentication errors - redirect to sign-in with booking data
         if (response.status === 401) {
-          // Encode booking data in URL params
-          // Convert slot start time to HHMM format for VenueBookingWidget
-          const slotStart = new Date(selectedSlot.start)
-          const hours = String(slotStart.getHours()).padStart(2, "0")
-          const minutes = String(slotStart.getMinutes()).padStart(2, "0")
-          const timeStr = `${hours}${minutes}`
-          
-          // Convert duration slots (15min) to hours for VenueBookingWidget
-          const durationHours = (durationSlots * 15) / 60
-          
-          const bookingData = {
-            date: date,
-            startTime: timeStr,
-            duration: durationHours,
-            seats: seats,
+          pendingReservationPayloadRef.current = {
+            venueId: id,
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+            seatCount: seats,
           }
-          const bookingParam = encodeURIComponent(JSON.stringify(bookingData))
-          router.push(`/profile?callbackUrl=${encodeURIComponent(`/venue/${id}?booking=${bookingParam}`)}`)
+          setShowSignInModal(true)
+          return
+        }
+        
+        // Handle PAST_TIME error code specifically
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
           return
         }
         
@@ -226,6 +232,11 @@ export function VenueCard({
       setConfirmedReservation(data?.reservation || null)
       setConfirmationOpen(true)
       
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
+      
       // Call onBookingSuccess callback to refresh availability
       if (onBookingSuccess) {
         onBookingSuccess()
@@ -238,6 +249,42 @@ export function VenueCard({
     }
   }
 
+  const retryReservation = useCallback(async () => {
+    const payload = pendingReservationPayloadRef.current
+    if (!payload) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (data?.code === "PAST_TIME") {
+          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setSubmitError(data?.error ?? "Failed to create reservation.")
+        }
+        pendingReservationPayloadRef.current = null
+        return
+      }
+      pendingReservationPayloadRef.current = null
+      setConfirmedReservation(data?.reservation || null)
+      setConfirmationOpen(true)
+      showToast("Reservation confirmed.", "success")
+      if (pathname === "/reservations") router.refresh()
+      onBookingSuccess?.()
+    } catch (error) {
+      console.error("Error creating reservation:", error)
+      setSubmitError("Something went wrong while creating your reservation.")
+      pendingReservationPayloadRef.current = null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [id, pathname, router, showToast, onBookingSuccess])
+
   // Redirect to venue detail page when expanded (for seat-level booking)
   useEffect(() => {
     if (isExpanded) {
@@ -249,7 +296,8 @@ export function VenueCard({
     // Show loading state while redirecting
     return (
       <Card className={cn("transition-all", className)}>
-        <CardContent className="py-8 text-center">
+        <CardContent className="flex flex-col items-center justify-center gap-2 py-8">
+          <LoadingSpinner size="md" />
           <p className="text-sm text-muted-foreground">Loading booking...</p>
         </CardContent>
       </Card>
@@ -260,14 +308,18 @@ export function VenueCard({
   // Collapsed state
   return (
     <>
+      {isPending && (
+        <LoadingOverlay label="Loading venue..." zIndex={100} />
+      )}
       <button
         type="button"
         onClick={() => {
-          // Pass initialSeatCount as URL param if set
-          const url = initialSeatCount && initialSeatCount > 0 
+          const url = initialSeatCount && initialSeatCount > 0
             ? `/venue/${id}?seats=${initialSeatCount}`
             : `/venue/${id}`
-          router.push(url)
+          startTransition(() => {
+            router.push(url)
+          })
         }}
         className="w-full text-left"
       >
@@ -283,6 +335,17 @@ export function VenueCard({
             <VenueImageCarousel images={imageUrls} enableGallery={false} />
             {/* Badges overlaying top-right of image */}
             <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 items-end">
+              {/* Favorite button */}
+              <div onClick={(e) => e.stopPropagation()}>
+                <FavoriteButton
+                  type="venue"
+                  itemId={id}
+                  initialFavorited={isFavorited}
+                  size="sm"
+                  className="rounded-full bg-background/90 backdrop-blur-sm p-1 shadow-sm"
+                  onToggle={onToggleFavorite}
+                />
+              </div>
               {/* Availability label */}
               {availabilityLabel && (
                 <span
@@ -346,6 +409,16 @@ export function VenueCard({
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
         reservation={confirmedReservation}
+      />
+
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={(open) => {
+          setShowSignInModal(open)
+          if (!open) pendingReservationPayloadRef.current = null
+        }}
+        onSignInSuccess={retryReservation}
+        description="Sign in to complete your reservation."
       />
     </>
   )

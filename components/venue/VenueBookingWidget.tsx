@@ -1,13 +1,15 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { BookingConfirmationModal } from "@/components/reservation/BookingConfirmationModal"
 import { SeatCard } from "@/components/venue/SeatCard"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
+import { SignInModal } from "@/components/auth/SignInModal"
 import { cn } from "@/lib/utils"
+import { roundUpToNext15Minutes } from "@/lib/availability-utils"
 
 interface Table {
   id: string
@@ -26,6 +28,8 @@ interface Table {
 interface VenueBookingWidgetProps {
   venueId: string
   tables: Table[]
+  favoritedTableIds?: Set<string>
+  favoritedSeatIds?: Set<string>
 }
 
 interface AvailableSeat {
@@ -68,21 +72,34 @@ interface UnavailableGroupTable extends AvailableGroupTable {
 export function VenueBookingWidget({
   venueId,
   tables,
+  favoritedTableIds = new Set(),
+  favoritedSeatIds = new Set(),
 }: VenueBookingWidgetProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
 
   // Get initial seat count from URL params if available
-  const initialSeatCountFromUrl = searchParams.get("seats")
+  const initialSeatCountFromUrl = searchParams?.get("seats")
   const parsedInitialSeatCount = initialSeatCountFromUrl 
     ? parseInt(initialSeatCountFromUrl, 10) 
     : null
   const validInitialSeatCount = parsedInitialSeatCount && parsedInitialSeatCount > 0 
     ? parsedInitialSeatCount 
     : null
+
+  // Get preselected resource from QR code scan
+  const resourceTypeFromUrl = searchParams?.get("resourceType")
+  const resourceIdFromUrl = searchParams?.get("resourceId")
+
+  // #region agent log
+  useEffect(() => {
+    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:mount", message: "URL params for preselection", data: { resourceTypeFromUrl, resourceIdFromUrl, fullUrl: typeof window !== "undefined" ? window.location.href : "" }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2" }) }).catch(() => {})
+  }, [resourceTypeFromUrl, resourceIdFromUrl])
+  // #endregion
 
   const [date, setDate] = useState<string>("")
   const [startTime, setStartTime] = useState<string>("")
@@ -91,6 +108,12 @@ export function VenueBookingWidget({
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
+  const [preselectedSeatId, setPreselectedSeatId] = useState<string | null>(
+    resourceTypeFromUrl === "seat" && resourceIdFromUrl ? resourceIdFromUrl : null
+  )
+  const [preselectedTableId, setPreselectedTableId] = useState<string | null>(
+    resourceTypeFromUrl === "table" && resourceIdFromUrl ? resourceIdFromUrl : null
+  )
   const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
   const [unavailableSeats, setUnavailableSeats] = useState<UnavailableSeat[]>([])
   const [availableSeatGroups, setAvailableSeatGroups] = useState<AvailableSeatGroup[]>([])
@@ -113,6 +136,8 @@ export function VenueBookingWidget({
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSignInModal, setShowSignInModal] = useState(false)
+  const pendingReservationPayloadRef = useRef<any>(null)
 
   const handleCheckAvailability = useCallback(async () => {
     if (!date || !startTime) {
@@ -122,15 +147,26 @@ export function VenueBookingWidget({
 
     setIsLoadingAvailability(true)
     setError(null)
-    setSelectedSeatId(null)
-    setSelectedSeatIds([])
-    setSelectedGroupTableId(null)
+    // Don't clear selections if we have a preselected resource - wait to see if it's available
+    if (!preselectedSeatId && !preselectedTableId) {
+      setSelectedSeatId(null)
+      setSelectedSeatIds([])
+      setSelectedGroupTableId(null)
+    }
 
     try {
       const startAtLocal = new Date(`${date}T${startTime}`)
       const endAtLocal = new Date(
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
+
+      // Validate that start time is not in the past
+      const now = new Date()
+      if (startAtLocal < now) {
+        setError("This date/time is in the past. Please select a current or future time.")
+        setIsLoadingAvailability(false)
+        return
+      }
 
       const response = await fetch(
         `/api/venues/${venueId}/availability?startAt=${encodeURIComponent(
@@ -156,6 +192,18 @@ export function VenueBookingWidget({
       if (data.error) {
         console.error("Availability error:", data.error)
         setError(data.error)
+        setAvailableSeats([])
+        setUnavailableSeats([])
+        setAvailableSeatGroups([])
+        setAvailableGroupTables([])
+        setUnavailableGroupTables([])
+        setUnavailableSeatIds(new Set())
+        return
+      }
+
+      // Venue paused: show message and block booking
+      if (data.bookingDisabled) {
+        setError(data.pauseMessage || "This venue is temporarily not accepting reservations.")
         setAvailableSeats([])
         setUnavailableSeats([])
         setAvailableSeatGroups([])
@@ -193,6 +241,30 @@ export function VenueBookingWidget({
       setAvailableGroupTables(data.availableGroupTables || [])
       setUnavailableGroupTables(data.unavailableGroupTables || [])
       setUnavailableSeatIds(new Set(data.unavailableSeatIds || []))
+
+      // Auto-select preselected seat/table if available
+      if (preselectedSeatId) {
+        const preselectedSeat = (data.availableSeats || []).find((s: AvailableSeat) => s.id === preselectedSeatId)
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectSeat", message: "Preselection seat result", data: { preselectedSeatId, foundSeat: !!preselectedSeat, availableSeatIds: (data.availableSeats || []).map((s: AvailableSeat) => s.id).slice(0, 5) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {})
+        // #endregion
+        if (preselectedSeat) {
+          setSelectedSeatId(preselectedSeatId)
+          setSeatCount(1) // Individual seat selection
+          showToast("Pre-selected seat from QR code", "success")
+        }
+      } else if (preselectedTableId) {
+        const availableGroupTables = data.availableGroupTables || []
+        const preselectedTable = availableGroupTables.find((t: AvailableGroupTable) => t.id === preselectedTableId)
+        // #region agent log
+        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectTable", message: "Preselection table result", data: { preselectedTableId, foundTable: !!preselectedTable, availableGroupTablesCount: availableGroupTables.length, availableTableIds: availableGroupTables.map((t: AvailableGroupTable) => t.id).slice(0, 8), note: !preselectedTable ? "Table not in availableGroupTables (may be individual booking mode)" : null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {})
+        // #endregion
+        if (preselectedTable) {
+          setSelectedGroupTableId(preselectedTableId)
+          setSeatCount(preselectedTable.seatCount)
+          showToast("Pre-selected table from QR code", "success")
+        }
+      }
     } catch (err) {
       console.error("Error checking availability:", err)
       setError("Something went wrong while checking availability.")
@@ -205,7 +277,7 @@ export function VenueBookingWidget({
     } finally {
       setIsLoadingAvailability(false)
     }
-  }, [date, startTime, durationHours, venueId, seatCount])
+  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast])
 
   // Track if we've initialized date/time to prevent re-initialization
   const hasInitialized = useRef(false)
@@ -219,7 +291,7 @@ export function VenueBookingWidget({
 
   // Restore booking data from URL params if present (after sign-in)
   useEffect(() => {
-    const bookingParam = searchParams.get("booking")
+    const bookingParam = searchParams?.get("booking")
     if (bookingParam) {
       try {
         const bookingData = JSON.parse(decodeURIComponent(bookingParam))
@@ -255,16 +327,7 @@ export function VenueBookingWidget({
     // Default initialization - only run once on mount
     if (!hasInitialized.current && date === "" && startTime === "") {
       const now = new Date()
-      const rounded = new Date(now)
-      if (
-        rounded.getMinutes() > 0 ||
-        rounded.getSeconds() > 0 ||
-        rounded.getMilliseconds() > 0
-      ) {
-        rounded.setHours(rounded.getHours() + 1, 0, 0, 0)
-      } else {
-        rounded.setMinutes(0, 0, 0)
-      }
+      const rounded = roundUpToNext15Minutes(now)
 
       const yyyy = rounded.getFullYear()
       const mm = String(rounded.getMonth() + 1).padStart(2, "0")
@@ -276,16 +339,16 @@ export function VenueBookingWidget({
       setStartTime(`${hh}:${min}`)
       hasInitialized.current = true
       
-      // Auto-trigger availability check after setting date/time (only for default initialization, not URL params)
-      // Use a small delay to ensure state is updated
+      // Auto-trigger availability check after setting date/time
+      // Also trigger if we have preselected resource from QR code
       setTimeout(() => {
-        if (!hasAutoChecked.current && !searchParams.get("booking")) {
+        if (!hasAutoChecked.current && !searchParams?.get("booking")) {
           hasAutoChecked.current = true
           handleCheckAvailabilityRef.current()
         }
       }, 150)
     }
-  }, [searchParams, router])
+  }, [searchParams, router, preselectedSeatId, preselectedTableId])
 
   // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {
@@ -401,6 +464,14 @@ export function VenueBookingWidget({
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
 
+      // Client-side validation: check if start time is in the past
+      const now = new Date()
+      if (startAtLocal < now) {
+        setError("This date/time is in the past. Please select a current or future time.")
+        setIsSubmitting(false)
+        return
+      }
+
       // Determine what to book: group table or individual seats
       let requestBody: any = {
         venueId,
@@ -439,32 +510,27 @@ export function VenueBookingWidget({
 
       if (!response.ok) {
         if (response.status === 401) {
-          const bookingData = {
-            date: date,
-            startTime: startTime.replace(":", ""),
-            duration: durationHours,
-            tableId: selectedGroupTableId,
-            seatId: seatCount === 1 ? selectedSeatId : null,
-            seatIds: seatCount > 1 ? selectedSeatIds : null,
-            seatCount: selectedGroupTableId
-              ? availableGroupTables.find((t) => t.id === selectedGroupTableId)?.seatCount ?? seatCount
-              : seatCount,
-          }
-          const bookingParam = encodeURIComponent(JSON.stringify(bookingData))
-          router.push(
-            `/profile?callbackUrl=${encodeURIComponent(
-              `/venue/${venueId}?booking=${bookingParam}`
-            )}`
-          )
+          pendingReservationPayloadRef.current = requestBody
+          setShowSignInModal(true)
           return
         }
-        setError(data?.error || "Failed to create reservation. Please try again.")
+        // Handle PAST_TIME error code specifically
+        if (data?.code === "PAST_TIME") {
+          setError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setError(data?.error || "Failed to create reservation. Please try again.")
+        }
         return
       }
 
       setConfirmedReservation(data?.reservation || null)
       setConfirmationOpen(true)
       showToast("Reservation confirmed.", "success")
+      
+      // Refresh reservations page if user is currently on it
+      if (pathname === "/reservations") {
+        router.refresh()
+      }
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")
@@ -472,6 +538,41 @@ export function VenueBookingWidget({
       setIsSubmitting(false)
     }
   }
+
+  const retryReservation = useCallback(async () => {
+    const payload = pendingReservationPayloadRef.current
+    if (!payload) return
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      const response = await fetch("/api/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (data?.code === "PAST_TIME") {
+          setError(data.error || "This date/time is in the past. Please select a current or future time.")
+        } else {
+          setError(data?.error || "Failed to create reservation. Please try again.")
+        }
+        pendingReservationPayloadRef.current = null
+        return
+      }
+      pendingReservationPayloadRef.current = null
+      setConfirmedReservation(data?.reservation || null)
+      setConfirmationOpen(true)
+      showToast("Reservation confirmed.", "success")
+      if (pathname === "/reservations") router.refresh()
+    } catch (err) {
+      console.error("Error creating reservation:", err)
+      setError("Something went wrong while creating your reservation.")
+      pendingReservationPayloadRef.current = null
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [pathname, showToast])
 
   // Helper function to render single seat selection
   const renderSingleSeatSelection = () => {
@@ -762,6 +863,8 @@ export function VenueBookingWidget({
                             isSelected={isSelected}
                             isCommunal={seat.isCommunal ?? false}
                             nextAvailableAt={null}
+                            isFavorited={favoritedSeatIds.has(seat.id)}
+                            venueId={venueId}
                             onSelect={() => {
                               setSelectedSeatId(seat.id)
                               setSelectedGroupTableId(null)
@@ -791,6 +894,8 @@ export function VenueBookingWidget({
                             isSelected={false}
                             isCommunal={seat.isCommunal ?? false}
                             nextAvailableAt={seat.nextAvailableAt}
+                            isFavorited={favoritedSeatIds.has(seat.id)}
+                            venueId={venueId}
                             onSelect={() => {
                               // Unavailable seats can't be selected
                             }}
@@ -1084,6 +1189,8 @@ export function VenueBookingWidget({
                       isAvailable={true}
                       isSelected={isSeatSelected}
                       isCommunal={seat.isCommunal ?? false}
+                      isFavorited={favoritedSeatIds.has(seat.id)}
+                      venueId={venueId}
                       onSelect={() => {
                         setSelectedSeatIds(allSeatIdsInGroup)
                         setSelectedGroupTableId(null)
@@ -1150,7 +1257,20 @@ export function VenueBookingWidget({
                 className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={startTime}
                 onChange={(e) => {
-                  setStartTime(e.target.value)
+                  const newTime = e.target.value
+                  setStartTime(newTime)
+                  
+                  // Validate if date is today and time is in the past
+                  if (date === new Date().toISOString().split("T")[0] && newTime) {
+                    const selectedDateTime = new Date(`${date}T${newTime}`)
+                    const now = new Date()
+                    if (selectedDateTime < now) {
+                      setError("This time is in the past. Please select a current or future time.")
+                    } else {
+                      setError(null)
+                    }
+                  }
+                  
                   setAvailableSeats([])
                   setUnavailableSeats([])
                   setAvailableSeatGroups([])
@@ -1159,6 +1279,9 @@ export function VenueBookingWidget({
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
+                min={date === new Date().toISOString().split("T")[0] 
+                  ? `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`
+                  : undefined}
                 required
               />
             </div>
@@ -1222,6 +1345,7 @@ export function VenueBookingWidget({
             type="button"
             onClick={handleCheckAvailability}
             disabled={!canCheckAvailability}
+            loading={isLoadingAvailability}
             className="w-full"
             variant="outline"
           >
@@ -1273,7 +1397,7 @@ export function VenueBookingWidget({
               type="submit"
               className="mt-1 w-full"
               size="lg"
-              disabled={isSubmitting}
+              loading={isSubmitting}
             >
               {isSubmitting ? "Reserving..." : "Reserve seat"}
             </Button>
@@ -1292,6 +1416,17 @@ export function VenueBookingWidget({
         open={confirmationOpen}
         onOpenChange={setConfirmationOpen}
         reservation={confirmedReservation}
+      />
+
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={(open) => {
+          setShowSignInModal(open)
+          if (!open) pendingReservationPayloadRef.current = null
+        }}
+        onSignInSuccess={retryReservation}
+        description="Sign in to complete your reservation."
+        callbackUrl={pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")}
       />
 
       <ImageGalleryModal

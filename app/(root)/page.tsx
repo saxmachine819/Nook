@@ -1,14 +1,15 @@
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 import { ExploreClient } from "./ExploreClient"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
-import { isVenueOpenNow, getNextOpenTime } from "@/lib/venue-hours"
-
+import { getCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 
 interface ExplorePageProps {
   searchParams: Promise<{ 
     q?: string
     dealsOnly?: string
+    favoritesOnly?: string
     tags?: string
     priceMin?: string
     priceMax?: string
@@ -19,6 +20,9 @@ interface ExplorePageProps {
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   try {
+    // Get session for favorite state fetching
+    const session = await auth()
+    
     // Add early return for testing
     // return <ExploreClient venues={[]} />
     
@@ -31,6 +35,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
 
     // Parse filter parameters from URL
     const dealsOnly = params?.dealsOnly === "true"
+    const favoritesOnly = params?.favoritesOnly === "true"
     const tagsParam = params?.tags
     const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : []
     const priceMin = params?.priceMin ? parseFloat(params.priceMin) : null
@@ -82,6 +87,24 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         }
       }
     }
+
+    // Add favoritesOnly filter (only if user is authenticated)
+    if (favoritesOnly && session?.user?.id) {
+      whereClause.favoriteVenues = {
+        some: {
+          userId: session.user.id,
+        },
+      }
+    } else if (favoritesOnly && !session?.user?.id) {
+      // If favoritesOnly is requested but user is not signed in, return empty results
+      return <ExploreClient venues={[]} favoritedVenueIds={new Set()} />
+    }
+
+    // Only show APPROVED venues in Explore
+    whereClause.onboardingStatus = "APPROVED"
+    // Exclude soft-deleted and paused venues from Explore
+    whereClause.status = { not: "DELETED" }
+    whereClause.pausedAt = null
 
     // Fetch venues from database (with optional search filter)
     let venues = await prisma.venue.findMany({
@@ -203,6 +226,21 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       return acc
     }, {})
 
+    // Pre-compute open status for all venues (can't await inside .map)
+    const openStatusList = await Promise.all(
+      venues.map(async (v) => {
+        const canonical = await getCanonicalVenueHours(v.id)
+        const openStatus = canonical ? getOpenStatus(canonical, now) : null
+        return { venueId: v.id, openStatus, timezone: canonical?.timezone ?? null }
+      })
+    )
+    const openStatusByVenueId = Object.fromEntries(
+      openStatusList.map(({ venueId, openStatus, timezone }) => [
+        venueId,
+        { openStatus, timezone },
+      ])
+    )
+
     // Format venues for client component
     const formattedVenues = venues.map((venue) => {
       // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
@@ -215,79 +253,28 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         return sum + (tableWithSeats.seatCount || 0)
       }, 0)
       
-      // Calculate price range based on booking modes
-      // Min: cheapest individual seat price
-      // Max: most expensive full table price (total, not per seat)
-      const groupTables = venue.tables.filter(t => (t as any).bookingMode === "group")
-      const individualTables = venue.tables.filter(t => (t as any).bookingMode === "individual")
-      
-      // Min price: cheapest individual seat
-      let minPrice = venue.hourlySeatPrice || 0
-      if (individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => {
-          const tableWithSeats = t as any
-          return tableWithSeats.seats || []
-        })
-        const seatPrices = individualSeats
-          .map(seat => (seat as any).pricePerHour)
-          .filter(price => price && price > 0)
-        if (seatPrices.length > 0) {
-          minPrice = Math.min(...seatPrices)
-        }
-      }
-      
-      // Max price: most expensive full table (total table price)
-      let maxPrice = venue.hourlySeatPrice || 0
-      if (groupTables.length > 0) {
-        const tablePrices = groupTables
-          .map(t => (t as any).tablePricePerHour)
-          .filter(price => price && price > 0)
-        if (tablePrices.length > 0) {
-          maxPrice = Math.max(...tablePrices)
-        }
-      }
-      
-      // If no group tables, max should be the most expensive individual seat
-      if (groupTables.length === 0 && individualTables.length > 0) {
-        const individualSeats = individualTables.flatMap(t => {
-          const tableWithSeats = t as any
-          return tableWithSeats.seats || []
-        })
-        const seatPrices = individualSeats
-          .map(seat => (seat as any).pricePerHour)
-          .filter(price => price && price > 0)
-        if (seatPrices.length > 0) {
-          maxPrice = Math.max(...seatPrices)
-        }
-      }
-      
-      // If no individual tables, min should be the cheapest group table per seat
-      if (individualTables.length === 0 && groupTables.length > 0) {
-        const perSeatPrices = groupTables
-          .map(t => {
-            const tableWithSeats = t as any
-            const tablePrice = tableWithSeats.tablePricePerHour
-            const seatCount = tableWithSeats.seats ? tableWithSeats.seats.length : 0
-            if (tablePrice && tablePrice > 0 && seatCount > 0) {
-              return tablePrice / seatCount
-            }
-            return null
-          })
-          .filter((price): price is number => price !== null)
-        if (perSeatPrices.length > 0) {
-          minPrice = Math.min(...perSeatPrices)
-        }
-      }
+      // Cheapest price: min of (all seat prices from individual tables, all table total prices from group tables)
+      const allSeatPrices = venue.tables
+        .filter(t => (t as any).bookingMode === "individual")
+        .flatMap(t => (t as any).seats || [])
+        .map((seat: any) => seat.pricePerHour)
+        .filter((p: number) => p != null && p > 0)
+      const allTablePrices = venue.tables
+        .filter(t => (t as any).bookingMode === "group")
+        .map(t => (t as any).tablePricePerHour)
+        .filter((p: number) => p != null && p > 0)
+      const candidatePrices = [...allSeatPrices, ...allTablePrices]
+      const fallback = venue.hourlySeatPrice || 0
+      const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
+      const maxPrice = candidatePrices.length > 0 ? Math.max(...candidatePrices) : fallback
       
       const venueReservations = reservationsByVenue[venue.id] || []
-      const venueWithHours = venue as any
-      const venueHours = venueWithHours.venueHours || null
-      const openingHoursJson = venueWithHours.openingHoursJson || null
+      const { openStatus, timezone } = openStatusByVenueId[venue.id] ?? { openStatus: null, timezone: null }
       const availabilityLabel = computeAvailabilityLabel(
         capacity,
         venueReservations,
-        venueHours,
-        openingHoursJson
+        openStatus,
+        { timeZone: timezone ?? undefined }
       )
 
       // Parse and combine image URLs
@@ -351,12 +338,31 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
         capacity,
         rulesText: venue.rulesText || "",
         availabilityLabel,
+        openStatus: openStatus
+          ? { status: openStatus.status, todayHoursText: openStatus.todayHoursText }
+          : null,
         imageUrls,
         dealBadge,
       }
     })
 
-    return <ExploreClient venues={formattedVenues} />
+    // Fetch favorite states for all venues in batch
+    let favoritedVenueIds = new Set<string>()
+    if (session?.user?.id && formattedVenues.length > 0) {
+      const venueIds = formattedVenues.map((v) => v.id)
+      const favorites = await prisma.favoriteVenue.findMany({
+        where: {
+          userId: session.user.id,
+          venueId: { in: venueIds },
+        },
+        select: {
+          venueId: true,
+        },
+      })
+      favoritedVenueIds = new Set(favorites.map((f) => f.venueId))
+    }
+
+    return <ExploreClient venues={[]} favoritedVenueIds={favoritedVenueIds} />
   } catch (error) {
     console.error("Error fetching venues:", error)
     return <ExploreClient venues={[]} />

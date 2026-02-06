@@ -1,7 +1,9 @@
 "use client"
 
+import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { LoadingOverlay } from "@/components/ui/loading-overlay"
 import { MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -31,6 +33,7 @@ export function VenuePreviewCard({
   className,
 }: VenuePreviewCardProps) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const locationDisplay = address || (city && state ? `${city}, ${state}` : city || "")
   const addressSnippet = locationDisplay
     ? locationDisplay.length > 60
@@ -44,11 +47,16 @@ export function VenuePreviewCard({
       : `$${minPrice.toFixed(0)}–$${maxPrice.toFixed(0)} / seat / hour`
 
   const handleViewDetails = () => {
-    router.push(`/venue/${id}`)
+    startTransition(() => {
+      router.push(`/venue/${id}`)
+    })
   }
 
   return (
     <div className={cn("space-y-3", className)}>
+      {isPending && (
+        <LoadingOverlay label="Loading venue..." zIndex={100} />
+      )}
       <h3 className="text-base font-semibold leading-tight">{name}</h3>
       {addressSnippet && (
         <div className="flex items-start gap-1.5">

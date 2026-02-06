@@ -11,6 +11,7 @@ interface PlaceDetailsResponse {
     latitude: number
     longitude: number
   }
+  // weekdayDescriptions (weekday_text) stored for debug/sync only; UI must not display it — use canonical hours engine.
   regularOpeningHours?: {
     weekdayDescriptions?: string[]
     periods?: Array<{

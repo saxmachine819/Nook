@@ -16,9 +16,21 @@ interface SignInModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSignInSuccess?: () => void
+  /** Override default description (e.g. "Sign in to complete your reservation.") */
+  description?: string
+  /** Override callback URL after OAuth (default: current path + search) */
+  callbackUrl?: string
 }
 
-export function SignInModal({ open, onOpenChange, onSignInSuccess }: SignInModalProps) {
+const DEFAULT_DESCRIPTION = "Sign in to reserve seats and manage your reservations."
+
+export function SignInModal({
+  open,
+  onOpenChange,
+  onSignInSuccess,
+  description = DEFAULT_DESCRIPTION,
+  callbackUrl,
+}: SignInModalProps) {
   const { data: session, status } = useSession()
   const [isSigningIn, setIsSigningIn] = useState(false)
 
@@ -35,7 +47,9 @@ export function SignInModal({ open, onOpenChange, onSignInSuccess }: SignInModal
 
   const handleSignIn = async () => {
     setIsSigningIn(true)
-    await signIn("google", { callbackUrl: window.location.pathname })
+    const url =
+      callbackUrl ?? (typeof window !== "undefined" ? window.location.pathname + window.location.search : "/")
+    await signIn("google", { callbackUrl: url })
   }
 
   return (
@@ -43,9 +57,7 @@ export function SignInModal({ open, onOpenChange, onSignInSuccess }: SignInModal
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Sign in to continue</DialogTitle>
-          <DialogDescription>
-            Sign in to reserve seats and manage your reservations.
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="pt-4">
           <Button

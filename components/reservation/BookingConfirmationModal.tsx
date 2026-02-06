@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { CheckCircle2, Clock, MapPin, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -23,6 +24,12 @@ type ReservationForConfirmation = {
     id: string
     label: string | null
     pricePerHour: number
+    table?: {
+      directionsText: string | null
+    } | null
+  } | null
+  table?: {
+    directionsText: string | null
   } | null
 }
 
@@ -79,24 +86,24 @@ function escapeICSString(str: string): string {
 }
 
 function buildICS(res: ReservationForConfirmation): string {
-  const uid = `nook-reservation-${res.id}@nook.app`
+  const uid = `nooc-reservation-${res.id}@nooc.app`
   const dtstamp = toICSDateUTC(new Date().toISOString())
   const dtstart = toICSDateUTC(res.startAt)
   const dtend = toICSDateUTC(res.endAt)
 
-  const summary = escapeICSString(`Nook: Reservation @ ${res.venue.name}`)
+  const summary = escapeICSString(`Nooc: Reservation @ ${res.venue.name}`)
   const location = res.venue.address ? escapeICSString(res.venue.address) : ""
   const seatText = `${res.seatCount} seat${res.seatCount > 1 ? "s" : ""}`
 
   const rules = res.venue.rulesText
     ? `\\n\\nHouse rules:\\n${escapeICSString(res.venue.rulesText)}`
     : ""
-  const description = escapeICSString(`Reserved ${seatText} via Nook.`) + rules
+  const description = escapeICSString(`Reserved ${seatText} via Nooc.`) + rules
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Nook//Reservation//EN",
+    "PRODID:-//Nooc//Reservation//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -123,6 +130,23 @@ export function BookingConfirmationModal({
   onOpenChange: (open: boolean) => void
   reservation: ReservationForConfirmation | null
 }) {
+  const router = useRouter()
+  
+  // Helper function to derive directions from reservation
+  const getDirectionsText = (res: ReservationForConfirmation | null): string | null => {
+    if (!res) return null
+    // If reservation has seatId, look up the seat's table and use Table.directionsText
+    if (res.seat?.table?.directionsText) {
+      return res.seat.table.directionsText
+    }
+    // Else if reservation has tableId, use Table.directionsText
+    if (res.table?.directionsText) {
+      return res.table.directionsText
+    }
+    // Else return null
+    return null
+  }
+
   const computed = useMemo(() => {
     if (!reservation) return null
 
@@ -136,12 +160,12 @@ export function BookingConfirmationModal({
     const estimated = pricePerSeatPerHour * hours * reservation.seatCount
 
     const googleUrl = (() => {
-      const text = `Nook: Reservation @ ${reservation.venue.name}`
+      const text = `Nooc: Reservation @ ${reservation.venue.name}`
       const dates = `${toGoogleCalendarDateUTC(reservation.startAt)}/${toGoogleCalendarDateUTC(
         reservation.endAt
       )}`
       const detailsParts = [
-        `Reserved ${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} via Nook.`,
+        `Reserved ${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""} via Nooc.`,
         reservation.venue.rulesText ? `\n\nHouse rules:\n${reservation.venue.rulesText}` : "",
       ].filter(Boolean)
       const details = detailsParts.join("")
@@ -160,7 +184,9 @@ export function BookingConfirmationModal({
     const ics = buildICS(reservation)
     const icsDataUrl = `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`
 
-    return { date, timeRange, estimated, googleUrl, icsDataUrl }
+    const directionsText = getDirectionsText(reservation)
+
+    return { date, timeRange, estimated, googleUrl, icsDataUrl, directionsText }
   }, [reservation])
 
   return (
@@ -216,6 +242,15 @@ export function BookingConfirmationModal({
                     </div>
                   </div>
 
+                  {computed.directionsText && (
+                    <div className="border-t pt-3">
+                      <p className="text-sm font-medium">Directions to your seat</p>
+                      <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
+                        {computed.directionsText}
+                      </p>
+                    </div>
+                  )}
+
                   <div className="border-t pt-3">
                     <div className="flex items-baseline justify-between">
                       <span className="text-sm text-muted-foreground">Estimated</span>
@@ -240,7 +275,14 @@ export function BookingConfirmationModal({
 
             <div className="grid gap-2">
               <Button asChild size="lg">
-                <Link href="/reservations" onClick={() => onOpenChange(false)}>
+                <Link 
+                  href="/reservations" 
+                  onClick={() => {
+                    onOpenChange(false)
+                    // Refresh the reservations page to show the new reservation
+                    router.refresh()
+                  }}
+                >
                   View my reservations
                 </Link>
               </Button>
@@ -257,7 +299,7 @@ export function BookingConfirmationModal({
                   </a>
                 </Button>
                 <Button asChild variant="outline">
-                  <a href={computed.icsDataUrl} download={`nook-reservation-${reservation.id}.ics`}>
+                  <a href={computed.icsDataUrl} download={`nooc-reservation-${reservation.id}.ics`}>
                     Apple Calendar
                   </a>
                 </Button>

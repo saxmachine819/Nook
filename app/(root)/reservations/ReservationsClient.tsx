@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ import {
   Navigation,
   Receipt,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, isBlobSupported } from "@/lib/utils"
 
 type TabType = "upcoming" | "past" | "cancelled"
 
@@ -60,6 +60,8 @@ interface Reservation {
   table: {
     name: string | null
     seatCount: number | null
+    tablePricePerHour: number | null
+    seats?: { id: string }[]
   } | null
 }
 
@@ -71,10 +73,19 @@ interface ReservationsClientProps {
 
 export function ReservationsClient({ upcoming, past, cancelled }: ReservationsClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast, ToastComponent } = useToast()
   const [activeTab, setActiveTab] = useState<TabType>("upcoming")
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  // When returning from detail page after cancel, refresh list and clean URL
+  useEffect(() => {
+    if (searchParams?.get("refresh") === "1") {
+      router.refresh()
+      router.replace("/reservations", { scroll: false })
+    }
+  }, [searchParams, router])
 
   const handleCancel = async (reservationId: string) => {
     setCancellingId(reservationId)
@@ -89,7 +100,9 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
         throw new Error("Failed to cancel")
       }
 
+      await response.json().catch(() => null)
       showToast("Reservation cancelled", "success")
+      // Refresh server data so the list updates (cancel from list page)
       router.refresh()
     } catch (error) {
       showToast("Failed to cancel reservation", "error")
@@ -109,9 +122,9 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
     const icsContent = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Nook//Reservation//EN",
+      "PRODID:-//Nooc//Reservation//EN",
       "BEGIN:VEVENT",
-      `UID:${reservation.id}@nook`,
+      `UID:${reservation.id}@nooc`,
       `DTSTART:${formatICSDate(start)}`,
       `DTEND:${formatICSDate(end)}`,
       `SUMMARY:Reservation at ${reservation.venue.name}`,
@@ -121,6 +134,10 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
       "END:VCALENDAR",
     ].join("\r\n")
 
+    if (!isBlobSupported()) {
+      showToast("Calendar download is not supported in this browser", "error")
+      return
+    }
     const blob = new Blob([icsContent], { type: "text/calendar" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -157,15 +174,19 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
     const end = new Date(reservation.endAt)
     const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
 
-    // If multiple seats booked, use venue price * seat count
-    if (reservation.seatCount > 1) {
-      return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
+    // GROUP table booking: tableId exists and seatId is null
+    // Use table's tablePricePerHour (total price for the table, not per-seat)
+    if (reservation.tableId && !reservation.seatId && reservation.table?.tablePricePerHour) {
+      return reservation.table.tablePricePerHour * hours
     }
+
     // For single seat bookings, use seat price if available
     if (reservation.seatId && reservation.seat) {
       return reservation.seat.pricePerHour * hours
     }
-    // Fallback to venue price * seat count
+
+    // Fallback: multiple seats or individual booking without seat data
+    // Use venue price * seat count
     return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
   }
 
@@ -194,9 +215,12 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
 
   const getSeatInfo = (reservation: Reservation): string => {
     // For group table bookings (seatId is null, tableId exists)
-    // Use table's actual seat count as the source of truth
-    if (!reservation.seatId && reservation.tableId && reservation.table?.seatCount) {
-      const actualSeatCount = reservation.table.seatCount
+    // Use table's seats.length when available, else fall back to seatCount column
+    if (!reservation.seatId && reservation.tableId && reservation.table) {
+      const actualSeatCount =
+        reservation.table.seats?.length ??
+        reservation.table.seatCount ??
+        1
       const tableName = reservation.table.name
       return tableName ? `Table ${tableName} for ${actualSeatCount}` : `Table for ${actualSeatCount}`
     }
@@ -387,6 +411,7 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
             <DialogTitle>Cancel reservation?</DialogTitle>
             <DialogDescription>
               Are you sure you want to cancel this reservation? This action cannot be undone.
+              Reservations can be canceled at any time, but all bookings are non-refundable.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

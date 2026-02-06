@@ -37,8 +37,11 @@ export async function GET() {
 
     const admin = isAdmin(session.user)
     const venues = await prisma.venue.findMany({
-      where: admin ? undefined : { ownerId: session.user.id },
-      select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true },
+      where: {
+        status: { not: "DELETED" },
+        ...(admin ? {} : { ownerId: session.user.id }),
+      },
+      select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true, onboardingStatus: true, pausedAt: true },
     })
 
     const list = venues.map((v) => ({
@@ -46,6 +49,8 @@ export async function GET() {
       name: v.name,
       address: v.address ?? "",
       thumbnail: thumbnailForVenue(v),
+      onboardingStatus: v.onboardingStatus,
+      pausedAt: v.pausedAt,
     }))
 
     return NextResponse.json({ venues: list, isAdmin: admin, userId: session.user.id, email: session.user.email ?? null })
