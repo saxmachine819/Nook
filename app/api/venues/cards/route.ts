@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { batchGetCanonicalVenueHours, getOpenStatus } from "@/lib/hours";
 import { computeAvailabilityLabel } from "@/lib/availability-utils";
 import { formatDealBadgeSummary } from "@/lib/deal-utils";
+import { cache } from "@/lib/cache";
 import type {
   VenueCard,
   VenueCardsResponse,
@@ -11,34 +12,16 @@ import type {
   VenueOpenStatus,
 } from "@/types/venue";
 
-const hoursCache = new Map<
-  string,
-  {
-    data: Awaited<ReturnType<typeof batchGetCanonicalVenueHours>>;
-    timestamp: number;
-  }
->();
-const HOURS_CACHE_TTL = 60 * 60 * 2 * 1000; // 2 hours
-
 async function getCachedHours(venueIds: string[]) {
   const cacheKey = venueIds.sort().join(",");
-  const cached = hoursCache.get(cacheKey);
-  const now = Date.now();
+  const cached = cache.getHours(cacheKey);
 
-  if (cached && now - cached.timestamp < HOURS_CACHE_TTL) {
-    return cached.data;
+  if (cached) {
+    return cached;
   }
 
   const data = await batchGetCanonicalVenueHours(venueIds);
-  hoursCache.set(cacheKey, { data, timestamp: now });
-
-  // Cleanup old cache entries
-  if (hoursCache.size > 100) {
-    const entries = Array.from(hoursCache.entries());
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-    hoursCache.delete(entries[0][0]);
-  }
-
+  cache.setHours(cacheKey, data);
   return data;
 }
 
@@ -120,6 +103,29 @@ export async function GET(request: Request) {
       }
     }
 
+    const cacheKey = [
+      "cards",
+      ids.length > 0 ? ids.sort().join(",") : null,
+      parsedBounds ? `${parsedBounds.north},${parsedBounds.south},${parsedBounds.east},${parsedBounds.west}` : null,
+      q,
+      tags.sort().join(","),
+      priceMinNum,
+      priceMaxNum,
+      seatCount,
+      bookingModes.sort().join(","),
+      dealsOnly,
+      availableNow,
+    ]
+      .filter(Boolean)
+      .join("|");
+
+    if (!favoritesOnly && !session?.user?.id) {
+      const cached = cache.getCards(cacheKey);
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+    }
+
     const now = new Date();
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
@@ -129,7 +135,6 @@ export async function GET(request: Request) {
       pausedAt: null,
     };
 
-    // If IDs provided, use them directly (fastest path for prefetch)
     if (ids.length > 0) {
       whereClause.id = { in: ids };
     } else if (parsedBounds && q.length === 0) {
@@ -456,6 +461,11 @@ export async function GET(request: Request) {
       venues: formattedVenues,
       favoritedVenueIds,
     };
+
+    if (!favoritesOnly && !session?.user?.id) {
+      cache.setCards(cacheKey, response);
+    }
+
     return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching venue cards:", error);
