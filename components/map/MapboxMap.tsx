@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import mapboxgl from "mapbox-gl"
 import "mapbox-gl/dist/mapbox-gl.css"
 import { Button } from "@/components/ui/button"
 import { Navigation } from "lucide-react"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 
 interface Venue {
   id: string
@@ -36,10 +37,15 @@ interface MapboxMapProps {
   didAreaSearch?: boolean // True when area search just completed (synchronous ref, no batching delay)
   /** When true (e.g. parent already has venues), skip loading overlay so remount does not show "Loading map" again */
   initialLoadingComplete?: boolean
+  /** When true, show a subtle loading indicator (pins are being fetched but map is ready) */
+  isFetchingPins?: boolean
+  /** When true, show initial loading overlay (first load, no pins yet) */
+  isInitialLoading?: boolean
 }
 
-// NYC coordinates (default center)
+// NYC coordinates (default center) - narrower initial zoom for better performance
 const NYC_CENTER = { lat: 40.7128, lng: -74.006 }
+const DEFAULT_ZOOM = 13 // Narrower default zoom for faster initial load
 
 export function MapboxMap({
   venues,
@@ -59,6 +65,8 @@ export function MapboxMap({
   onInitialBounds,
   didAreaSearch = false,
   initialLoadingComplete = false,
+  isFetchingPins = false,
+  isInitialLoading = false,
 }: MapboxMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
@@ -82,6 +90,10 @@ export function MapboxMap({
   const [isLoading, setIsLoading] = useState(!initialLoadingComplete)
   const [mapError, setMapError] = useState<string | null>(null)
   const [showSearchButton, setShowSearchButton] = useState(false)
+
+  const debouncedShowSearchButton = useDebounce(() => {
+    setShowSearchButton(true)
+  }, 500)
 
   // Keep callback refs up-to-date
   useEffect(() => {
@@ -437,7 +449,7 @@ export function MapboxMap({
     // Determine center: prioritize user location ONLY if user hasn't interacted, then first venue, then NYC
     // CRITICAL: If user is searching area, preserve current map state - don't reset to default
     let center: [number, number] = [NYC_CENTER.lng, NYC_CENTER.lat]
-    let zoom = 12
+    let zoom = DEFAULT_ZOOM
 
     // PRIMARY GUARD: If user is searching area, don't reset map - it should already be positioned
     if (isSearchingAreaRef.current && mapRef.current) {
@@ -455,7 +467,7 @@ export function MapboxMap({
       const validVenues = venues.filter((v) => v.latitude !== null && v.longitude !== null)
       if (validVenues.length > 0) {
         center = [validVenues[0].longitude!, validVenues[0].latitude!]
-        zoom = 12
+        zoom = DEFAULT_ZOOM
       }
     }
 
@@ -795,11 +807,10 @@ export function MapboxMap({
         }
 
         if (hasChanged && onSearchArea) {
-          setShowSearchButton(true)
+          debouncedShowSearchButton()
         }
       }
 
-      // Also listen to move event (during dragging) for more responsive button appearance
       const handleMove = () => {
         if (!map.loaded()) return
 
@@ -834,11 +845,11 @@ export function MapboxMap({
         }
 
         if (hasChanged && onSearchArea) {
-          setShowSearchButton(true)
+          debouncedShowSearchButton()
         }
       }
 
-      map.on("move", handleMove) // Show button during dragging
+      map.on("move", handleMove)
       map.on("moveend", handleMoveEnd)
       map.on("zoomend", handleMoveEnd)
 
@@ -1673,6 +1684,24 @@ export function MapboxMap({
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-muted/50">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">Loading map...</p>
+          </div>
+        </div>
+      )}
+      {/* Initial loading - simple indicator */}
+      {!isLoading && isInitialLoading && (
+        <div className="absolute top-4 left-1/2 z-20 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-background/95 backdrop-blur-sm px-3 py-1.5 shadow-md border border-border">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-medium text-muted-foreground">Finding venues…</span>
+          </div>
+        </div>
+      )}
+      {/* Subtle loading indicator when fetching new pins (map is ready but data is loading) */}
+      {!isLoading && !isInitialLoading && isFetchingPins && (
+        <div className="absolute top-4 left-1/2 z-20 -translate-x-1/2">
+          <div className="flex items-center gap-2 rounded-full bg-background/95 backdrop-blur-sm px-3 py-1.5 shadow-md border border-border">
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-xs font-medium text-muted-foreground">Loading venues...</span>
           </div>
         </div>
       )}

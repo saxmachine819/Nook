@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
-import { getCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
+import { batchGetCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
 
 const DEBUG_LOG = (payload: { location: string; message: string; data?: Record<string, unknown>; hypothesisId?: string }) => {
   fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", {
@@ -310,37 +310,31 @@ export async function GET(request: Request) {
       return result
     }
 
-    // Resolve open status for each venue (single shared hours engine)
+    // Resolve open status for each venue using batch loading (eliminates N+1 queries)
     // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:beforePromiseAll", message: "before Promise.all hours", data: { venueCount: venues.length }, hypothesisId: "H1,H5" })
+    DEBUG_LOG({ location: "search/route.ts:beforeBatchHours", message: "before batchGetCanonicalVenueHours", data: { venueCount: venues.length }, hypothesisId: "H1,H5" })
     // #endregion
-    let venuesWithOpenStatus = await Promise.all(
-      venues.map(async (venue) => {
-        // #region agent log
-        DEBUG_LOG({ location: "search/route.ts:mapEntry", message: "venue map entry", data: { venueId: venue.id }, hypothesisId: "H1,H5" })
-        // #endregion
-        try {
-          const canonical = await getCanonicalVenueHours(venue.id)
-          // #region agent log
-          DEBUG_LOG({ location: "search/route.ts:afterCanonical", message: "after getCanonicalVenueHours", data: { venueId: venue.id, hasCanonical: !!canonical }, hypothesisId: "H1,H5" })
-          // #endregion
-          const openStatus = canonical ? getOpenStatus(canonical, now) : null
-          // #region agent log
-          DEBUG_LOG({ location: "search/route.ts:afterOpenStatus", message: "after getOpenStatus", data: { venueId: venue.id }, hypothesisId: "H1" })
-          // #endregion
-          return { venue, openStatus, timezone: canonical?.timezone ?? null }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          // #region agent log
-          DEBUG_LOG({ location: "search/route.ts:mapCatch", message: "hours catch", data: { venueId: venue.id, error: msg }, hypothesisId: "H1,H5" })
-          // #endregion
-          console.error("[Explore API] hours for venue", venue.id, err)
-          return { venue, openStatus: null, timezone: null }
-        }
-      })
-    )
+    const hoursMap = await batchGetCanonicalVenueHours(venueIds)
     // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:afterPromiseAll", message: "after Promise.all", data: { count: venuesWithOpenStatus.length }, hypothesisId: "H1" })
+    DEBUG_LOG({ location: "search/route.ts:afterBatchHours", message: "after batchGetCanonicalVenueHours", data: { hoursMapSize: hoursMap.size }, hypothesisId: "H1,H5" })
+    // #endregion
+
+    let venuesWithOpenStatus = venues.map((venue) => {
+      try {
+        const canonical = hoursMap.get(venue.id) ?? null
+        const openStatus = canonical ? getOpenStatus(canonical, now) : null
+        return { venue, openStatus, timezone: canonical?.timezone ?? null }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        // #region agent log
+        DEBUG_LOG({ location: "search/route.ts:mapCatch", message: "hours catch", data: { venueId: venue.id, error: msg }, hypothesisId: "H1,H5" })
+        // #endregion
+        console.error("[Explore API] hours for venue", venue.id, err)
+        return { venue, openStatus: null, timezone: null }
+      }
+    })
+    // #region agent log
+    DEBUG_LOG({ location: "search/route.ts:afterHoursMap", message: "after hours mapping", data: { count: venuesWithOpenStatus.length }, hypothesisId: "H1" })
     // #endregion
 
     // Apply "Available Now" filter if requested

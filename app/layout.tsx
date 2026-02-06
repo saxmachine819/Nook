@@ -4,6 +4,7 @@ import "./globals.css"
 import { AuthProvider } from "@/components/auth/AuthProvider"
 import { ClientErrorBoundary } from "@/components/auth/ClientErrorBoundary"
 import { TermsGate } from "@/components/auth/TermsGate"
+import { Providers } from "@/app/providers"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,9 +27,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased bg-background`}>
         <ClientErrorBoundary>
-          <AuthProvider>
-          <TermsGate>{children}</TermsGate>
-        </AuthProvider>
+          <Providers>
+            <AuthProvider>
+              <TermsGate>{children}</TermsGate>
+            </AuthProvider>
+          </Providers>
         </ClientErrorBoundary>
       </body>
     </html>

@@ -38,6 +38,7 @@ interface VenuePreviewSheetProps {
   initialSeatCount?: number
   isFavorited?: boolean
   onToggleFavorite?: () => void
+  isLoading?: boolean
 }
 
 const SHEET_TRANSITION_MS = 200
@@ -50,6 +51,7 @@ export function VenuePreviewSheet({
   initialSeatCount,
   isFavorited = false,
   onToggleFavorite,
+  isLoading = false,
 }: VenuePreviewSheetProps) {
   const [visible, setVisible] = useState(false)
   const [dragTranslateY, setDragTranslateY] = useState(0)
@@ -193,7 +195,8 @@ export function VenuePreviewSheet({
   }, [open])
 
 
-  if (!venue) return null
+  // Show sheet if loading (skeleton) or venue is available
+  if (!venue && !isLoading) return null
 
   return (
     <>
@@ -236,27 +239,39 @@ export function VenuePreviewSheet({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          <VenueCard
-            key={`${venue.id}-${initialSeatCount ?? 'default'}`} // Force remount when venue or seat count changes
-            id={venue.id}
-            name={venue.name}
-            address={venue.address}
-            city={venue.city}
-            state={venue.state}
-            minPrice={venue.minPrice}
-            maxPrice={venue.maxPrice}
-            tags={venue.tags}
-            availabilityLabel={venue.availabilityLabel}
-            imageUrls={venue.imageUrls}
-            capacity={venue.capacity}
-            rulesText={venue.rulesText}
-            isExpanded={false}
-            isDeemphasized={false}
-            isFavorited={isFavorited}
-            onToggleFavorite={onToggleFavorite}
-            dealBadge={venue.dealBadge}
-            initialSeatCount={initialSeatCount}
-          />
+          {isLoading || !venue ? (
+            <div className="p-4 space-y-3 animate-pulse">
+              <div className="h-48 bg-muted rounded-lg" />
+              <div className="h-5 bg-muted rounded w-3/4" />
+              <div className="h-4 bg-muted rounded w-1/2" />
+              <div className="flex gap-2">
+                <div className="h-6 bg-muted rounded-full w-16" />
+                <div className="h-6 bg-muted rounded-full w-20" />
+              </div>
+            </div>
+          ) : (
+            <VenueCard
+              key={`${venue.id}-${initialSeatCount ?? 'default'}`} // Force remount when venue or seat count changes
+              id={venue.id}
+              name={venue.name}
+              address={venue.address}
+              city={venue.city}
+              state={venue.state}
+              minPrice={venue.minPrice}
+              maxPrice={venue.maxPrice}
+              tags={venue.tags}
+              availabilityLabel={venue.availabilityLabel}
+              imageUrls={venue.imageUrls}
+              capacity={venue.capacity}
+              rulesText={venue.rulesText}
+              isExpanded={false}
+              isDeemphasized={false}
+              isFavorited={isFavorited}
+              onToggleFavorite={onToggleFavorite}
+              dealBadge={venue.dealBadge}
+              initialSeatCount={initialSeatCount}
+            />
+          )}
         </div>
       </div>
     </>

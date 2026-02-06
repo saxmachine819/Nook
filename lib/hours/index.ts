@@ -66,6 +66,45 @@ export async function getCanonicalVenueHours(venueId: string): Promise<Canonical
 }
 
 /**
+ * Batch load canonical venue hours for multiple venues in a single query.
+ * Returns a Map<venueId, CanonicalVenueHours> for efficient lookup.
+ * This eliminates N+1 queries when fetching hours for search results.
+ */
+export async function batchGetCanonicalVenueHours(
+  venueIds: string[]
+): Promise<Map<string, CanonicalVenueHours>> {
+  if (venueIds.length === 0) {
+    return new Map()
+  }
+
+  const venues = await prisma.venue.findMany({
+    where: { id: { in: venueIds } },
+    select: {
+      id: true,
+      timezone: true,
+      hoursSource: true,
+      venueHours: {
+        orderBy: { dayOfWeek: "asc" },
+        select: { dayOfWeek: true, isClosed: true, openTime: true, closeTime: true, source: true },
+      },
+    },
+  })
+
+  const result = new Map<string, CanonicalVenueHours>()
+
+  for (const venue of venues) {
+    const effective = getEffectiveVenueHours(venue.venueHours, venue.hoursSource)
+    const weeklyHours = [...effective].sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+    result.set(venue.id, {
+      timezone: venue.timezone ?? DEFAULT_TIMEZONE,
+      weeklyHours,
+    })
+  }
+
+  return result
+}
+
+/**
  * Get date/time parts for a moment in a timezone (weekday 0-6, hour, minute, etc.).
  */
 function getPartsInTimezone(at: Date, tz: string): {

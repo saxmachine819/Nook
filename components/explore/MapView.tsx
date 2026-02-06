@@ -33,6 +33,10 @@ interface MapViewProps {
   didAreaSearch?: boolean
   /** When true (e.g. parent already has venues), skip loading overlay on remount */
   initialLoadingComplete?: boolean
+  /** When true, show subtle loading indicator (pins are being fetched) */
+  isFetchingPins?: boolean
+  /** When true, show initial loading overlay (first load, no pins yet) */
+  isInitialLoading?: boolean
 }
 
 export function MapView({
@@ -54,6 +58,8 @@ export function MapView({
   onInitialBounds,
   didAreaSearch,
   initialLoadingComplete,
+  isFetchingPins,
+  isInitialLoading,
 }: MapViewProps) {
   if (!hasMapboxToken) {
     return (
@@ -90,6 +96,8 @@ export function MapView({
         onInitialBounds={onInitialBounds}
         didAreaSearch={didAreaSearch}
         initialLoadingComplete={initialLoadingComplete}
+        isFetchingPins={isFetchingPins}
+        isInitialLoading={isInitialLoading}
       />
     </div>
   )
