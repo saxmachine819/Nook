@@ -18,7 +18,7 @@ export function useVenueCard(id: string | null, enabled = true) {
     queryKey: ["venueCard", id],
     queryFn: () => fetchVenueCard(id!),
     enabled: enabled && id !== null,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 60 * 1000, // Match cards hook
     gcTime: 5 * 60 * 1000,
   })
 }
