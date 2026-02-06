@@ -194,18 +194,11 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   }
   
   if (individualTables.length === 0 && groupTables.length > 0) {
-    const perSeatPrices = groupTables
-      .map(t => {
-        const tablePrice = (t as any).tablePricePerHour
-        const seatCount = (t as any).seats?.length ?? 0
-        if (tablePrice && tablePrice > 0 && seatCount > 0) {
-          return tablePrice / seatCount
-        }
-        return null
-      })
-      .filter((price): price is number => price !== null)
-    if (perSeatPrices.length > 0) {
-      minPrice = Math.min(...perSeatPrices)
+    const tablePrices = groupTables
+      .map(t => (t as any).tablePricePerHour)
+      .filter((price): price is number => !!price && price > 0)
+    if (tablePrices.length > 0) {
+      minPrice = Math.min(...tablePrices)
     }
   }
   

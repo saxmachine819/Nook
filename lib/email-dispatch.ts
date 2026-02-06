@@ -1,7 +1,7 @@
 import React from "react"
 import { Resend } from "resend"
 import { prisma } from "@/lib/prisma"
-import { validateEmailEnv } from "@/lib/email-send"
+import { validateEmailEnv, getFromAddress } from "@/lib/email-send"
 import WelcomeEmail from "@/emails/WelcomeEmail"
 import BookingConfirmationEmail from "@/emails/BookingConfirmationEmail"
 import BookingCanceledEmail from "@/emails/BookingCanceledEmail"
@@ -37,6 +37,7 @@ const REGISTRY: Record<string, Handler> = {
         startAt: p.startAt as string | undefined,
         endAt: p.endAt as string | undefined,
         confirmationUrl: p.confirmationUrl as string | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
   booking_canceled: {
@@ -46,6 +47,7 @@ const REGISTRY: Record<string, Handler> = {
         venueName: p.venueName as string | undefined,
         startAt: p.startAt as string | undefined,
         canceledAt: p.canceledAt as string | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
   venue_booking_created: {
@@ -56,6 +58,7 @@ const REGISTRY: Record<string, Handler> = {
         guestEmail: p.guestEmail as string | undefined,
         startAt: p.startAt as string | undefined,
         endAt: p.endAt as string | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
   venue_booking_canceled: {
@@ -66,6 +69,7 @@ const REGISTRY: Record<string, Handler> = {
         guestEmail: p.guestEmail as string | undefined,
         startAt: p.startAt as string | undefined,
         canceledAt: p.canceledAt as string | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
   booking_end_5min: {
@@ -76,6 +80,7 @@ const REGISTRY: Record<string, Handler> = {
         endAt: p.suggestedExtensionStartAt as string | undefined,
         extendUrl: p.extendUrl as string | undefined,
         nextSlotAvailable: p.nextSlotAvailable as boolean | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
   booking_reminder_60min: {
@@ -88,6 +93,7 @@ const REGISTRY: Record<string, Handler> = {
         seatLabel: p.seatLabel as string | null | undefined,
         tableLabel: p.tableLabel as string | undefined,
         viewBookingUrl: p.viewBookingUrl as string | undefined,
+        timeZone: p.timeZone as string | undefined,
       }),
   },
 }
@@ -110,7 +116,7 @@ export async function runDispatcher(): Promise<DispatchResult> {
     return { processed: 0, sent: 0, failed: 0, envError: envResult.message }
   }
 
-  const from = process.env.EMAIL_FROM!.trim()
+  const from = getFromAddress()
   const resend = new Resend(process.env.RESEND_API_KEY!)
 
   const events = await prisma.notificationEvent.findMany({

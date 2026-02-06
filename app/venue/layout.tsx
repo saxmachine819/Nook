@@ -1,3 +1,10 @@
+import dynamic from "next/dynamic"
+
+const BottomNav = dynamic(
+  () => import("@/components/layout/BottomNav").then((mod) => ({ default: mod.BottomNav })),
+  { ssr: false }
+)
+
 export default function VenueLayout({
   children,
 }: {
@@ -5,7 +12,8 @@ export default function VenueLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 pb-20">{children}</main>
+      <BottomNav />
     </div>
   )
 }

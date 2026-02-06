@@ -7,69 +7,55 @@ import {
   Html,
   Section,
   Text,
-} from "@react-email/components";
-import * as React from "react";
+} from "@react-email/components"
+import * as React from "react"
+import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
+import { emailStyles } from "./shared-styles"
 
 export interface VenueBookingCanceledEmailProps {
-  venueName?: string;
-  guestEmail?: string;
-  startAt?: string;
-  canceledAt?: string;
+  venueName?: string
+  guestEmail?: string
+  startAt?: string
+  canceledAt?: string
+  timeZone?: string
 }
 
-const defaultProps: Required<VenueBookingCanceledEmailProps> = {
+const defaultProps: Required<Omit<VenueBookingCanceledEmailProps, "timeZone">> = {
   venueName: "The Quiet Room",
   guestEmail: "guest@example.com",
   startAt: "2025-02-05T10:00:00Z",
   canceledAt: "2025-02-04T09:00:00Z",
-};
+}
 
 export default function VenueBookingCanceledEmail(props: VenueBookingCanceledEmailProps) {
-  const { venueName, guestEmail, startAt, canceledAt } = { ...defaultProps, ...props };
+  const { venueName, guestEmail, startAt, canceledAt, timeZone } = { ...defaultProps, ...props }
+  const displayVenueName = venueName?.trim() || defaultProps.venueName
+  const s = emailStyles
 
   return (
     <Html>
       <Head />
-      <Body style={main}>
-        <Container style={container}>
-          <Section style={header}>
-            <Heading style={brand}>Nooc</Heading>
+      <Body style={s.main}>
+        <Container style={s.container}>
+          <Section style={s.header}>
+            <Heading style={s.brand}>Nooc</Heading>
           </Section>
-          <Section style={section}>
-            <Text style={text}>
-              A booking at {venueName} (guest: {guestEmail}, was {formatDate(startAt)}) has been canceled.
+          <Section style={s.section}>
+            <Text style={s.text}>
+              A booking at <span style={s.highlight}>{displayVenueName}</span> has been canceled.
             </Text>
-            <Text style={text}>Canceled at: {formatDate(canceledAt)}.</Text>
+            <Text style={s.timeLine}>
+              Guest: <span style={s.highlight}>{guestEmail}</span>
+            </Text>
+            <Text style={s.timeLine}>Was: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
+            <Text style={s.timeLine}>Canceled at: {formatDateTimeInTimezone(canceledAt, timeZone)}</Text>
           </Section>
-          <Hr style={hr} />
-          <Section style={footer}>
-            <Text style={footerText}>Questions? Reply to support@nooc.io</Text>
+          <Hr style={s.hr} />
+          <Section style={s.footer}>
+            <Text style={s.footerText}>Questions? Reply to support@nooc.io</Text>
           </Section>
         </Container>
       </Body>
     </Html>
-  );
+  )
 }
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
-const main = {
-  backgroundColor: "#f5f5f0",
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
-};
-
-const container = { margin: "0 auto", padding: "24px", maxWidth: "560px" };
-const header = { paddingBottom: "16px" };
-const brand = { margin: "0", fontSize: "24px", fontWeight: "600", color: "#0F5132", letterSpacing: "-0.02em" };
-const section = { padding: "8px 0" };
-const text = { margin: "0 0 24px", fontSize: "16px", lineHeight: "1.6", color: "#374151" };
-const hr = { borderColor: "#e5e5e0", margin: "24px 0" };
-const footer = { paddingTop: "8px" };
-const footerText = { margin: "0", fontSize: "13px", color: "#6b7280" };

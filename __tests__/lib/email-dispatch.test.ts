@@ -14,6 +14,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/email-send', () => ({
   validateEmailEnv: vi.fn().mockReturnValue({ ok: true }),
+  getFromAddress: vi.fn().mockReturnValue('nooc <support@nooc.io>'),
 }))
 
 const { runDispatcher } = await import('@/lib/email-dispatch')

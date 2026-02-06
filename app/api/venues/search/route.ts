@@ -380,10 +380,10 @@ export async function GET(request: Request) {
         return sum + (table.seatCount || 0)
       }, 0)
       
-      // Cheapest price: min of (all seat prices, all table total prices)
-      const allSeatPrices = venueWithIncludes.tables.flatMap((t: any) =>
-        (t.seats || []).map((s: any) => s.pricePerHour).filter((p: number) => p != null && p > 0)
-      )
+      // Cheapest price: min of (all seat prices from individual tables, all table total prices from group tables)
+      const allSeatPrices = venueWithIncludes.tables
+        .filter((t: any) => t.bookingMode === "individual")
+        .flatMap((t: any) => (t.seats || []).map((s: any) => s.pricePerHour).filter((p: number) => p != null && p > 0))
       const allTablePrices = venueWithIncludes.tables
         .filter((t: any) => t.bookingMode === "group" && t.tablePricePerHour != null && t.tablePricePerHour > 0)
         .map((t: any) => t.tablePricePerHour)
