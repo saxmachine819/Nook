@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { canEditVenue } from "@/lib/venue-auth"
+import { requireVenueAdminOrOwner } from "@/lib/venue-members"
 import { stripe } from "@/lib/stripe"
 
 export const runtime = "nodejs"
@@ -28,9 +28,8 @@ export async function GET(
       return NextResponse.json({ error: "Venue not found." }, { status: 404 })
     }
 
-    if (!canEditVenue(session.user, venue)) {
-      return NextResponse.json({ error: "Permission denied." }, { status: 403 })
-    }
+    const guard = await requireVenueAdminOrOwner(venueId, session.user, venue)
+    if (guard) return guard
 
     if (!venue.stripeAccountId) {
       return NextResponse.json(

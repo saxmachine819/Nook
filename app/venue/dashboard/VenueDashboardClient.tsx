@@ -33,7 +33,7 @@ export function VenueDashboardClient() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/users/me/venues")
+    fetch("/api/users/me/venues", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
       .then((data) => {
         const list = (data.venues ?? []) as Venue[]

@@ -1427,8 +1427,8 @@ export function VenueOnboardClient() {
 
       </form>
 
-      {/* Sticky Back / Next */}
-      <div className="fixed bottom-0 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
+      {/* Sticky Back / Next — above bottom nav (bottom-20) */}
+      <div className="fixed bottom-20 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
         <div className="container mx-auto flex items-center justify-between gap-4">
           {currentStep > 0 ? (
             <Button type="button" variant="outline" size="lg" onClick={handleBack}>
@@ -1454,8 +1454,8 @@ export function VenueOnboardClient() {
           </Button>
         </div>
       </div>
-      {/* Add padding to bottom of content to prevent overlap with sticky button */}
-      <div className="h-20" />
+      {/* Add padding to bottom of content so it scrolls above sticky bar + bottom nav */}
+      <div className="h-40" />
     </div>
   )
 }

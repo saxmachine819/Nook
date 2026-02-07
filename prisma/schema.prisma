@@ -46,6 +46,11 @@ enum NotificationEventStatus {
   FAILED
 }
 
+enum VenueMemberRole {
+  staff
+  admin
+}
+
 model Venue {
   id              String        @id @default(cuid())
   name            String
@@ -99,6 +104,7 @@ model Venue {
   owner           User?         @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   approvedBy      User?         @relation("ApprovedVenues", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   rejectedBy      User?         @relation("RejectedVenues", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+  venueMembers    VenueMember[]
 
   @@index([ownerId])
   @@index([onboardingStatus])
@@ -107,6 +113,22 @@ model Venue {
   @@index([hourlySeatPrice])
   @@index([onboardingStatus, status, pausedAt])
   @@map("venues")
+}
+
+model VenueMember {
+  id        String          @id @default(cuid())
+  venueId   String
+  email     String          // store lowercased in app
+  userId    String?
+  role      VenueMemberRole @default(staff)
+  createdAt DateTime        @default(now())
+  venue     Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user      User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([venueId, email])
+  @@index([venueId, userId])
+  @@index([venueId, email])
+  @@map("venue_members")
 }
 
 model Table {
@@ -240,9 +262,10 @@ model User {
   favoriteVenues   FavoriteVenue[]
   favoriteTables   FavoriteTable[]
   favoriteSeats    FavoriteSeat[]
-  approvedVenues   Venue[]    @relation("ApprovedVenues")
-  rejectedVenues   Venue[]    @relation("RejectedVenues")
-  auditLogs        AuditLog[] @relation("AuditLogActor")
+  approvedVenues   Venue[]       @relation("ApprovedVenues")
+  rejectedVenues   Venue[]       @relation("RejectedVenues")
+  auditLogs        AuditLog[]    @relation("AuditLogActor")
+  venueMemberships VenueMember[]
 
   @@index([status])
   @@map("users")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,6 @@ import { Plus, Trash2, Search, Upload, X, Expand } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { parseGooglePeriodsToVenueHours } from "@/lib/venue-hours"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
-
 const AVAILABLE_TAGS = [
   "Quiet",
   "Strong Wi-Fi",
@@ -99,6 +98,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingScript, setIsLoadingScript] = useState(true)
   const autocompleteInputRef = useRef<HTMLInputElement>(null)
+
   const autocompleteRef = useRef<any>(null)
   const venuePhotoInputRef = useRef<HTMLInputElement>(null)
 

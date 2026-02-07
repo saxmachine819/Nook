@@ -35,6 +35,7 @@ import {
   ChevronDown,
   PauseCircle,
   PlayCircle,
+  UserMinus,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -57,6 +58,7 @@ import {
 import { DealList } from "@/components/venue/DealList"
 import { DealForm } from "@/components/venue/DealForm"
 import { type Deal } from "@prisma/client"
+import { useVenueRole } from "./VenueRoleProvider"
 
 interface VenueOpsConsoleClientProps {
   venue: {
@@ -119,12 +121,21 @@ export function VenueOpsConsoleClient({
 }: VenueOpsConsoleClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
+  const venueRole = useVenueRole()
+  const showStripe = venueRole === "admin" || venueRole === null
+  const showTeam = venueRole === "admin" || venueRole === null
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; email: string; role: string }>>([])
+  const [teamMembersLoading, setTeamMembersLoading] = useState(false)
+  const [newMemberEmail, setNewMemberEmail] = useState("")
+  const [addMemberLoading, setAddMemberLoading] = useState(false)
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
   const [deals, setDeals] = useState<Deal[]>(initialDeals || [])
   const [printQRModal, setPrintQRModal] = useState<{ token: string } | null>(null)
   const [printQRLoading, setPrintQRLoading] = useState<string | null>(null)
   const [localQrTokensByKey, setLocalQrTokensByKey] = useState<Record<string, string>>({})
   const [retiringKey, setRetiringKey] = useState<string | null>(null)
   const [qrManagementOpen, setQrManagementOpen] = useState(false)
+  const [teamManagementOpen, setTeamManagementOpen] = useState(false)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
 
@@ -173,6 +184,21 @@ export function VenueOpsConsoleClient({
   const weekSectionRef = useRef<HTMLDivElement>(null)
   
   const [visibleSection, setVisibleSection] = useState<"Now" | "Today" | "This week">("Now")
+
+  const fetchTeamMembers = useCallback(() => {
+    if (!showTeam) return
+    setTeamMembersLoading(true)
+    fetch(`/api/venues/${venue.id}/members`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.members) setTeamMembers(data.members)
+      })
+      .finally(() => setTeamMembersLoading(false))
+  }, [venue.id, showTeam])
+
+  useEffect(() => {
+    fetchTeamMembers()
+  }, [fetchTeamMembers])
 
   const hasQrForResource = useCallback(
     (resourceType: "seat" | "table", resourceId: string) => {
@@ -924,6 +950,7 @@ export function VenueOpsConsoleClient({
   }, [lastUpdated])
 
   useEffect(() => {
+    if (!showStripe) return
     let isMounted = true
     fetch(`/api/venues/${venue.id}/stripe/status`)
       .then((response) => (response.ok ? response.json() : null))
@@ -943,9 +970,10 @@ export function VenueOpsConsoleClient({
     return () => {
       isMounted = false
     }
-  }, [venue.id])
+  }, [venue.id, showStripe])
 
   useEffect(() => {
+    if (!showStripe) return
     let isMounted = true
     fetch(`/api/venues/${venue.id}/stripe/balance`)
       .then((response) => (response.ok ? response.json() : null))
@@ -960,7 +988,7 @@ export function VenueOpsConsoleClient({
     return () => {
       isMounted = false
     }
-  }, [venue.id])
+  }, [venue.id, showStripe])
 
   const handleStripeConnect = useCallback(async () => {
     if (isStripeConnecting) return
@@ -1114,15 +1142,17 @@ export function VenueOpsConsoleClient({
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleStripeConnect}
-                disabled={isStripeConnecting}
-              >
-                <CreditCard className="mr-1.5 h-3.5 w-3.5" />
-                {stripeButtonLabel}
-              </Button>
+              {showStripe && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStripeConnect}
+                  disabled={isStripeConnecting}
+                >
+                  <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                  {stripeButtonLabel}
+                </Button>
+              )}
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/venue/dashboard/${venue.id}/edit`}>
                   <Settings className="mr-1.5 h-3.5 w-3.5" />
@@ -1142,7 +1172,7 @@ export function VenueOpsConsoleClient({
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
-        {stripeAlerts.length > 0 && (
+        {showStripe && stripeAlerts.length > 0 && (
           <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
             <CardHeader>
               <CardTitle>Stripe needs attention</CardTitle>
@@ -1334,66 +1364,67 @@ export function VenueOpsConsoleClient({
 
           {/* Right Column: Manage Seats + Quick Actions */}
           <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Payouts</CardTitle>
-                <CardDescription>Available Stripe balance</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border bg-muted/40 p-3">
-                    <div className="text-xs text-muted-foreground">Available</div>
-                    <div className="text-lg font-semibold">
-                      {stripeBalance
-                        ? formatMoney(stripeBalance.available, stripeBalance.currency)
-                        : "—"}
+            {showStripe && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payouts</CardTitle>
+                  <CardDescription>Available Stripe balance</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border bg-muted/40 p-3">
+                      <div className="text-xs text-muted-foreground">Available</div>
+                      <div className="text-lg font-semibold">
+                        {stripeBalance
+                          ? formatMoney(stripeBalance.available, stripeBalance.currency)
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/40 p-3">
+                      <div className="text-xs text-muted-foreground">Pending</div>
+                      <div className="text-lg font-semibold">
+                        {stripeBalance
+                          ? formatMoney(stripeBalance.pending, stripeBalance.currency)
+                          : "—"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/40 p-3">
+                      <div className="text-xs text-muted-foreground">Withdrawable</div>
+                      <div className="text-lg font-semibold">
+                        {stripeBalance
+                          ? formatMoney(stripeBalance.available, stripeBalance.currency)
+                          : "—"}
+                      </div>
                     </div>
                   </div>
-                  <div className="rounded-lg border bg-muted/40 p-3">
-                    <div className="text-xs text-muted-foreground">Pending</div>
-                    <div className="text-lg font-semibold">
-                      {stripeBalance
-                        ? formatMoney(stripeBalance.pending, stripeBalance.currency)
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border bg-muted/40 p-3">
-                    <div className="text-xs text-muted-foreground">Withdrawable</div>
-                    <div className="text-lg font-semibold">
-                      {stripeBalance
-                        ? formatMoney(stripeBalance.available, stripeBalance.currency)
-                        : "—"}
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={() => setIsPayoutDialogOpen(true)}
-                  disabled={!venue.stripeAccountId || stripeStatus?.needsOnboarding}
-                >
-                  Request payout
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleStripeDashboard}
-                  disabled={!venue.stripeAccountId || isStripeDashboardOpening}
-                >
-                  {isStripeDashboardOpening ? "Opening dashboard..." : "Open Stripe dashboard"}
-                </Button>
-                {!venue.stripeAccountId && (
-                  <p className="text-xs text-muted-foreground">
-                    Connect Stripe to enable payouts.
-                  </p>
-                )}
-                {stripeStatus?.needsOnboarding && (
-                  <p className="text-xs text-amber-700">
-                    Complete Stripe onboarding before requesting payouts.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-            {/* Seat Status Panel */}
+                  <Button
+                    className="w-full"
+                    onClick={() => setIsPayoutDialogOpen(true)}
+                    disabled={!venue.stripeAccountId || stripeStatus?.needsOnboarding}
+                  >
+                    Request payout
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleStripeDashboard}
+                    disabled={!venue.stripeAccountId || isStripeDashboardOpening}
+                  >
+                    {isStripeDashboardOpening ? "Opening dashboard..." : "Open Stripe dashboard"}
+                  </Button>
+                  {!venue.stripeAccountId && (
+                    <p className="text-xs text-muted-foreground">
+                      Connect Stripe to enable payouts.
+                    </p>
+                  )}
+                  {stripeStatus?.needsOnboarding && (
+                    <p className="text-xs text-amber-700">
+                      Complete Stripe onboarding before requesting payouts.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             {/* Manage Seats Panel */}
             <Card>
               <CardHeader>
@@ -1609,187 +1640,295 @@ export function VenueOpsConsoleClient({
                         <span className="text-sm text-muted-foreground">{venuePauseMessage}</span>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {venueStatus === "ACTIVE" ? (
+                    {showStripe && (
+                      <div className="flex flex-wrap gap-2">
+                        {venueStatus === "ACTIVE" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setPauseMessageInput(venuePauseMessage ?? "")
+                              setCancelFutureOnPause(false)
+                              setPauseModalOpen(true)
+                            }}
+                            disabled={pauseUnpauseLoading}
+                          >
+                            <PauseCircle className="mr-1.5 h-3.5 w-3.5" />
+                            Pause reservations
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUnpause}
+                            disabled={pauseUnpauseLoading}
+                          >
+                            <PlayCircle className="mr-1.5 h-3.5 w-3.5" />
+                            Resume reservations
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
+                          className="text-muted-foreground hover:text-foreground"
                           onClick={() => {
-                            setPauseMessageInput(venuePauseMessage ?? "")
-                            setCancelFutureOnPause(false)
-                            setPauseModalOpen(true)
+                            setDeleteVenueModalOpen(true)
+                            setDeleteVenueConfirmation("")
+                            setDeleteVenueError(null)
                           }}
-                          disabled={pauseUnpauseLoading}
                         >
-                          <PauseCircle className="mr-1.5 h-3.5 w-3.5" />
-                          Pause reservations
+                          Delete venue
                         </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleUnpause}
-                          disabled={pauseUnpauseLoading}
-                        >
-                          <PlayCircle className="mr-1.5 h-3.5 w-3.5" />
-                          Resume reservations
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setDeleteVenueModalOpen(true)
-                          setDeleteVenueConfirmation("")
-                          setDeleteVenueError(null)
-                        }}
-                      >
-                        Delete venue
-                      </Button>
-                    </div>
+                      </div>
+                    )}
                   </>
                 )}
-                <Button
-                  variant="outline"
-                  className="w-full justify-between"
-                  onClick={() => setQrManagementOpen((open) => !open)}
-                >
-                  <span className="flex items-center gap-2">
-                    <Printer className="h-4 w-4" />
-                    QR Code Management
-                  </span>
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", qrManagementOpen && "rotate-180")} />
-                </Button>
-                {qrManagementOpen && (
-                  <div className="rounded-md border bg-muted/30 overflow-hidden">
-                    <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
-                      {venue.tables.length === 0 ? (
-                        <p className="text-xs text-muted-foreground px-2 py-3 text-center">No seats or tables yet</p>
-                      ) : (
-                        venue.tables.flatMap((table) => {
-                          const isGroupTable = table.bookingMode === "group"
-                          if (isGroupTable) {
-                            const tableHasQr = hasQrForResource("table", table.id)
-                            const tableKey = `table:${table.id}`
-                            return [
-                              <div
-                                key={tableKey}
-                                className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                {showStripe && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setQrManagementOpen((open) => !open)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Printer className="h-4 w-4" />
+                        QR Code Management
+                      </span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", qrManagementOpen && "rotate-180")} />
+                    </Button>
+                    {qrManagementOpen && (
+                      <div className="rounded-md border bg-muted/30 overflow-hidden">
+                        <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                          {venue.tables.length === 0 ? (
+                            <p className="text-xs text-muted-foreground px-2 py-3 text-center">No seats or tables yet</p>
+                          ) : (
+                            venue.tables.flatMap((table) => {
+                              const isGroupTable = table.bookingMode === "group"
+                              if (isGroupTable) {
+                                const tableHasQr = hasQrForResource("table", table.id)
+                                const tableKey = `table:${table.id}`
+                                return [
+                                  <div
+                                    key={tableKey}
+                                    className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                                  >
+                                    <span className="text-xs font-medium truncate min-w-0">
+                                      {table.name || "Unnamed Table"}
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {tableHasQr ? (
+                                        <>
+                                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                            QR assigned
+                                          </span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] px-1.5"
+                                            onClick={() => {
+                                              const token = getTokenForResource("table", table.id)
+                                              if (token) setPrintQRModal({ token })
+                                            }}
+                                          >
+                                            <Download className="h-2.5 w-2.5 mr-0.5" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
+                                            disabled={retiringKey !== null}
+                                            onClick={() => handleRetire("table", table.id)}
+                                          >
+                                            {retiringKey === tableKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 text-[10px] px-1.5"
+                                          disabled={printQRLoading !== null}
+                                          onClick={() => handlePrintQR("table", table.id)}
+                                        >
+                                          {printQRLoading === tableKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>,
+                                ]
+                              }
+                              return table.seats.map((seat) => {
+                                const seatHasQr = hasQrForResource("seat", seat.id)
+                                const seatKey = `seat:${seat.id}`
+                                const tableName = table.name || "Unnamed Table"
+                                const seatLabel = getSeatLabel(seat)
+                                const rowLabel = `${tableName} — ${seatLabel}`
+                                return (
+                                  <div
+                                    key={seatKey}
+                                    className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                                  >
+                                    <span className="text-xs font-medium truncate min-w-0" title={rowLabel}>
+                                      {rowLabel}
+                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {seatHasQr ? (
+                                        <>
+                                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                            QR assigned
+                                          </span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] px-1.5"
+                                            onClick={() => {
+                                              const token = getTokenForResource("seat", seat.id)
+                                              if (token) setPrintQRModal({ token })
+                                            }}
+                                          >
+                                            <Download className="h-2.5 w-2.5 mr-0.5" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
+                                            disabled={retiringKey !== null}
+                                            onClick={() => handleRetire("seat", seat.id)}
+                                          >
+                                            {retiringKey === seatKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
+                                          </Button>
+                                        </>
+                                      ) : (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 text-[10px] px-1.5"
+                                          disabled={printQRLoading !== null}
+                                          onClick={() => handlePrintQR("seat", seat.id)}
+                                        >
+                                          {printQRLoading === seatKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                )
+                              })
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {showTeam && (
+                  <>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setTeamManagementOpen((open) => !open)}
+                    >
+                      <span className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Team Management
+                      </span>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", teamManagementOpen && "rotate-180")} />
+                    </Button>
+                    {teamManagementOpen && (
+                      <div className="rounded-md border bg-muted/30 overflow-hidden p-3 space-y-4">
+                        <div className="flex gap-2">
+                          <Input
+                            type="email"
+                            placeholder="staff@example.com"
+                            value={newMemberEmail}
+                            onChange={(e) => setNewMemberEmail(e.target.value)}
+                            disabled={addMemberLoading}
+                            className="flex-1"
+                          />
+                          <Button
+                            type="button"
+                            onClick={async () => {
+                              const email = newMemberEmail.trim().toLowerCase()
+                              if (!email) {
+                                showToast("Enter an email address.", "error")
+                                return
+                              }
+                              setAddMemberLoading(true)
+                              try {
+                                const res = await fetch(`/api/venues/${venue.id}/members`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ email }),
+                                })
+                                const data = await res.json().catch(() => ({}))
+                                if (!res.ok) {
+                                  showToast(data.error || "Failed to add member.", "error")
+                                  return
+                                }
+                                setNewMemberEmail("")
+                                fetchTeamMembers()
+                                showToast("Staff member added.", "success")
+                              } finally {
+                                setAddMemberLoading(false)
+                              }
+                            }}
+                            disabled={addMemberLoading}
+                          >
+                            {addMemberLoading ? "Adding..." : "Add member"}
+                          </Button>
+                        </div>
+                        {teamMembersLoading ? (
+                          <p className="text-sm text-muted-foreground">Loading members…</p>
+                        ) : teamMembers.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No team members yet. Add staff by email above.</p>
+                        ) : (
+                          <ul className="space-y-2 rounded-md border">
+                            {teamMembers.map((m) => (
+                              <li
+                                key={m.id}
+                                className="flex items-center justify-between gap-2 px-3 py-2 text-sm"
                               >
-                                <span className="text-xs font-medium truncate min-w-0">
-                                  {table.name || "Unnamed Table"}
-                                </span>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {tableHasQr ? (
-                                    <>
-                                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        QR assigned
-                                      </span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 text-[10px] px-1.5"
-                                        onClick={() => {
-                                          const token = getTokenForResource("table", table.id)
-                                          if (token) setPrintQRModal({ token })
-                                        }}
-                                      >
-                                        <Download className="h-2.5 w-2.5 mr-0.5" />
-                                        Download
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
-                                        disabled={retiringKey !== null}
-                                        onClick={() => handleRetire("table", table.id)}
-                                      >
-                                        {retiringKey === tableKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 text-[10px] px-1.5"
-                                      disabled={printQRLoading !== null}
-                                      onClick={() => handlePrintQR("table", table.id)}
-                                    >
-                                      {printQRLoading === tableKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>,
-                            ]
-                          }
-                          return table.seats.map((seat) => {
-                            const seatHasQr = hasQrForResource("seat", seat.id)
-                            const seatKey = `seat:${seat.id}`
-                            const tableName = table.name || "Unnamed Table"
-                            const seatLabel = getSeatLabel(seat)
-                            const rowLabel = `${tableName} — ${seatLabel}`
-                            return (
-                              <div
-                                key={seatKey}
-                                className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
-                              >
-                                <span className="text-xs font-medium truncate min-w-0" title={rowLabel}>
-                                  {rowLabel}
-                                </span>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {seatHasQr ? (
-                                    <>
-                                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                        QR assigned
-                                      </span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 text-[10px] px-1.5"
-                                        onClick={() => {
-                                          const token = getTokenForResource("seat", seat.id)
-                                          if (token) setPrintQRModal({ token })
-                                        }}
-                                      >
-                                        <Download className="h-2.5 w-2.5 mr-0.5" />
-                                        Download
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
-                                        disabled={retiringKey !== null}
-                                        onClick={() => handleRetire("seat", seat.id)}
-                                      >
-                                        {retiringKey === seatKey ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 text-[10px] px-1.5"
-                                      disabled={printQRLoading !== null}
-                                      onClick={() => handlePrintQR("seat", seat.id)}
-                                    >
-                                      {printQRLoading === seatKey ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate QR</>}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })
-                        })
-                      )}
-                    </div>
-                  </div>
+                                <span className="truncate">{m.email}</span>
+                                <span className="shrink-0 text-muted-foreground capitalize">{m.role}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="shrink-0"
+                                  disabled={removingMemberId === m.id}
+                                  onClick={async () => {
+                                    setRemovingMemberId(m.id)
+                                    try {
+                                      const res = await fetch(`/api/venues/${venue.id}/members/${m.id}`, {
+                                        method: "DELETE",
+                                      })
+                                      if (!res.ok) {
+                                        showToast("Failed to remove member.", "error")
+                                        return
+                                      }
+                                      fetchTeamMembers()
+                                      showToast("Member removed.", "success")
+                                    } finally {
+                                      setRemovingMemberId(null)
+                                    }
+                                  }}
+                                >
+                                  <UserMinus className="h-4 w-4" />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
                 <Button
                   variant="outline"
@@ -1823,54 +1962,56 @@ export function VenueOpsConsoleClient({
         </div>
       </div>
 
-      <Dialog open={isPayoutDialogOpen} onOpenChange={setIsPayoutDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request payout</DialogTitle>
-            <DialogDescription>
-              Enter the amount you want to withdraw. Minimum payout is $5.00.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="payout-amount">
-              Amount (USD)
-            </label>
-            <input
-              id="payout-amount"
-              type="number"
-              min="5"
-              step="0.01"
-              value={payoutAmount}
-              onChange={(event) => setPayoutAmount(event.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="5.00"
-            />
-            {stripeBalance && (
-              <p className="text-xs text-muted-foreground">
-                Available: {formatMoney(stripeBalance.available, stripeBalance.currency)}
-              </p>
-            )}
-            {payoutError && (
-              <p className="text-xs text-red-600">{payoutError}</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsPayoutDialogOpen(false)}
-              disabled={isPayoutSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePayoutSubmit}
-              disabled={isPayoutSubmitting || !!payoutError}
-            >
-              {isPayoutSubmitting ? "Submitting..." : "Submit payout"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showStripe && (
+        <Dialog open={isPayoutDialogOpen} onOpenChange={setIsPayoutDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Request payout</DialogTitle>
+              <DialogDescription>
+                Enter the amount you want to withdraw. Minimum payout is $5.00.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="payout-amount">
+                Amount (USD)
+              </label>
+              <input
+                id="payout-amount"
+                type="number"
+                min="5"
+                step="0.01"
+                value={payoutAmount}
+                onChange={(event) => setPayoutAmount(event.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                placeholder="5.00"
+              />
+              {stripeBalance && (
+                <p className="text-xs text-muted-foreground">
+                  Available: {formatMoney(stripeBalance.available, stripeBalance.currency)}
+                </p>
+              )}
+              {payoutError && (
+                <p className="text-xs text-red-600">{payoutError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsPayoutDialogOpen(false)}
+                disabled={isPayoutSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handlePayoutSubmit}
+                disabled={isPayoutSubmitting || !!payoutError}
+              >
+                {isPayoutSubmitting ? "Submitting..." : "Submit payout"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Edit Reservation Modal */}
       <Dialog open={!!editingReservation} onOpenChange={(open) => !open && setEditingReservation(null)}>

@@ -41,7 +41,7 @@ export function WelcomeOnboardStep() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Welcome to Nooc 👋
+          Welcome to Nooc
         </h2>
         <p className="mt-1.5 text-muted-foreground">
           Let's get your space ready for reservations.
