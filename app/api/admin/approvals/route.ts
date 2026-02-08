@@ -42,6 +42,8 @@ function computeReadinessIndicators(venue: any): ReadinessIndicators {
   }
 }
 
+export const dynamic = "force-dynamic"
+
 export async function GET() {
   try {
     // Require authentication

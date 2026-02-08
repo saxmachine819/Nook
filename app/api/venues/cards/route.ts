@@ -25,6 +25,8 @@ async function getCachedHours(venueIds: string[]) {
   return data;
 }
 
+export const dynamic = "force-dynamic";
+
 /**
  * Cards endpoint for venue listings.
  *

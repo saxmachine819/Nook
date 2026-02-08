@@ -29,6 +29,8 @@ function thumbnailForVenue(venue: {
   return urls[0] ?? null
 }
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)

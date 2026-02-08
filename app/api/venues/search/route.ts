@@ -13,6 +13,8 @@ const DEBUG_LOG = (payload: { location: string; message: string; data?: Record<s
   }).catch(() => {})
 }
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: Request) {
   console.log("🔍 /api/venues/search route called")
   try {

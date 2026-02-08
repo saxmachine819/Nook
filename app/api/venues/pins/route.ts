@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { batchGetCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
 import type { OpenStatusValue } from "@/types/venue"
 
+export const dynamic = "force-dynamic"
+
 /**
  * Lightweight pins endpoint for map markers.
  * Returns: id, name, minPrice, lat, lng, openStatus (~120 bytes per venue)
