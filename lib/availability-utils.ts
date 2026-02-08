@@ -1,5 +1,13 @@
 import type { OpenStatus } from "@/lib/hours"
 
+/** YYYY-MM-DD for the given date in local timezone (for date inputs and "today" checks). */
+export function getLocalDateString(date: Date = new Date()): string {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, "0")
+  const dd = String(date.getDate()).padStart(2, "0")
+  return `${yyyy}-${mm}-${dd}`
+}
+
 export function roundUpToNext15Minutes(date: Date): Date {
   const result = new Date(date)
   const minutes = result.getMinutes()

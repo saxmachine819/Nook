@@ -66,7 +66,7 @@ export async function GET(request: Request) {
             ? [{ email: { equals: emailForClaim, mode: "insensitive" as const } }]
             : []),
         ],
-      } as const
+      }
       const [memberRows, ownedVenues] = await Promise.all([
         prisma.venueMember.findMany({
           where: memberWhere,

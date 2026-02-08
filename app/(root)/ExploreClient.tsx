@@ -48,7 +48,12 @@ function venueCardToExploreVenue(card: VenueCard): ExploreVenue {
     capacity: 0,
     availabilityLabel: card.availabilityLabel,
     openStatus: card.openStatus,
-    imageUrls: card.imageUrl ? [card.imageUrl] : undefined,
+    imageUrls:
+      card.imageUrls?.length > 0
+        ? card.imageUrls
+        : card.imageUrl
+          ? [card.imageUrl]
+          : undefined,
     hourlySeatPrice: card.minPrice,
     dealBadge: card.dealBadge,
   };

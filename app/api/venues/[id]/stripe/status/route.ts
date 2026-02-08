@@ -47,7 +47,7 @@ export async function GET(
     const eventuallyDue = requirements?.eventually_due ?? []
     const pastDue = requirements?.past_due ?? []
     const errors = requirements?.errors ?? []
-    const disabledReason = account.disabled_reason ?? null
+    const disabledReason = requirements?.disabled_reason ?? null
 
     const needsOnboarding =
       currentlyDue.length > 0 ||

@@ -402,21 +402,41 @@ export async function GET(request: Request) {
           },
         );
 
-        let imageUrl: string | null = null;
+        // Build full imageUrls array (same logic as search): parse imageUrls then merge hero first
+        let imageUrls: string[] = [];
+        if (venue.imageUrls) {
+          if (Array.isArray(venue.imageUrls)) {
+            imageUrls = venue.imageUrls.filter(
+              (url: unknown): url is string =>
+                typeof url === "string" && url.length > 0
+            );
+          } else if (typeof venue.imageUrls === "string") {
+            try {
+              const parsed = JSON.parse(venue.imageUrls);
+              if (Array.isArray(parsed)) {
+                imageUrls = parsed.filter(
+                  (url: unknown): url is string =>
+                    typeof url === "string" && url.length > 0
+                );
+              }
+            } catch {
+              if (venue.imageUrls.length > 0) {
+                imageUrls = [venue.imageUrls];
+              }
+            }
+          }
+        }
         if (
           venue.heroImageUrl &&
           typeof venue.heroImageUrl === "string" &&
           venue.heroImageUrl.length > 0
         ) {
-          imageUrl = venue.heroImageUrl;
-        } else if (venue.imageUrls) {
-          if (Array.isArray(venue.imageUrls) && venue.imageUrls.length > 0) {
-            const first = venue.imageUrls[0];
-            if (typeof first === "string" && first.length > 0) {
-              imageUrl = first;
-            }
-          }
+          imageUrls = [
+            venue.heroImageUrl,
+            ...imageUrls.filter((url: string) => url !== venue.heroImageUrl),
+          ];
         }
+        const imageUrl = imageUrls[0] ?? null;
 
         let dealBadge: VenueDealBadge | null = null;
         const primaryDeal = venue.deals?.[0];
@@ -448,6 +468,7 @@ export async function GET(request: Request) {
           maxPrice,
           tags: venue.tags || [],
           imageUrl,
+          imageUrls,
           availabilityLabel,
           openStatus: openStatusResult,
           dealBadge,

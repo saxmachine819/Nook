@@ -140,7 +140,7 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
       <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
         <div
           ref={carouselRef}
-          className="flex h-full transition-transform duration-300 ease-out"
+          className="flex h-full transition-transform duration-300 ease-out touch-pan-x"
           style={{
             transform: `translateX(-${currentIndex * 100}%) translateX(${translateX}px)`,
           }}

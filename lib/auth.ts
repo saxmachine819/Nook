@@ -94,7 +94,7 @@ export const authOptions = {
             where: {
               OR: [
                 { userId: user.id },
-                ...(user.email ? [{ email: { equals: user.email, mode: "insensitive" } }] : []),
+                ...(user.email ? [{ email: { equals: user.email, mode: "insensitive" as const } }] : []),
               ],
             },
             select: { venueId: true },

@@ -1,10 +1,13 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, ExternalLink } from "lucide-react"
+
+const STRIPE_ONBOARDING_URL = "https://stripe.com/resources/more/merchant-onboarding-explained"
 
 interface StripeConnectClientProps {
   venueId: string
@@ -45,6 +48,83 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
             </p>
             <p className="text-sm text-muted-foreground">
               You'll be able to see payouts and manage your account in Stripe.
+            </p>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-4 space-y-4">
+            <h3 className="text-sm font-semibold tracking-tight">
+              Stripe Connect onboarding (what you'll need)
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              To receive payouts, vendors complete a quick Stripe Connect setup. This is a standard
+              identity and banking check used by platforms like Airbnb and Shopify.
+            </p>
+
+            <h4 className="text-sm font-semibold text-foreground">
+              What you'll need (5–10 minutes)
+            </h4>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">Business info</span>
+                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                  <li>Legal business name and address</li>
+                  <li>Business type (individual, LLC, corporation, nonprofit)</li>
+                  <li>Tax classification</li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Owner / representative info</span>
+                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                  <li>Full legal name</li>
+                  <li>Date of birth</li>
+                  <li>Home address</li>
+                  <li>Last 4 digits of SSN (US)</li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Banking</span>
+                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                  <li>Bank account and routing number</li>
+                </ul>
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Sometimes required</span>
+                <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                  <li>Government-issued ID</li>
+                  <li>Business registration documents</li>
+                </ul>
+              </li>
+            </ul>
+
+            <h4 className="text-sm font-semibold text-foreground">Why this is required</h4>
+            <p className="text-sm text-muted-foreground">
+              Stripe is a regulated payments processor and must verify identities (KYC/AML) and
+              ensure payouts go to the correct entity. All info is handled securely by Stripe.
+            </p>
+
+            <h4 className="text-sm font-semibold text-foreground">Approval timing</h4>
+            <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
+              <li>Usually instant</li>
+              <li>Up to 24–48 hours if review is needed</li>
+            </ul>
+
+            <h4 className="text-sm font-semibold text-foreground">After approval</h4>
+            <ul className="list-disc space-y-0.5 pl-5 text-sm text-muted-foreground">
+              <li>Start accepting bookings</li>
+              <li>Get paid directly to your bank</li>
+              <li>Track payouts in your dashboard</li>
+            </ul>
+
+            <p className="pt-2 text-sm text-muted-foreground">
+              <Link
+                href={STRIPE_ONBOARDING_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-medium text-foreground underline underline-offset-4 hover:no-underline"
+              >
+                To learn more, click here
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
             </p>
           </div>
 

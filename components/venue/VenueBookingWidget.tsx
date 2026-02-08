@@ -9,7 +9,7 @@ import { SeatCard } from "@/components/venue/SeatCard"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 import { SignInModal } from "@/components/auth/SignInModal"
 import { cn } from "@/lib/utils"
-import { roundUpToNext15Minutes } from "@/lib/availability-utils"
+import { roundUpToNext15Minutes, getLocalDateString } from "@/lib/availability-utils"
 
 interface Table {
   id: string
@@ -1243,7 +1243,7 @@ export function VenueBookingWidget({
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
-                min={new Date().toISOString().split("T")[0]}
+                min={getLocalDateString()}
                 required
               />
             </div>
@@ -1259,7 +1259,7 @@ export function VenueBookingWidget({
                 onChange={(e) => {
                   const newTime = e.target.value
                   setStartTime(newTime)
-                  if (date === new Date().toISOString().split("T")[0] && newTime) {
+                  if (date === getLocalDateString() && newTime) {
                     const selectedDateTime = new Date(`${date}T${newTime}`)
                     const now = new Date()
                     if (selectedDateTime < now) {
@@ -1278,7 +1278,7 @@ export function VenueBookingWidget({
                   setSelectedSeatId(null)
                   setSelectedSeatIds([])
                 }}
-                min={date === new Date().toISOString().split("T")[0]
+                min={date === getLocalDateString()
                   ? `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`
                   : undefined}
                 required

@@ -13,6 +13,7 @@ import { BookingConfirmationModal } from "@/components/reservation/BookingConfir
 import { SignInModal } from "@/components/auth/SignInModal"
 import { VenueImageCarousel } from "./VenueImageCarousel"
 import { FavoriteButton } from "./FavoriteButton"
+import { getLocalDateString } from "@/lib/availability-utils"
 
 interface VenueCardProps {
   id: string
@@ -154,7 +155,7 @@ export function VenueCard({
     return slots.filter((slot) => {
       const start = new Date(slot.start)
       // Only show slots in the future for today; for other days, show all.
-      if (date === now.toISOString().split("T")[0]) {
+      if (date === getLocalDateString(now)) {
         return start > now
       }
       return true

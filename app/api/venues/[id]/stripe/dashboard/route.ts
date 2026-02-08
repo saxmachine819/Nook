@@ -38,20 +38,7 @@ export async function POST(
       )
     }
 
-    const origin = request.headers.get("origin") || process.env.NEXTAUTH_URL
-    if (!origin) {
-      return NextResponse.json(
-        { error: "Missing NEXTAUTH_URL for Stripe redirects." },
-        { status: 500 }
-      )
-    }
-
-    const loginLink = await stripe.accounts.createLoginLink(
-      venue.stripeAccountId,
-      {
-        redirect_url: new URL(`/venue/dashboard/${venue.id}`, origin).toString(),
-      }
-    )
+    const loginLink = await stripe.accounts.createLoginLink(venue.stripeAccountId)
 
     return NextResponse.json({ url: loginLink.url })
   } catch (error) {

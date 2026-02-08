@@ -40,7 +40,7 @@ export function VenueTermsClient({ venueId, venueName }: VenueTermsClientProps) 
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-4 py-6 pb-24">
       {ToastComponent}
       <h1 className="mb-6 text-3xl font-semibold tracking-tight">Terms and conditions</h1>
 

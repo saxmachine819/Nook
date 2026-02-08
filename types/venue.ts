@@ -49,6 +49,7 @@ export interface VenueCard {
   maxPrice: number
   tags: string[]
   imageUrl: string | null
+  imageUrls: string[]
   availabilityLabel: string
   openStatus: VenueOpenStatus | null
   dealBadge: VenueDealBadge | null

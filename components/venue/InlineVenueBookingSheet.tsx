@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { useToast } from "@/components/ui/toast"
 import { SignInModal } from "@/components/auth/SignInModal"
+import { getLocalDateString } from "@/lib/availability-utils"
 
 interface InlineVenue {
   id: string
@@ -103,7 +104,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
     return slots.filter((slot) => {
       const start = new Date(slot.start)
       // Only show slots in the future for today; for other days, show all.
-      if (date === now.toISOString().split("T")[0]) {
+      if (date === getLocalDateString(now)) {
         return start > now
       }
       return true
@@ -265,7 +266,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
                 className="mt-0.5 w-full rounded-md border bg-background px-2 py-1.5 text-xs shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
+                min={getLocalDateString()}
               />
             </div>
             <div className="flex flex-col">
