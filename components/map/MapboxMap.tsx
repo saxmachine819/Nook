@@ -1035,9 +1035,8 @@ export function MapboxMap({
     }
   }, [userLocation, isLoading])
 
-  // Fly to venue when centerOnVenueId is set
   useEffect(() => {
-    if (!centerOnVenueId || !mapRef.current || isLoading || !mapRef.current.loaded()) return
+    if (!centerOnVenueId || !mapRef.current) return
 
     let targetLat: number | null = null
     let targetLng: number | null = null
@@ -1057,12 +1056,27 @@ export function MapboxMap({
 
     if (targetLat == null || targetLng == null) return
 
-    mapRef.current.flyTo({
-      center: [targetLng, targetLat],
-      zoom: 15,
-      duration: 600,
-    })
-  }, [centerOnVenueId, centerOnCoordinates, venues, isLoading])
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const tryNavigate = () => {
+      if (!mapRef.current || !mapRef.current.loaded()) {
+        timeoutId = setTimeout(tryNavigate, 100);
+        return;
+      }
+
+      mapRef.current.flyTo({
+        center: [targetLng, targetLat],
+        zoom: 20,
+        duration: 600,
+      });
+    };
+
+    tryNavigate();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [centerOnVenueId, centerOnCoordinates, venues])
 
   // Store venues in a ref so we can access latest value in intervals/callbacks
   const venuesRef = useRef(venues)

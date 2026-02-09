@@ -25,10 +25,9 @@ async function fetchVenueCards(
   const { ids, bounds, searchQuery, filters } = options;
   const params = new URLSearchParams();
 
-  // IDs take priority (fastest path for prefetch from pins)
   if (ids && ids.length > 0) {
     params.append("ids", ids.join(","));
-  } else if (bounds && (!searchQuery || searchQuery.length === 0)) {
+  } else if (bounds) {
     params.append("north", bounds.north.toString());
     params.append("south", bounds.south.toString());
     params.append("east", bounds.east.toString());

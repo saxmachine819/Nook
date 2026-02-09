@@ -17,6 +17,7 @@ import {
   type InitialFilters,
   type VenuePin,
 } from "@/lib/hooks";
+import { useSearchNavigation } from "@/lib/hooks/use-search-navigation";
 import {
   filterStateToSearchFilters,
   hasActiveFilters,
@@ -98,6 +99,7 @@ export function ExploreClient({
   const [centerOnCoordinates, setCenterOnCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [shouldFitMapBounds, setShouldFitMapBounds] = useState(false);
   const [debugBounds, setDebugBounds] = useState<MapBounds | null>(null);
+  const [useBoundedSearch, setUseBoundedSearch] = useState(false);
 
   const hasReceivedInitialBoundsRef = useRef(false);
   const didAreaSearchRef = useRef(false);
@@ -115,21 +117,29 @@ export function ExploreClient({
     isFetching: isPinsFetching,
   } = useVenuePins(currentBounds, isClient && !hasFilters);
 
-  const pins = pinsData?.pins ?? [];
-  const pinIds = useMemo(() => pins.map((p) => p.id), [pins]);
+  const viewportPins = pinsData?.pins ?? [];
+  const pinIds = useMemo(() => viewportPins.map((p) => p.id), [viewportPins]);
 
-  // Phase 2: Fetch cards using pin IDs (parallel, for drawer)
   const {
     data: cardsData,
     isLoading: isCardsLoading,
     isFetching: isCardsFetching,
   } = useVenueCards({
     ids: hasFilters ? undefined : pinIds,
-    bounds: hasFilters ? currentBounds : undefined,
+    bounds: hasFilters && useBoundedSearch ? currentBounds : undefined,
     searchQuery: searchQuery.length > 0 ? searchQuery : undefined,
     filters: searchFilters,
     enabled: isClient && (pinIds.length > 0 || hasFilters),
   });
+
+  const { manualPins, navigationTarget, resetNavigation } = useSearchNavigation({
+    hasFilters,
+    cardsData,
+    isCardsLoading,
+    useBoundedSearch,
+  });
+
+  const pins = manualPins ?? viewportPins;
 
   const venues: ExploreVenue[] = useMemo(() => {
     if (!cardsData?.venues) return [];
@@ -172,6 +182,13 @@ export function ExploreClient({
     }
   }, [cardsData?.favoritedVenueIds]);
 
+  useEffect(() => {
+    if (navigationTarget && mapReady) {
+      setCenterOnVenueId(navigationTarget.id);
+      setCenterOnCoordinates({ lat: navigationTarget.lat, lng: navigationTarget.lng });
+    }
+  }, [navigationTarget, mapReady]);
+
   useEffect(() => setIsClient(true), []);
 
   useEffect(() => {
@@ -200,7 +217,7 @@ export function ExploreClient({
     const t = setTimeout(() => {
       setCenterOnVenueId(null);
       setCenterOnCoordinates(null);
-    }, 800);
+    }, 1500);
     return () => clearTimeout(t);
   }, [centerOnVenueId]);
 
@@ -231,10 +248,9 @@ export function ExploreClient({
 
   const handleSearchArea = useCallback((bounds: MapBounds) => {
     setCurrentBounds(bounds);
+    setUseBoundedSearch(true);
     if (process.env.NODE_ENV !== "production") setDebugBounds(bounds);
     didAreaSearchRef.current = true;
-    // Don't invalidate queries - TanStack Query handles refetch based on queryKey change
-    // Setting new bounds triggers new pins query → new pinIds → new cards query
     setTimeout(() => {
       didAreaSearchRef.current = false;
     }, 2000);
@@ -250,8 +266,9 @@ export function ExploreClient({
   const handleSearch = useCallback(
     (query: string) => {
       setSearchQuery(query);
+      resetNavigation();
     },
-    [setSearchQuery]
+    [setSearchQuery, resetNavigation]
   );
 
   const handleApplyFilters = useCallback(
@@ -259,10 +276,11 @@ export function ExploreClient({
       if (appliedFilters) {
         setFilters(appliedFilters);
         filtersRef.current = appliedFilters;
+        resetNavigation();
         setShouldFitMapBounds(true);
       }
     },
-    [setFilters, filtersRef]
+    [setFilters, filtersRef, resetNavigation]
   );
 
   const handleToggleFavorite = useCallback(

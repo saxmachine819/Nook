@@ -139,7 +139,7 @@ export async function GET(request: Request) {
 
     if (ids.length > 0) {
       whereClause.id = { in: ids };
-    } else if (parsedBounds && q.length === 0) {
+    } else if (parsedBounds) {
       whereClause.latitude = {
         gte: parsedBounds.south,
         lte: parsedBounds.north,
