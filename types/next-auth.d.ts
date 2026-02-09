@@ -11,6 +11,7 @@ declare module "next-auth" {
       termsAcceptedAt?: Date | null
       venueSummary?: { count: number; singleVenueId: string | null }
     }
+    venueMembershipClaimed?: boolean
   }
 
   interface User {

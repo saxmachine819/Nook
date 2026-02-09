@@ -95,11 +95,13 @@ export function ExploreClient({
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [venueLoadingOverlay, setVenueLoadingOverlay] = useState(false);
   const [centerOnVenueId, setCenterOnVenueId] = useState<string | null>(null);
+  const [centerOnCoordinates, setCenterOnCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [shouldFitMapBounds, setShouldFitMapBounds] = useState(false);
   const [debugBounds, setDebugBounds] = useState<MapBounds | null>(null);
 
   const hasReceivedInitialBoundsRef = useRef(false);
   const didAreaSearchRef = useRef(false);
+  const lastSearchQueryRef = useRef("");
 
   const searchFilters = useMemo(
     () => filterStateToSearchFilters(filters),
@@ -196,9 +198,25 @@ export function ExploreClient({
 
   useEffect(() => {
     if (!centerOnVenueId) return;
-    const t = setTimeout(() => setCenterOnVenueId(null), 800);
+    const t = setTimeout(() => {
+      setCenterOnVenueId(null);
+      setCenterOnCoordinates(null);
+    }, 800);
     return () => clearTimeout(t);
   }, [centerOnVenueId]);
+
+  useEffect(() => {
+    if (searchQuery.length > 0 && searchQuery !== lastSearchQueryRef.current && venues.length > 0 && !isCardsLoading) {
+      lastSearchQueryRef.current = searchQuery;
+      const firstVenue = venues[0];
+      if (firstVenue?.id && firstVenue.latitude != null && firstVenue.longitude != null) {
+        setCenterOnVenueId(firstVenue.id);
+        setCenterOnCoordinates({ lat: firstVenue.latitude, lng: firstVenue.longitude });
+      }
+    } else if (searchQuery.length === 0) {
+      lastSearchQueryRef.current = "";
+    }
+  }, [searchQuery, venues, isCardsLoading]);
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -275,6 +293,14 @@ export function ExploreClient({
     [filters.favoritesOnly, queryClient]
   );
 
+  const handleCenterOnVenue = useCallback((venueId: string) => {
+    const venue = venues.find((v) => v.id === venueId);
+    if (venue && venue.latitude != null && venue.longitude != null) {
+      setCenterOnVenueId(venueId);
+      setCenterOnCoordinates({ lat: venue.latitude, lng: venue.longitude });
+    }
+  }, [venues]);
+
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   // Separate loading states: pins for map, cards for drawer
   const isPinsSearching = isPinsLoading || isPinsFetching;
@@ -326,6 +352,7 @@ export function ExploreClient({
             onSearchArea={handleSearchArea}
             isSearching={isPinsSearching}
             centerOnVenueId={centerOnVenueId}
+            centerOnCoordinates={centerOnCoordinates}
             hasMapboxToken={!!mapboxToken}
             shouldFitBounds={shouldFitMapBounds}
             skipFitBounds={didAreaSearchRef.current}
@@ -400,7 +427,7 @@ export function ExploreClient({
             isLoading={isCardsSearching}
             isInitialLoading={isInitialLoad}
             onSelectVenue={setSelectedVenueId}
-            onCenterOnVenue={setCenterOnVenueId}
+            onCenterOnVenue={handleCenterOnVenue}
             autoExpand={searchQuery.length > 0}
             favoritesOnly={filters.favoritesOnly}
             favoritedVenueIds={favoritedVenueIdsState}

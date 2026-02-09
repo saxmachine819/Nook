@@ -84,53 +84,9 @@ export const authOptions = {
         session.user.termsAcceptedAt = user.termsAcceptedAt;
       }
 
-      // Link any venue_members (invited by email) to this user so list/summary include those venues
-      await claimVenueMembershipForUser(session.user);
-
-      // Venue summary for nav (Manage item): venues user owns OR is a member of (staff/admin).
-      try {
-        const [memberRows, ownedVenues] = await Promise.all([
-          prisma.venueMember.findMany({
-            where: {
-              OR: [
-                { userId: user.id },
-                ...(user.email ? [{ email: { equals: user.email, mode: "insensitive" as const } }] : []),
-              ],
-            },
-            select: { venueId: true },
-            distinct: ["venueId"],
-          }),
-          prisma.venue.findMany({
-            where: { ownerId: user.id, status: { not: "DELETED" } },
-            select: { id: true },
-          }),
-        ])
-        const allVenueIds = new Set([
-          ...memberRows.map((m) => m.venueId),
-          ...ownedVenues.map((v) => v.id),
-        ])
-        if (allVenueIds.size === 0) {
-          if (session?.user) {
-            session.user.venueSummary = { count: 0, singleVenueId: null }
-          }
-        } else {
-          const managedVenues = await prisma.venue.findMany({
-            where: {
-              id: { in: Array.from(allVenueIds) },
-              status: { not: "DELETED" },
-            },
-            select: { id: true },
-          })
-          const count = managedVenues.length
-          const singleVenueId = count === 1 ? managedVenues[0]?.id ?? null : null
-          if (session?.user) {
-            session.user.venueSummary = { count, singleVenueId }
-          }
-        }
-      } catch (err) {
-        if (session?.user) {
-          session.user.venueSummary = { count: 0, singleVenueId: null }
-        }
+      if (!session.venueMembershipClaimed) {
+        await claimVenueMembershipForUser(session.user);
+        session.venueMembershipClaimed = true;
       }
 
       // First login: enqueue welcome email once per user (atomic claim).

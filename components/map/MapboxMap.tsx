@@ -26,6 +26,7 @@ interface MapboxMapProps {
   onSearchArea?: (bounds: { north: number; south: number; east: number; west: number }) => void
   isSearching?: boolean
   centerOnVenueId?: string | null
+  centerOnCoordinates?: { lat: number; lng: number } | null
   shouldFitBounds?: boolean
   onBoundsFitted?: () => void
   onRequestLocation?: () => void
@@ -55,6 +56,7 @@ export function MapboxMap({
   onSearchArea,
   isSearching = false,
   centerOnVenueId,
+  centerOnCoordinates,
   shouldFitBounds,
   onBoundsFitted,
   onRequestLocation,
@@ -1036,16 +1038,31 @@ export function MapboxMap({
   // Fly to venue when centerOnVenueId is set
   useEffect(() => {
     if (!centerOnVenueId || !mapRef.current || isLoading || !mapRef.current.loaded()) return
-    const venue = venues.find(
-      (v) => v.id === centerOnVenueId && v.latitude != null && v.longitude != null
-    )
-    if (!venue) return
+
+    let targetLat: number | null = null
+    let targetLng: number | null = null
+
+    if (centerOnCoordinates) {
+      targetLat = centerOnCoordinates.lat
+      targetLng = centerOnCoordinates.lng
+    } else {
+      const venue = venues.find(
+        (v) => v.id === centerOnVenueId && v.latitude != null && v.longitude != null
+      )
+      if (venue) {
+        targetLat = venue.latitude!
+        targetLng = venue.longitude!
+      }
+    }
+
+    if (targetLat == null || targetLng == null) return
+
     mapRef.current.flyTo({
-      center: [venue.longitude!, venue.latitude!],
+      center: [targetLng, targetLat],
       zoom: 15,
       duration: 600,
     })
-  }, [centerOnVenueId, venues, isLoading])
+  }, [centerOnVenueId, centerOnCoordinates, venues, isLoading])
 
   // Store venues in a ref so we can access latest value in intervals/callbacks
   const venuesRef = useRef(venues)

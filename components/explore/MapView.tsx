@@ -28,6 +28,7 @@ interface MapViewProps {
   onSearchArea: (bounds: { north: number; south: number; east: number; west: number }) => void
   isSearching: boolean
   centerOnVenueId: string | null
+  centerOnCoordinates?: { lat: number; lng: number } | null
   hasMapboxToken: boolean
   shouldFitBounds?: boolean
   onBoundsFitted?: () => void
@@ -54,6 +55,7 @@ export function MapView({
   onSearchArea,
   isSearching,
   centerOnVenueId,
+  centerOnCoordinates,
   hasMapboxToken,
   shouldFitBounds,
   onBoundsFitted,
@@ -118,6 +120,7 @@ export function MapView({
         onSearchArea={onSearchArea}
         isSearching={isSearching}
         centerOnVenueId={centerOnVenueId}
+        centerOnCoordinates={centerOnCoordinates}
         shouldFitBounds={shouldFitBounds}
         onBoundsFitted={onBoundsFitted}
         onRequestLocation={onRequestLocation}
