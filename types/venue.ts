@@ -27,10 +27,10 @@ export interface VenueDealBadge {
 export interface VenuePin {
   id: string
   name: string
-  latitude: number
-  longitude: number
+  lat: number
+  lng: number
   minPrice: number
-  openStatus: OpenStatusValue | null
+  status: OpenStatusValue | null
 }
 
 /**

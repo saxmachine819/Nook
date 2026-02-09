@@ -1,14 +1,6 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query"
-import type { MapBounds, OpenStatusValue } from "@/types/venue"
+import type { MapBounds, OpenStatusValue, VenuePin } from "@/types/venue"
 
-export interface VenuePin {
-  id: string
-  name: string
-  minPrice: number
-  lat: number
-  lng: number
-  status: OpenStatusValue | null
-}
 
 interface PinsResponse {
   pins: VenuePin[]

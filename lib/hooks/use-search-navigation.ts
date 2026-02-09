@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { VenuePin } from "./use-venue-pins";
-import type { VenueCard } from "@/types/venue";
+import type { VenuePin, VenueCard } from "@/types/venue";
 
 interface UseSearchNavigationOptions {
   hasFilters: boolean;
@@ -26,7 +25,7 @@ export function useSearchNavigation(options: UseSearchNavigationOptions) {
           lat: v.latitude!,
           lng: v.longitude!,
           minPrice: v.minPrice,
-          status: v.openStatus || null,
+          status: v.openStatus?.status || null,
         }));
 
       setManualPins(convertedPins);
