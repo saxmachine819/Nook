@@ -266,3 +266,31 @@ After a successful booking, the reservations API enqueues one `booking_confirmat
 
 - **Success:** A test that mocks `enqueueNotification` and asserts it is called once with `type: "booking_confirmation"`, `dedupeKey` matching `/^booking_confirmation:/`, and `toEmail` equal to the session user’s email after a 201 response.
 - **Failure:** A test that triggers a failed booking (e.g. missing fields, 400/409) and asserts `enqueueNotification` is not called.
+
+---
+
+## Venue approved email
+
+When a site admin approves a venue (POST `/api/venues/[id]/approve`), the venue owner receives an "Approved & Ready to Book" email. The notification is enqueued only after approval succeeds; it uses `type: venue_approved` and `dedupeKey: venue_approved:<venueId>` for idempotency.
+
+### A) Manual test
+
+1. As an admin, approve a venue with a known name (e.g. "Bluebird Café") from the Admin → Approvals page (or via POST `/api/venues/<venueId>/approve`).
+2. Verify exactly one `NotificationEvent` row: `type` = `venue_approved`, `dedupeKey` = `venue_approved:<venueId>`, and payload containing `venueName`, `venueId`, and `dashboardUrl`.
+
+### B) Dispatch test
+
+1. With a PENDING `venue_approved` event (e.g. from step A), run `curl -X POST http://localhost:3000/api/email/dispatch` (or GET with CRON_SECRET).
+2. Confirm the received email has subject "{VenueName} is approved — you're live on Nooc 🎉" (with the actual venue name) and body that references the venue name and has "Go to your dashboard" linking to the venue dashboard URL.
+
+### C) Debug panel test
+
+1. Open Email Debug (`/admin/email-debug`) as an admin.
+2. Confirm `venue_approved` appears in the type filter; select it and confirm events of that type are listed.
+3. Click a `venue_approved` row to expand; confirm the payload preview shows `venueName` (and `venueId`, `dashboardUrl`) and that the derived subject shows the venue-specific subject when `venueName` is present.
+4. After running dispatch, confirm the event's status moves from PENDING to SENT.
+
+### D) Safety / idempotency
+
+1. **Re-approval:** Attempt to approve an already-approved venue (e.g. call POST approve again or use the approvals UI). The API returns 400 ("Venue cannot be approved. Current status: APPROVED") and no new notification is enqueued.
+2. **Dedupe:** If the same `venue_approved:<venueId>` were enqueued twice (e.g. from another code path), the second `enqueueNotification` call returns `created: false` and does not create a duplicate row; only one email would ever be sent.

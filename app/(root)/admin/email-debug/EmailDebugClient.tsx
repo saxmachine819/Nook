@@ -16,6 +16,7 @@ const TYPE_OPTIONS = [
   "welcome_user",
   "welcome",
   "booking_end_5min",
+  "venue_approved",
 ] as const
 
 export interface EmailDebugEvent {

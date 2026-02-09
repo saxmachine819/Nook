@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { enqueueNotification } from "@/lib/notification-queue"
 import { prisma } from "@/lib/prisma"
 import { isAdmin } from "@/lib/venue-auth"
 
@@ -60,8 +61,33 @@ export async function POST(
         rejectionReason: null,
         rejectedByUserId: null,
       },
-      select: { id: true, name: true, onboardingStatus: true },
+      select: {
+        id: true,
+        name: true,
+        onboardingStatus: true,
+        owner: { select: { email: true } },
+      },
     })
+
+    if (updatedVenue.owner?.email?.trim()) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+      const dashboardUrl = baseUrl ? `${baseUrl}/venue/dashboard/${venueId}` : ""
+      try {
+        await enqueueNotification({
+          type: "venue_approved",
+          dedupeKey: `venue_approved:${venueId}`,
+          toEmail: updatedVenue.owner.email.trim(),
+          venueId,
+          payload: {
+            venueId,
+            venueName: updatedVenue.name,
+            dashboardUrl,
+          },
+        })
+      } catch (enqueueErr) {
+        console.error("Failed to enqueue venue_approved notification:", enqueueErr)
+      }
+    }
 
     return NextResponse.json({ venue: updatedVenue }, { status: 200 })
   } catch (error: any) {

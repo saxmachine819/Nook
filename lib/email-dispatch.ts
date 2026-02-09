@@ -9,6 +9,7 @@ import VenueBookingCreatedEmail from "@/emails/VenueBookingCreatedEmail"
 import VenueBookingCanceledEmail from "@/emails/VenueBookingCanceledEmail"
 import BookingEndReminderEmail from "@/emails/BookingEndReminderEmail"
 import BookingReminder60MinEmail from "@/emails/BookingReminder60MinEmail"
+import VenueApprovedEmail from "@/emails/VenueApprovedEmail"
 
 const BATCH_SIZE = 25
 const MAX_ERROR_LENGTH = 1000
@@ -16,7 +17,7 @@ const MAX_ERROR_LENGTH = 1000
 type Payload = Record<string, unknown>
 
 interface Handler {
-  subject: string
+  subject: string | ((payload: Payload) => string)
   render: (payload: Payload) => React.ReactElement
 }
 
@@ -96,6 +97,15 @@ const REGISTRY: Record<string, Handler> = {
         timeZone: p.timeZone as string | undefined,
       }),
   },
+  venue_approved: {
+    subject: (p) =>
+      `${p.venueName ?? "Your venue"} is approved — you're live on Nooc 🎉`,
+    render: (p) =>
+      React.createElement(VenueApprovedEmail, {
+        venueName: p.venueName as string | undefined,
+        dashboardUrl: p.dashboardUrl as string | undefined,
+      }),
+  },
 }
 
 export interface DispatchResult {
@@ -140,13 +150,15 @@ export async function runDispatcher(): Promise<DispatchResult> {
     }
 
     const payload = (event.payload as Payload) ?? {}
+    const subject =
+      typeof handler.subject === "function" ? handler.subject(payload) : handler.subject
     let errorMessage: string | null = null
 
     try {
       const { data, error } = await resend.emails.send({
         from,
         to: [event.toEmail],
-        subject: handler.subject,
+        subject,
         react: handler.render(payload),
       })
       if (error) errorMessage = error.message ?? "Failed to send"

@@ -16,6 +16,7 @@ const EMAIL_TYPE_SUBJECTS: Record<string, string> = {
   venue_booking_created: "New booking at your venue",
   venue_booking_canceled: "Booking canceled at your venue",
   booking_end_5min: "Your booking ends in 5 minutes",
+  venue_approved: "Venue approved",
 }
 
 async function getNotificationEvents(status?: string, type?: string) {
@@ -47,20 +48,27 @@ async function getNotificationEvents(status?: string, type?: string) {
       take: 100,
     })
 
-    return events.map((e) => ({
-      id: e.id,
-      createdAt: e.createdAt.toISOString(),
-      type: e.type,
-      status: e.status,
-      toEmail: e.toEmail,
-      userId: e.userId,
-      venueId: e.venueId,
-      bookingId: e.bookingId,
-      payload: e.payload,
-      error: e.error,
-      sentAt: e.sentAt?.toISOString() ?? null,
-      subject: EMAIL_TYPE_SUBJECTS[e.type] ?? e.type,
-    }))
+    return events.map((e) => {
+      const payload = e.payload as { venueName?: string } | null
+      const subject =
+        e.type === "venue_approved" && payload?.venueName
+          ? `${payload.venueName} is approved — you're live on Nooc 🎉`
+          : EMAIL_TYPE_SUBJECTS[e.type] ?? e.type
+      return {
+        id: e.id,
+        createdAt: e.createdAt.toISOString(),
+        type: e.type,
+        status: e.status,
+        toEmail: e.toEmail,
+        userId: e.userId,
+        venueId: e.venueId,
+        bookingId: e.bookingId,
+        payload: e.payload,
+        error: e.error,
+        sentAt: e.sentAt?.toISOString() ?? null,
+        subject,
+      }
+    })
   } catch (error) {
     console.error("Error fetching notification events:", error)
     return []
