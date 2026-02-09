@@ -231,32 +231,31 @@ export async function POST(request: Request) {
         )
       }
 
-      // Check if table is available (no overlapping reservations for this table)
-      const overlapping = await prisma.reservation.findFirst({
-        where: {
-          tableId: tableId,
-          seatId: null, // Group bookings have no seatId
-          status: {
-            not: "cancelled",
+      // Use transaction to prevent race condition
+      const reservation = await prisma.$transaction(async (tx) => {
+        // Check if table is available with row-level locking
+        const overlapping = await tx.reservation.findFirst({
+          where: {
+            tableId: tableId,
+            seatId: null,
+            status: {
+              not: "cancelled",
+            },
+            startAt: {
+              lt: parsedEnd,
+            },
+            endAt: {
+              gt: parsedStart,
+            },
           },
-          startAt: {
-            lt: parsedEnd,
-          },
-          endAt: {
-            gt: parsedStart,
-          },
-        },
-      })
+        })
 
-      if (overlapping) {
-        return NextResponse.json(
-          { error: "This table is not available for that time." },
-          { status: 409 }
-        )
-      }
+        if (overlapping) {
+          throw new Error("TABLE_UNAVAILABLE")
+        }
 
-      // Create a single reservation for the entire table
-      const reservation = await prisma.reservation.create({
+        // Create reservation atomically
+        return await tx.reservation.create({
         data: {
           venueId: venueId,
           tableId: tableId,
@@ -301,6 +300,7 @@ export async function POST(request: Request) {
             },
           },
         },
+      })
       })
 
       reservations = [reservation]
@@ -353,38 +353,33 @@ export async function POST(request: Request) {
         }
       }
 
-      // Check per-seat availability: ensure no overlapping reservations for any of the seats
-      const overlapping = await prisma.reservation.findFirst({
-        where: {
-          seatId: {
-            in: finalSeatIds,
-          },
-          status: {
-            not: "cancelled",
-          },
-          startAt: {
-            lt: parsedEnd,
-          },
-          endAt: {
-            gt: parsedStart,
-          },
-        },
-      })
-
-      if (overlapping) {
-        return NextResponse.json(
-          { error: "One or more seats are not available for that time." },
-          { status: 409 }
-        )
-      }
-
-      // NOTE: For MVP we use simple check-then-create. This is not fully concurrency safe.
-      // TODO: Add transactional locking / seat hold logic to prevent race conditions.
-
-      // Create a single reservation for all selected seats
-      // Use the first seat's tableId and seatId as the primary reference
+      // Use transaction to prevent race condition
       const firstSeat = seats[0]
-      const reservation = await prisma.reservation.create({
+      const reservation = await prisma.$transaction(async (tx) => {
+        // Check per-seat availability with row-level locking
+        const overlapping = await tx.reservation.findFirst({
+          where: {
+            seatId: {
+              in: finalSeatIds,
+            },
+            status: {
+              not: "cancelled",
+            },
+            startAt: {
+              lt: parsedEnd,
+            },
+            endAt: {
+              gt: parsedStart,
+            },
+          },
+        })
+
+        if (overlapping) {
+          throw new Error("SEAT_UNAVAILABLE")
+        }
+
+        // Create reservation atomically
+        return await tx.reservation.create({
         data: {
           venueId: venueId,
           tableId: firstSeat.tableId,
@@ -429,6 +424,7 @@ export async function POST(request: Request) {
             },
           },
         },
+      })
       })
 
       reservations = [reservation]
@@ -540,6 +536,21 @@ export async function POST(request: Request) {
       stack: error?.stack,
       name: error?.name,
     })
+
+    // Handle race condition errors from transaction
+    if (error?.message === "TABLE_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "This table is not available for that time." },
+        { status: 409 }
+      )
+    }
+
+    if (error?.message === "SEAT_UNAVAILABLE") {
+      return NextResponse.json(
+        { error: "One or more seats are not available for that time." },
+        { status: 409 }
+      )
+    }
 
     // Check for foreign key constraint errors
     if (error?.code === "P2003") {

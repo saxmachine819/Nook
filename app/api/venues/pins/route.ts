@@ -47,6 +47,17 @@ export async function GET(request: Request) {
         hourlySeatPrice: true,
         latitude: true,
         longitude: true,
+        tables: {
+          where: { isActive: true },
+          select: {
+            bookingMode: true,
+            tablePricePerHour: true,
+            seats: {
+              where: { isActive: true },
+              select: { pricePerHour: true },
+            },
+          },
+        },
       },
       take: 200,
     })
@@ -61,10 +72,20 @@ export async function GET(request: Request) {
         const canonical = hoursMap.get(venue.id)
         const openStatus = canonical ? getOpenStatus(canonical, now) : null
 
+        const allSeatPrices = venue.tables.flatMap((t) =>
+          t.seats.map((s) => s.pricePerHour).filter((p): p is number => p != null && p > 0)
+        )
+        const allTablePrices = venue.tables
+          .filter((t) => t.bookingMode === "group" && t.tablePricePerHour != null && t.tablePricePerHour > 0)
+          .map((t) => t.tablePricePerHour as number)
+        const candidatePrices = [...allSeatPrices, ...allTablePrices]
+        const fallback = venue.hourlySeatPrice > 0 ? venue.hourlySeatPrice : 0
+        const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
+
         return {
           id: venue.id,
           name: venue.name,
-          minPrice: venue.hourlySeatPrice ?? 0,
+          minPrice,
           lat: venue.latitude as number,
           lng: venue.longitude as number,
           status: (openStatus?.status ?? null) as OpenStatusValue | null,

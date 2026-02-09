@@ -101,7 +101,6 @@ export function ExploreClient({
 
   const hasReceivedInitialBoundsRef = useRef(false);
   const didAreaSearchRef = useRef(false);
-  const lastSearchQueryRef = useRef("");
 
   const searchFilters = useMemo(
     () => filterStateToSearchFilters(filters),
@@ -204,19 +203,6 @@ export function ExploreClient({
     }, 800);
     return () => clearTimeout(t);
   }, [centerOnVenueId]);
-
-  useEffect(() => {
-    if (searchQuery.length > 0 && searchQuery !== lastSearchQueryRef.current && venues.length > 0 && !isCardsLoading) {
-      lastSearchQueryRef.current = searchQuery;
-      const firstVenue = venues[0];
-      if (firstVenue?.id && firstVenue.latitude != null && firstVenue.longitude != null) {
-        setCenterOnVenueId(firstVenue.id);
-        setCenterOnCoordinates({ lat: firstVenue.latitude, lng: firstVenue.longitude });
-      }
-    } else if (searchQuery.length === 0) {
-      lastSearchQueryRef.current = "";
-    }
-  }, [searchQuery, venues, isCardsLoading]);
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
