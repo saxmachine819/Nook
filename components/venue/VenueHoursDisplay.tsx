@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import type { OpenStatus } from "@/lib/hours"
 
 interface VenueHoursDisplayProps {

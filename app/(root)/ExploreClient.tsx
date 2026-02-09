@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MapView } from "@/components/explore/MapView";
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls";

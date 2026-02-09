@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { VenueCard } from "@/components/venue/VenueCard"
 import { cn } from "@/lib/utils"
 
@@ -78,7 +78,10 @@ export function VenuePreviewSheet({
     startTimeRef.current = Date.now()
     swipeToCloseActiveRef.current = false
     currentDeltaYRef.current = 0
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    const target = e.currentTarget as HTMLElement
+    if (target.setPointerCapture) {
+      target.setPointerCapture(e.pointerId)
+    }
   }
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -108,7 +111,10 @@ export function VenuePreviewSheet({
         (deltaY >= SWIPE_VELOCITY_MIN_DISTANCE_PX && velocity >= SWIPE_VELOCITY_THRESHOLD_PX_MS))
     if (shouldClose) onClose()
     else setDragTranslateY(0)
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    const target = e.currentTarget as HTMLElement
+    if (target.releasePointerCapture) {
+      target.releasePointerCapture(e.pointerId)
+    }
     startYRef.current = 0
     startScrollTopRef.current = 0
     swipeToCloseActiveRef.current = false
