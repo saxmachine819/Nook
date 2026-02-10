@@ -169,6 +169,7 @@ export async function getVenueResources(venueId: string) {
                 name: true,
                 position: true,
               },
+              orderBy: { position: "asc" },
             },
           },
         },
@@ -184,9 +185,9 @@ export async function getVenueResources(venueId: string) {
       return { seats: [], tables: [] }
     }
 
-    // Flatten seats from all tables - only include seats from individual tables
+    // Flatten seats from all tables - only include seats from individual tables (case-insensitive)
     const seats = venue.tables
-      .filter((table) => (table.bookingMode || "individual") === "individual") // Only individual tables
+      .filter((table) => String(table.bookingMode || "individual").toLowerCase() === "individual")
       .flatMap((table) => {
         // Safety check: ensure seats array exists
         if (!table.seats || !Array.isArray(table.seats)) {

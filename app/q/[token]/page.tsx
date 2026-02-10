@@ -15,6 +15,8 @@ const QRRedirectWithAdminPanel = dynamic(
   { ssr: false }
 )
 
+// QR flow: token → lookup; ACTIVE + venueId → redirect to /venue/[id] (optional resource params); scan recorded in QREvent.
+
 interface QRScanPageProps {
   params: Promise<{ token: string }>
 }
@@ -107,10 +109,13 @@ export default async function QRScanPage({ params }: QRScanPageProps) {
       if (qrAsset.venueId) {
         const queryParams = new URLSearchParams()
         
-        // Add resource preselection params if available
+        // Add resource preselection params if available (seat/table QR)
         if (qrAsset.resourceType && qrAsset.resourceId) {
           queryParams.set("resourceType", qrAsset.resourceType)
           queryParams.set("resourceId", qrAsset.resourceId)
+        } else {
+          // Venue-level QR (register/front window): no resource preselection; tag source for analytics
+          queryParams.set("source", "qr")
         }
 
         const queryString = queryParams.toString()

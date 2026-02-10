@@ -107,6 +107,7 @@ interface VenueOpsConsoleClientProps {
   deals: Deal[]
   now: string
   assignedQrByResourceKey?: Record<string, string>
+  venueQrToken?: string | null
 }
 
 type TabMode = "upcoming" | "past" | "cancelled"
@@ -118,6 +119,7 @@ export function VenueOpsConsoleClient({
   deals: initialDeals,
   now: initialNow,
   assignedQrByResourceKey = {},
+  venueQrToken: initialVenueQrToken = null,
 }: VenueOpsConsoleClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
@@ -134,6 +136,9 @@ export function VenueOpsConsoleClient({
   const [printQRLoading, setPrintQRLoading] = useState<string | null>(null)
   const [localQrTokensByKey, setLocalQrTokensByKey] = useState<Record<string, string>>({})
   const [retiringKey, setRetiringKey] = useState<string | null>(null)
+  const [venueQrLoading, setVenueQrLoading] = useState(false)
+  const [venueQrRetiring, setVenueQrRetiring] = useState(false)
+  const [localVenueQrToken, setLocalVenueQrToken] = useState<string | null>(null)
   const [qrManagementOpen, setQrManagementOpen] = useState(false)
   const [teamManagementOpen, setTeamManagementOpen] = useState(false)
   const [dealFormOpen, setDealFormOpen] = useState(false)
@@ -282,6 +287,62 @@ export function VenueOpsConsoleClient({
     },
     [getTokenForResource, showToast, router]
   )
+
+  const effectiveVenueQrToken = localVenueQrToken ?? initialVenueQrToken ?? null
+
+  const handleVenueQRGenerate = useCallback(async () => {
+    setVenueQrLoading(true)
+    try {
+      const res = await fetch("/api/qr-assets/allocate-and-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          venueId: venue.id,
+          resourceType: "venue",
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to get venue QR", "error")
+        return
+      }
+      setLocalVenueQrToken(data.token)
+      setPrintQRModal({ token: data.token })
+    } catch {
+      showToast("Failed to get venue QR", "error")
+    } finally {
+      setVenueQrLoading(false)
+    }
+  }, [venue.id, showToast])
+
+  const handleVenueQRRetire = useCallback(async () => {
+    const token = effectiveVenueQrToken
+    if (!token) {
+      showToast("No venue QR assigned", "error")
+      return
+    }
+    if (!confirm("Retire this QR? It will no longer be active.")) return
+    setVenueQrRetiring(true)
+    try {
+      const res = await fetch("/api/qr-assets/retire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to retire venue QR", "error")
+        return
+      }
+      setLocalVenueQrToken(null)
+      router.refresh()
+      showToast("Venue QR retired", "success")
+    } catch {
+      showToast("Failed to retire venue QR", "error")
+    } finally {
+      setVenueQrRetiring(false)
+    }
+  }, [effectiveVenueQrToken, showToast, router])
 
   const handlePause = useCallback(async () => {
     setPauseModalOpen(false)
@@ -1699,6 +1760,54 @@ export function VenueOpsConsoleClient({
                     {qrManagementOpen && (
                       <div className="rounded-md border bg-muted/30 overflow-hidden">
                         <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
+                          {/* Venue QR (Register / Front Window) — first option */}
+                          <div
+                            className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                          >
+                            <span className="text-xs font-medium truncate min-w-0">
+                              Venue QR (Register / Front Window)
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {effectiveVenueQrToken ? (
+                                <>
+                                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                    QR assigned
+                                  </span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-1.5"
+                                    onClick={() => setPrintQRModal({ token: effectiveVenueQrToken })}
+                                  >
+                                    <Download className="h-2.5 w-2.5 mr-0.5" />
+                                    Download
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[10px] px-1.5 text-muted-foreground hover:text-destructive"
+                                    disabled={venueQrRetiring}
+                                    onClick={handleVenueQRRetire}
+                                  >
+                                    {venueQrRetiring ? "..." : <><XCircle className="h-2.5 w-2.5 mr-0.5" /> Retire</>}
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] px-1.5"
+                                  disabled={venueQrLoading}
+                                  onClick={handleVenueQRGenerate}
+                                >
+                                  {venueQrLoading ? "..." : <><Printer className="h-2.5 w-2.5 mr-0.5" /> Generate venue QR</>}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                           {venue.tables.length === 0 ? (
                             <p className="text-xs text-muted-foreground px-2 py-3 text-center">No seats or tables yet</p>
                           ) : (
@@ -2053,12 +2162,6 @@ export function VenueOpsConsoleClient({
                   className="h-24 w-24"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Token (use this to verify in DB):{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px] select-all">
-                  {printQRModal.token}
-                </code>
-              </p>
               <div className="flex flex-col gap-2">
                 <Button asChild variant="outline" size="sm">
                   <a

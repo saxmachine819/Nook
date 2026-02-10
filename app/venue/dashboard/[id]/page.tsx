@@ -34,8 +34,8 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
 
   const now = new Date()
 
-  // Fetch reservations, seat blocks, deals, and QR assets
-  const [reservations, seatBlocks, dealsResult, qrAssets] = await Promise.all([
+  // Fetch reservations, seat blocks, deals, QR assets (seat/table), and venue-level QR
+  const [reservations, seatBlocks, dealsResult, qrAssets, venueQrAsset] = await Promise.all([
     prisma.reservation.findMany({
       where: {
         venueId: venue.id,
@@ -95,6 +95,15 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       },
       select: { resourceType: true, resourceId: true, token: true },
     }),
+    prisma.qRAsset.findFirst({
+      where: {
+        venueId: venue.id,
+        status: "ACTIVE",
+        resourceType: "venue",
+        resourceId: null,
+      },
+      select: { token: true },
+    }),
   ])
 
   const deals = dealsResult || []
@@ -132,6 +141,8 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
     }
   }
 
+  const venueQrToken = venueQrAsset?.token ?? null
+
   return (
     <VenueOpsConsoleClient
       venue={venue}
@@ -140,6 +151,7 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       deals={deals}
       now={now.toISOString()}
       assignedQrByResourceKey={assignedQrByResourceKey}
+      venueQrToken={venueQrToken}
     />
   )
 }
