@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 const TO_EMAIL_TRUNCATE = 40
@@ -63,6 +64,8 @@ export function EmailDebugClient({
   const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
   const [typeFilter, setTypeFilter] = useState(initialTypeFilter)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [dispatchLoading, setDispatchLoading] = useState(false)
+  const [dispatchMessage, setDispatchMessage] = useState<string | null>(null)
 
   useEffect(() => {
     setStatusFilter(initialStatusFilter)
@@ -90,10 +93,31 @@ export function EmailDebugClient({
     setExpandedId((prev) => (prev === id ? null : id))
   }
 
+  const handleRunDispatcher = async () => {
+    setDispatchLoading(true)
+    setDispatchMessage(null)
+    try {
+      const res = await fetch("/api/admin/email/run-dispatcher", { method: "POST" })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setDispatchMessage(
+          `Processed ${data.processed ?? 0}, sent ${data.sent ?? 0}, failed ${data.failed ?? 0}`
+        )
+        router.refresh()
+      } else {
+        setDispatchMessage(data.error ?? "Failed to run dispatcher")
+      }
+    } catch {
+      setDispatchMessage("Request failed")
+    } finally {
+      setDispatchLoading(false)
+    }
+  }
+
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="mb-4 flex flex-wrap gap-4">
+        <div className="mb-4 flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-sm">
             Status
             <select
@@ -124,7 +148,28 @@ export function EmailDebugClient({
               ))}
             </select>
           </label>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleRunDispatcher}
+            disabled={dispatchLoading}
+          >
+            {dispatchLoading ? "Running…" : "Run dispatcher"}
+          </Button>
         </div>
+        {dispatchMessage && (
+          <p
+            className={cn(
+              "mb-4 text-sm",
+              dispatchMessage.startsWith("Processed")
+                ? "text-muted-foreground"
+                : "text-destructive"
+            )}
+          >
+            {dispatchMessage}
+          </p>
+        )}
 
         {events.length === 0 ? (
           <p className="text-sm text-muted-foreground">No events match the filters.</p>
