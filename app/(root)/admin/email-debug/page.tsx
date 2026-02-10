@@ -17,6 +17,7 @@ const EMAIL_TYPE_SUBJECTS: Record<string, string> = {
   venue_booking_canceled: "Booking canceled at your venue",
   booking_end_5min: "Your booking ends in 5 minutes",
   venue_approved: "Venue approved",
+  customer_follow_up: "Thanks for using Nooc today ☕",
 }
 
 async function getNotificationEvents(status?: string, type?: string) {

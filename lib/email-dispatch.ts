@@ -10,6 +10,7 @@ import VenueBookingCanceledEmail from "@/emails/VenueBookingCanceledEmail"
 import BookingEndReminderEmail from "@/emails/BookingEndReminderEmail"
 import BookingReminder60MinEmail from "@/emails/BookingReminder60MinEmail"
 import VenueApprovedEmail from "@/emails/VenueApprovedEmail"
+import CustomerFollowUpEmail from "@/emails/CustomerFollowUpEmail"
 
 const BATCH_SIZE = 25
 const MAX_ERROR_LENGTH = 1000
@@ -104,6 +105,15 @@ const REGISTRY: Record<string, Handler> = {
       React.createElement(VenueApprovedEmail, {
         venueName: p.venueName as string | undefined,
         dashboardUrl: p.dashboardUrl as string | undefined,
+      }),
+  },
+  customer_follow_up: {
+    subject: "Thanks for using Nooc today ☕",
+    render: (p) =>
+      React.createElement(CustomerFollowUpEmail, {
+        venueName: p.venueName as string | undefined,
+        rebookUrl: p.rebookUrl as string | undefined,
+        exploreUrl: "https://nooc.io",
       }),
   },
 }

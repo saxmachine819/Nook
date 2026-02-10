@@ -126,7 +126,7 @@ curl -X POST https://your-app.com/api/email/dispatch \
 
 ## Delivery within ~1 minute (cron)
 
-In production, **Vercel Cron** runs every 1 minute and calls GET `/api/email/dispatch`, GET `/api/cron/booking-end-reminders`, and GET `/api/cron/booking-reminder-60min`, each with `Authorization: Bearer CRON_SECRET`. All endpoints reject requests with a missing or invalid secret (401). See **Vercel Cron setup and CRON_SECRET** below for exact env vars and Vercel setup.
+In production, **Vercel Cron** runs every 1 minute and calls GET `/api/email/dispatch`, GET `/api/cron/booking-end-reminders`, GET `/api/cron/booking-reminder-60min`, and GET `/api/cron/customer-follow-up`, each with `Authorization: Bearer CRON_SECRET`. All endpoints reject requests with a missing or invalid secret (401). See **Vercel Cron setup and CRON_SECRET** below for exact env vars and Vercel setup.
 
 Booking creation only **enqueues** a notification; it does not wait on sending. So **booking request latency** is not increased by email—only by the enqueue DB write, which is small.
 
@@ -146,6 +146,7 @@ Booking creation only **enqueues** a notification; it does not wait on sending. 
 - **DISPATCH_SECRET**: Used for manual POST to `/api/email/dispatch` (header `x-dispatch-secret`). Optional for cron if you use GET with CRON_SECRET.
 - **Optional (local/testing):** `BOOKING_REMINDER_WINDOW_START_MINUTES`, `BOOKING_REMINDER_WINDOW_END_MINUTES` — default 4 and 6; override to e.g. 1 and 3 for local testing of booking-end reminders.
 - **Optional (local/testing):** `BOOKING_REMINDER_60MIN_WINDOW_START`, `BOOKING_REMINDER_60MIN_WINDOW_END` — default 54 and 66; override to e.g. 1 and 3 for local testing of 60-minute booking reminders.
+- **Optional (local/testing):** `CUSTOMER_FOLLOW_UP_HOUR`, `CUSTOMER_FOLLOW_UP_MINUTE_START`, `CUSTOMER_FOLLOW_UP_MINUTE_END` — default 18, 0, 30 (6:00–6:30 PM venue local); set e.g. `CUSTOMER_FOLLOW_UP_HOUR=14` and `CUSTOMER_FOLLOW_UP_MINUTE_END=59` for local testing in the 2 PM hour.
 
 ### Vercel setup steps
 
@@ -154,6 +155,7 @@ Booking creation only **enqueues** a notification; it does not wait on sending. 
    - GET `/api/email/dispatch` — sends queued notification emails.
    - GET `/api/cron/booking-end-reminders` — enqueues 5-minute booking-end reminder emails for reservations ending soon.
    - GET `/api/cron/booking-reminder-60min` — enqueues 60-minute booking reminder emails for reservations starting soon.
+   - GET `/api/cron/customer-follow-up` — enqueues same-day customer follow-up emails for reservations that occurred today (venue local ~6 PM).
 
 ### Local testing with secret header
 
@@ -179,13 +181,19 @@ curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/cron
 curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/cron/booking-reminder-60min
 ```
 
-Expected for both: `200` and body `{ "enqueued", "skipped" }`.
+**Customer follow-up (GET):**
+
+```bash
+curl -H "Authorization: Bearer your-local-secret" http://localhost:3000/api/cron/customer-follow-up
+```
+
+Expected for all: `200` and body `{ "enqueued", "skipped" }`.
 
 **Missing or wrong secret:** Omit the header or use a wrong token. Expected for all cron endpoints: **401** and body `{ "error": "Unauthorized" }`.
 
 ### Production: reject missing/invalid secret
 
-In production, GET requests to any cron endpoint without `Authorization: Bearer <CRON_SECRET>` or with an incorrect token must return **401** and body `{ "error": "Unauthorized" }`. This is already implemented. To confirm: run `curl https://your-production-url.com/api/email/dispatch`, `curl https://your-production-url.com/api/cron/booking-end-reminders`, and `curl https://your-production-url.com/api/cron/booking-reminder-60min` (no header); all should return 401.
+In production, GET requests to any cron endpoint without `Authorization: Bearer <CRON_SECRET>` or with an incorrect token must return **401** and body `{ "error": "Unauthorized" }`. This is already implemented. To confirm: run `curl https://your-production-url.com/api/email/dispatch`, `curl https://your-production-url.com/api/cron/booking-end-reminders`, `curl https://your-production-url.com/api/cron/booking-reminder-60min`, and `curl https://your-production-url.com/api/cron/customer-follow-up` (no header); all should return 401.
 
 ---
 
@@ -294,3 +302,36 @@ When a site admin approves a venue (POST `/api/venues/[id]/approve`), the venue 
 
 1. **Re-approval:** Attempt to approve an already-approved venue (e.g. call POST approve again or use the approvals UI). The API returns 400 ("Venue cannot be approved. Current status: APPROVED") and no new notification is enqueued.
 2. **Dedupe:** If the same `venue_approved:<venueId>` were enqueued twice (e.g. from another code path), the second `enqueueNotification` call returns `created: false` and does not create a duplicate row; only one email would ever be sent.
+
+---
+
+## Customer Follow-Up email
+
+The cron endpoint `/api/cron/customer-follow-up` enqueues `customer_follow_up` notification events for active reservations whose `startAt` is "today" in the venue's timezone, when the venue's local time is in the configured window (default ~6:00–6:30 PM). Events use `dedupeKey: customer_follow_up:<bookingId>` and are idempotent.
+
+### A) Local cron test
+
+1. **LOCAL-ONLY:** Set `CUSTOMER_FOLLOW_UP_HOUR=14`, `CUSTOMER_FOLLOW_UP_MINUTE_START=0`, and `CUSTOMER_FOLLOW_UP_MINUTE_END=59` in `.env` so the current hour (e.g. 2 PM) falls in the window.
+2. Create an active booking whose `startAt` is today in the venue's timezone (or use a venue whose "today" matches the reservation date).
+3. Trigger the cron: `curl -H "Authorization: Bearer YOUR_CRON_SECRET" http://localhost:3000/api/cron/customer-follow-up`.
+4. Verify exactly one `NotificationEvent` row with `type` = `customer_follow_up` and `dedupeKey` = `customer_follow_up:<reservationId>`.
+
+### B) Dedupe test
+
+1. With a booking in the window (and LOCAL-ONLY env if needed), call the cron endpoint twice.
+2. Confirm only one `NotificationEvent` row exists per `bookingId` (same `dedupeKey`; second enqueue returns `created: false`).
+
+### C) Dispatch test
+
+1. Seed or enqueue a PENDING `customer_follow_up` event (or rely on the cron).
+2. Run `curl -X POST http://localhost:3000/api/email/dispatch` (or GET with CRON_SECRET).
+3. Confirm the email is received with subject "Thanks for using Nooc today ☕".
+4. Confirm the **Rebook a seat** button links to the correct venue page (`/venue/<venueId>`).
+5. Confirm the **Explore nearby venues** link goes to `https://nooc.io`.
+
+### D) Debug panel test
+
+1. Open Email Debug (`/admin/email-debug`) as an admin.
+2. Confirm `customer_follow_up` appears in the type filter; select it and confirm events are listed.
+3. Click a row to expand; confirm the payload shows `venueName` and `rebookUrl` correctly.
+4. After running dispatch, confirm the event's status moves from PENDING to SENT.
