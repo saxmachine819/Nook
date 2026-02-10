@@ -1,7 +1,20 @@
 import type { OpenStatus } from "@/lib/hours"
 
 /** YYYY-MM-DD for the given date in local timezone (for date inputs and "today" checks). */
-export function getLocalDateString(date: Date = new Date()): string {
+export function getLocalDateString(date: Date = new Date(), timeZone?: string): string {
+  if (timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+    const parts = formatter.formatToParts(date)
+    const year = parts.find((p) => p.type === "year")?.value
+    const month = parts.find((p) => p.type === "month")?.value
+    const day = parts.find((p) => p.type === "day")?.value
+    return `${year}-${month}-${day}`
+  }
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, "0")
   const dd = String(date.getDate()).padStart(2, "0")

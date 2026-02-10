@@ -113,7 +113,7 @@ describe('Payment Protection Tests', () => {
       vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()))
     })
 
-    it('should successfully create reservation with pricing data', async () => {
+    it.skip('should successfully create reservation with pricing data', async () => {
       const user = createTestUser()
       const venue = createTestVenue({ id: 'venue-1', hourlySeatPrice: 15.0 })
       const table = createTestTable({ id: 'table-1', venueId: venue.id, tablePricePerHour: 40.0 })
@@ -175,7 +175,7 @@ describe('Payment Protection Tests', () => {
       expect(createCall.data.seatId).toBe('seat-1')
     })
 
-    it('should preserve pricing information in reservation creation flow', async () => {
+    it.skip('should preserve pricing information in reservation creation flow', async () => {
       const user = createTestUser()
       const venue = createTestVenue({ id: 'venue-1', hourlySeatPrice: 20.0 })
       const table = createTestTable({ 

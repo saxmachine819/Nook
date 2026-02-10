@@ -1,15 +1,14 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { isAdmin } from "@/lib/venue-auth"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    // Require authentication
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: "You must be signed in to view venues." },
@@ -17,7 +16,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Check admin access
     if (!isAdmin(session.user)) {
       return NextResponse.json(
         { error: "Unauthorized: Admin access required" },
@@ -25,8 +23,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get search query parameter
-    const searchParams = request.nextUrl.searchParams
+    const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get("search")?.trim() || ""
 
     // Build where clause for search

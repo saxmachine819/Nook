@@ -47,12 +47,20 @@ export async function GET(request: Request) {
     const favoritesOnly = searchParams.get("favoritesOnly") === "true"
     const availableNow = searchParams.get("availableNow") === "true"
 
-    // Validate bounds if provided
-    const hasBounds = north && south && east && west
+    const anyBoundsProvided = north || south || east || west
+    const allBoundsProvided = north && south && east && west
+
+    if (anyBoundsProvided && !allBoundsProvided) {
+      return NextResponse.json(
+        { error: "Incomplete map bounds: north, south, east, west are all required" },
+        { status: 400 }
+      )
+    }
+
     let boundsValid = false
     let parsedBounds: { north: number; south: number; east: number; west: number } | null = null
 
-    if (hasBounds) {
+    if (allBoundsProvided) {
       const northNum = parseFloat(north)
       const southNum = parseFloat(south)
       const eastNum = parseFloat(east)
@@ -68,8 +76,7 @@ export async function GET(request: Request) {
       ) {
         boundsValid = true
         parsedBounds = { north: northNum, south: southNum, east: eastNum, west: westNum }
-      } else if (hasBounds) {
-        // Bounds provided but invalid
+      } else {
         return NextResponse.json(
           { error: "Invalid map bounds provided." },
           { status: 400 }
