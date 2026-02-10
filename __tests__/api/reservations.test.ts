@@ -10,7 +10,7 @@ vi.mock('@/lib/prisma', () => ({
 
 // Mock auth
 vi.mock('@/lib/auth', () => ({
-  auth: vi.fn(),
+  auth: vi.fn() as any,
 }))
 
 // Mock notification queue (enqueue only; no inline send)
@@ -42,13 +42,13 @@ describe('POST /api/reservations', () => {
 
     // Default mock session
     const { auth } = await import('@/lib/auth')
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()) as any)
   })
 
   describe('authentication', () => {
     it('returns 401 if user is not authenticated', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(null)
+      vi.mocked(auth).mockResolvedValue(null as any)
 
       mockRequest = new Request('http://localhost/api/reservations', {
         method: 'POST',
@@ -68,7 +68,7 @@ describe('POST /api/reservations', () => {
 
     it('returns 401 if session user has no id', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue({ user: { email: 'test@example.com' } })
+      vi.mocked(auth).mockResolvedValue({ user: { email: 'test@example.com' } } as any)
 
       mockRequest = new Request('http://localhost/api/reservations', {
         method: 'POST',

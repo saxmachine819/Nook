@@ -132,7 +132,7 @@ describe('GET /api/admin/users/[id]', () => {
 
     const { GET: GETDetail } = await import('@/app/api/admin/users/[id]/route')
     const request = new Request('http://localhost/api/admin/users/user-1')
-    const response = await GETDetail(request, { params: Promise.resolve({ id: 'user-1' }) })
+    const response = await GETDetail(request as any, { params: Promise.resolve({ id: 'user-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(401)
@@ -149,7 +149,7 @@ describe('GET /api/admin/users/[id]', () => {
 
     const { GET: GETDetail } = await import('@/app/api/admin/users/[id]/route')
     const request = new Request('http://localhost/api/admin/users/user-1')
-    const response = await GETDetail(request, { params: Promise.resolve({ id: 'user-1' }) })
+    const response = await GETDetail(request as any, { params: Promise.resolve({ id: 'user-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(403)
@@ -190,7 +190,7 @@ describe('GET /api/admin/users/[id]', () => {
 
     const { GET: GETDetail } = await import('@/app/api/admin/users/[id]/route')
     const request = new Request('http://localhost/api/admin/users/user-1')
-    const response = await GETDetail(request, { params: Promise.resolve({ id: 'user-1' }) })
+    const response = await GETDetail(request as any, { params: Promise.resolve({ id: 'user-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(200)
@@ -206,7 +206,7 @@ describe('GET /api/admin/users/[id]', () => {
 
     const { GET: GETDetail } = await import('@/app/api/admin/users/[id]/route')
     const request = new Request('http://localhost/api/admin/users/user-1')
-    const response = await GETDetail(request, { params: Promise.resolve({ id: 'user-1' }) })
+    const response = await GETDetail(request as any, { params: Promise.resolve({ id: 'user-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(404)
