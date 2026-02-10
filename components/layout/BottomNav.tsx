@@ -33,8 +33,8 @@ export function BottomNav() {
   const navItems = manageItem ? [...baseNavItems, manageItem] : baseNavItems;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex max-w-screen-md items-center justify-around px-4 py-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/20 pb-safe">
+      <div className="mx-auto flex max-w-screen-md items-center justify-around px-2 py-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isManage = item.label === "Manage";
@@ -55,20 +55,27 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                "group relative flex flex-col items-center gap-1.5 rounded-2xl px-5 py-2 transition-all duration-300 active:scale-95",
                 isActive
                   ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "text-muted-foreground/70 hover:text-foreground hover:bg-black/5"
               )}
             >
-              <Icon
-                className={cn(
-                  "h-5 w-5",
-                  isActive &&
-                    "fill-[rgba(15,81,50,0.2)] [&_path]:fill-[rgba(15,81,50,0.2)]",
-                )}
-              />
-              <span className="text-xs">{label}</span>
+              <div className={cn(
+                "relative z-10 flex h-6 w-6 items-center justify-center transition-transform duration-300 group-hover:-translate-y-0.5",
+                isActive && "text-primary"
+              )}>
+                <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              </div>
+              <span className={cn(
+                "relative z-10 text-[10px] font-semibold uppercase tracking-wider transition-opacity duration-300",
+                isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"
+              )}>
+                {label}
+              </span>
+              {isActive && (
+                <div className="absolute inset-0 z-0 scale-95 rounded-2xl bg-primary/10 animate-in fade-in zoom-in duration-300" />
+              )}
             </Link>
           );
         })}

@@ -33,11 +33,11 @@ export function TopOverlayControls({
     <>
       <div
         className={cn(
-          "relative z-10 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3",
+          "relative z-10 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4",
           className
         )}
       >
-        <div className="flex gap-3">
+        <div className="flex gap-4">
           <div className="flex-1 min-w-0">
             <SearchBar onSearch={onSearch} />
           </div>
@@ -46,18 +46,19 @@ export function TopOverlayControls({
             variant="outline"
             size="icon"
             onClick={() => onFilterPanelOpenChange(true)}
-            className="relative shrink-0 h-10 w-10 rounded-lg border-input bg-background/80"
+            className="relative shrink-0 h-14 w-14 rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
             aria-label="Filter workspaces"
           >
-            <Filter className="h-4 w-4" />
+            <Filter size={20} strokeWidth={2.5} className="text-primary/70" />
             {activeFilterCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+              <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-primary-foreground shadow-lg shadow-primary/20 animate-in zoom-in duration-300">
                 {activeFilterCount}
               </span>
             )}
           </Button>
         </div>
       </div>
+
       <FilterPanel
         open={filterPanelOpen}
         onOpenChange={onFilterPanelOpenChange}

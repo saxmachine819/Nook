@@ -84,7 +84,7 @@ export function VenueCard({
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
-  
+
   const [date, setDate] = useState<string>("")
   const [slots, setSlots] = useState<Slot[]>([])
   const [isLoadingSlots, setIsLoadingSlots] = useState(false)
@@ -179,112 +179,28 @@ export function VenueCard({
       setIsSubmitting(true)
 
       const startAt = new Date(selectedSlot.start)
-      const endAt = new Date(startAt.getTime() + durationSlots * 15 * 60 * 1000)
-
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          venueId: id,
-          startAt: startAt.toISOString(),
-          endAt: endAt.toISOString(),
-          seatCount: seats,
-        }),
-      })
-
-      const data = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          pendingReservationPayloadRef.current = {
-            venueId: id,
-            startAt: startAt.toISOString(),
-            endAt: endAt.toISOString(),
-            seatCount: seats,
-          }
-          setShowSignInModal(true)
-          return
-        }
-        
-        // Handle PAST_TIME error code specifically
-        if (data?.code === "PAST_TIME") {
-          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
-          return
-        }
-        
-        // Log error details for debugging
-        console.error("Reservation creation failed:", {
-          status: response.status,
-          error: data?.error,
-          details: data?.details,
+      const startTimeValue = startAt.getHours() * 100 + startAt.getMinutes()
+      const bookingParam = encodeURIComponent(
+        JSON.stringify({
+          date: getLocalDateString(startAt),
+          startTime: startTimeValue,
+          duration: durationSlots / 4,
         })
-        
-        const errorMessage = data?.error || "Failed to create reservation."
-        const detailsMessage = data?.details?.message ? ` (${data.details.message})` : ""
-        setSubmitError(errorMessage + detailsMessage)
-        return
-      }
+      )
 
-      showToast("Reservation confirmed.", "success")
-
-      // Open confirmation modal (no redirect)
-      setConfirmedReservation(data?.reservation || null)
-      setConfirmationOpen(true)
-      
-      // Refresh reservations page if user is currently on it
-      if (pathname === "/reservations") {
-        router.refresh()
-      }
-      
-      // Call onBookingSuccess callback to refresh availability
-      if (onBookingSuccess) {
-        onBookingSuccess()
-      }
+      showToast("Select seats to continue checkout.", "success")
+      router.push(`/venue/${id}?seats=${seats}&booking=${bookingParam}`)
     } catch (error) {
-      console.error("Error creating reservation:", error)
-      setSubmitError("Something went wrong while creating your reservation.")
+      console.error("Error starting checkout:", error)
+      setSubmitError("Something went wrong while starting checkout.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const retryReservation = useCallback(async () => {
-    const payload = pendingReservationPayloadRef.current
-    if (!payload) return
-    setIsSubmitting(true)
-    setSubmitError(null)
-    try {
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        if (data?.code === "PAST_TIME") {
-          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
-        } else {
-          setSubmitError(data?.error ?? "Failed to create reservation.")
-        }
-        pendingReservationPayloadRef.current = null
-        return
-      }
-      pendingReservationPayloadRef.current = null
-      setConfirmedReservation(data?.reservation || null)
-      setConfirmationOpen(true)
-      showToast("Reservation confirmed.", "success")
-      if (pathname === "/reservations") router.refresh()
-      onBookingSuccess?.()
-    } catch (error) {
-      console.error("Error creating reservation:", error)
-      setSubmitError("Something went wrong while creating your reservation.")
-      pendingReservationPayloadRef.current = null
-    } finally {
-      setIsSubmitting(false)
-    }
-  }, [id, pathname, router, showToast, onBookingSuccess])
+    pendingReservationPayloadRef.current = null
+  }, [])
 
   // Redirect to venue detail page when expanded (for seat-level booking)
   useEffect(() => {
@@ -322,20 +238,24 @@ export function VenueCard({
             router.push(url)
           })
         }}
-        className="w-full text-left"
+        className="w-full text-left outline-none"
       >
         <Card
           className={cn(
-            "overflow-hidden transition-shadow hover:shadow-md",
-            isDeemphasized ? "shadow-none" : "",
+            "group overflow-hidden border-none bg-card transition-all duration-300 hover:premium-shadow active:scale-[0.98]",
+            isDeemphasized ? "shadow-none" : "premium-shadow",
             className
           )}
         >
           {/* Image Section with Carousel */}
-          <div className="relative">
-            <VenueImageCarousel images={imageUrls} enableGallery={false} />
+          <div className="relative overflow-hidden">
+            <VenueImageCarousel images={imageUrls} enableGallery={false} className="transition-transform duration-500 group-hover:scale-105" />
+
+            {/* Gradient Overlay for badges visibility */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" />
+
             {/* Badges overlaying top-right of image */}
-            <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5 items-end">
+            <div className="absolute top-3 right-3 z-10 flex flex-col gap-2 items-end">
               {/* Favorite button */}
               <div onClick={(e) => e.stopPropagation()}>
                 <FavoriteButton
@@ -343,7 +263,7 @@ export function VenueCard({
                   itemId={id}
                   initialFavorited={isFavorited}
                   size="sm"
-                  className="rounded-full bg-background/90 backdrop-blur-sm p-1 shadow-sm"
+                  className="rounded-full glass-dark p-2 text-white shadow-lg transition-transform hover:scale-110 active:scale-90"
                   onToggle={onToggleFavorite}
                 />
               </div>
@@ -351,57 +271,65 @@ export function VenueCard({
               {availabilityLabel && (
                 <span
                   className={cn(
-                    "rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
-                    isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
+                    "rounded-full glass-dark px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg",
+                    isDeemphasized ? "py-0.5" : ""
                   )}
                 >
                   {availabilityLabel}
                 </span>
               )}
-              {/* Deal Badge directly under availability bubble */}
+              {/* Deal Badge */}
               {dealBadge && (
                 <span
                   className={cn(
-                    "rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-primary shadow-sm",
-                    isDeemphasized ? "px-2 py-0.5 text-xs" : "px-2 py-1 text-xs"
+                    "rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg animate-pulse",
+                    isDeemphasized ? "py-0.5" : ""
                   )}
                 >
-                  DEAL · {dealBadge.summary}
+                  {dealBadge.summary}
                 </span>
               )}
             </div>
           </div>
 
           {/* Text Content Below Image */}
-          <CardContent className={cn("p-4", isDeemphasized ? "pb-3" : "")}>
-            <h3 className={cn(isDeemphasized ? "text-base font-semibold leading-tight" : "text-lg font-semibold leading-tight")}>
-              {name}
-            </h3>
+          <CardContent className={cn("p-4 space-y-1.5", isDeemphasized ? "pb-3" : "")}>
+            <div className="flex justify-between items-start gap-2">
+              <h3 className={cn("font-bold tracking-tight text-foreground/90 transition-colors group-hover:text-primary", isDeemphasized ? "text-base" : "text-lg")}>
+                {name}
+              </h3>
+              <div className="shrink-0 flex flex-col items-end">
+                <p className="text-sm font-bold text-primary">
+                  ${minPrice.toFixed(0)}
+                </p>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold">/ hr</p>
+              </div>
+            </div>
+
             {locationDisplay && (
-              <div className={cn("mt-1 flex items-center gap-1", dealBadge ? "mt-1" : "mt-1")}>
-                <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                <p className={cn(isDeemphasized ? "text-xs text-muted-foreground" : "text-sm text-muted-foreground")}>
+              <div className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-primary/60 shrink-0" />
+                <p className={cn("text-muted-foreground font-medium", isDeemphasized ? "text-xs" : "text-sm")}>
                   {locationDisplay}
                 </p>
                 {missingLocation && (
-                  <span className="ml-2 text-xs text-muted-foreground opacity-50">
-                    (location missing)
+                  <span className="text-[10px] text-destructive/50 font-medium italic">
+                    (hidden)
                   </span>
                 )}
               </div>
             )}
-            {/* Pricing directly under address */}
-            <div className="mt-0.5">
-              {minPrice === maxPrice ? (
-                <p className="text-xs text-muted-foreground">
-                  ${minPrice.toFixed(0)} / hour
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  ${minPrice.toFixed(0)}-${maxPrice.toFixed(0)} / hour
-                </p>
-              )}
-            </div>
+
+            {/* Trust Tags or other info could go here if available */}
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {tags.slice(0, 3).map((tag, i) => (
+                  <span key={i} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/5 text-primary/70 border border-primary/10">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </button>
@@ -424,3 +352,4 @@ export function VenueCard({
     </>
   )
 }
+

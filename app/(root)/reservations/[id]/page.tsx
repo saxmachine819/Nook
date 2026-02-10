@@ -48,6 +48,11 @@ async function getReservation(reservationId: string, userId: string) {
           email: true,
         },
       },
+      payment: {
+        include: {
+          refundRequests: true,
+        },
+      },
     },
   })
 

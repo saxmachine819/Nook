@@ -36,6 +36,7 @@ import {
   PauseCircle,
   PlayCircle,
   UserMinus,
+  Undo2,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -1114,7 +1115,7 @@ export function VenueOpsConsoleClient({
   }, [isStripeDashboardOpening, showToast, venue.id])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white">
       {ToastComponent}
 
       {/* Top Bar - Sticky */}
@@ -1142,6 +1143,12 @@ export function VenueOpsConsoleClient({
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/venue/dashboard/${venue.id}/refunds`}>
+                  <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                  Refunds
+                </Link>
+              </Button>
               {showStripe && (
                 <Button
                   variant="outline"

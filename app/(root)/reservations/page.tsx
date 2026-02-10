@@ -46,6 +46,11 @@ async function getReservations(userId: string) {
           },
         },
       },
+      payment: {
+        include: {
+          refundRequests: true,
+        },
+      },
     },
     orderBy: {
       startAt: "desc", // Default: most recent first (we'll sort per category)

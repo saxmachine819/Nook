@@ -124,237 +124,231 @@ function ProfileContent() {
 
   if (!session) {
     const handleSignIn = () => {
-      // Use relative URL to avoid port mismatch issues
       const redirectUrl = callbackUrl || "/"
-      // Ensure callbackUrl is relative (not absolute) so it uses current origin
-      const relativeCallbackUrl = redirectUrl.startsWith("http") 
+      const relativeCallbackUrl = redirectUrl.startsWith("http")
         ? new URL(redirectUrl).pathname + new URL(redirectUrl).search
         : redirectUrl
       signIn("google", { callbackUrl: relativeCallbackUrl })
     }
 
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <User className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
-            <p className="text-sm text-muted-foreground">Sign in to manage your account</p>
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-16 max-w-xl">
+          <div className="flex flex-col items-center text-center space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <div className="flex h-24 w-24 items-center justify-center rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/5">
+              <User className="h-10 w-10 text-primary/40" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-4xl font-black tracking-tight">Your Space</h1>
+              <p className="text-sm font-medium text-muted-foreground/70 max-w-[280px] mx-auto leading-relaxed">
+                Sign in to manage your bookings, discover exclusive workspace deals, and more.
+              </p>
+            </div>
+
+            <Card className="w-full border-none bg-white shadow-2xl rounded-[2.5rem] p-8">
+              <CardContent className="p-0 space-y-6">
+                <Button onClick={handleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-lg shadow-primary/20">
+                  <LogIn className="mr-3 h-5 w-5" />
+                  Continue with Google
+                </Button>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
+                  By continuing, you agree to our Terms and Privacy Policy.
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              Sign in to reserve seats and manage your reservations
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={handleSignIn}
-              className="w-full"
-              size="lg"
-            >
-              <LogIn className="mr-2 h-4 w-4" />
-              Sign in with Google
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="mb-6 flex items-center gap-4">
-        <div className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-muted">
-          <div className="flex h-full w-full items-center justify-center bg-muted text-sm font-medium text-muted-foreground">
-            {initialsFromName(session.user?.name) ? (
-              initialsFromName(session.user?.name)
-            ) : (
-              <User className="h-8 w-8" />
-            )}
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-12 max-w-4xl">
+        <div className="mb-12 flex items-center gap-6 px-1 animate-in fade-in duration-700">
+          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="flex h-full w-full items-center justify-center text-xl font-black text-primary/40">
+              {initialsFromName(session.user?.name) ? (
+                initialsFromName(session.user?.name)
+              ) : (
+                <User className="h-8 w-8" />
+              )}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <h1 className="text-4xl font-black tracking-tight text-foreground/90">
+              {session.user?.name || "Member"}
+            </h1>
+            <p className="text-sm font-bold text-muted-foreground/60 uppercase tracking-widest">Account Settings</p>
           </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
-          <p className="text-sm text-muted-foreground">Your account settings</p>
-        </div>
-      </div>
 
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Information</CardTitle>
-            <CardDescription>
-              Your personal details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-muted-foreground">Name</label>
-                <p className="text-sm font-medium">
+        <div className="grid gap-8 lg:grid-cols-2">
+          <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4">
+            <CardHeader className="p-6">
+              <CardTitle className="text-xl font-black tracking-tight">Profile Info</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 pt-0 space-y-6">
+              <div className="p-4 bg-primary/[0.02] rounded-2xl border border-primary/5">
+                <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Full Name</label>
+                <p className="text-sm font-bold text-foreground/80">
                   {session.user?.name || "Not provided"}
                 </p>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-muted-foreground">Email</label>
-                <p className="text-sm font-medium">
+              <div className="p-4 bg-primary/[0.02] rounded-2xl border border-primary/5">
+                <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Email Address</label>
+                <p className="text-sm font-bold text-foreground/80">
                   {session.user?.email || "Not provided"}
                 </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Account Actions</CardTitle>
-            <CardDescription>
-              Manage your account
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              onClick={() => signOut()}
-              variant="outline"
-              className="w-full"
-              size="lg"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full text-muted-foreground hover:text-foreground"
-              size="lg"
-              onClick={() => {
-                setDeleteModalOpen(true)
-                setDeleteError(null)
-                setDeleteConfirmation("")
-                setDeleteReason("")
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete account
-            </Button>
-          </CardContent>
-        </Card>
-
-        {isAdmin && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Admin</CardTitle>
-              <CardDescription>
-                Access the admin panel to manage approvals, venues, and users
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button size="lg" asChild className="w-full">
-                <Link href="/admin">
-                  <Shield className="mr-2 h-4 w-4" />
-                  Go to Admin Panel
-                </Link>
-              </Button>
             </CardContent>
           </Card>
-        )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>My Venues</CardTitle>
-            <CardDescription>
-              {loadingVenues
-                ? "Loading..."
-                : venues.length === 0
-                  ? "List your venue on Nooc"
-                  : "Manage your venues from the dashboard"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingVenues ? (
-              <p className="text-sm text-muted-foreground">Loading venues…</p>
-            ) : venues.length === 0 ? (
-              <>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.
-                </p>
-                <Button size="lg" asChild className="w-full">
-                  <Link href="/venue/onboard">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add your venue
-                  </Link>
+          <div className="space-y-8">
+            <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4">
+              <CardHeader className="p-6">
+                <CardTitle className="text-xl font-black tracking-tight">Security & Privacy</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 pt-0 space-y-3">
+                <Button
+                  onClick={() => signOut()}
+                  variant="outline"
+                  className="w-full h-12 rounded-2xl font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all"
+                >
+                  <LogOut className="mr-2 h-4 w-4 opacity-50" />
+                  Sign out
                 </Button>
-              </>
-            ) : (
-              <Button size="lg" variant="outline" asChild className="w-full">
-                <Link href="/venue/dashboard">
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Open Venue Dashboard
-                </Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                <Button
+                  variant="ghost"
+                  className="w-full h-12 rounded-2xl font-bold text-muted-foreground/60 hover:text-red-600 hover:bg-red-50 transition-all"
+                  onClick={() => {
+                    setDeleteModalOpen(true)
+                    setDeleteError(null)
+                    setDeleteConfirmation("")
+                    setDeleteReason("")
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4 opacity-30" />
+                  Delete account
+                </Button>
+              </CardContent>
+            </Card>
 
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete account</DialogTitle>
-            <DialogDescription>
-              This will anonymize your account, pause your venues, and cancel your future reservations. Type DELETE to confirm.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
-              <Input
-                id="delete-confirmation"
-                value={deleteConfirmation}
-                onChange={(e) => setDeleteConfirmation(e.target.value)}
-                placeholder="DELETE"
-                className="font-mono"
-                autoComplete="off"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="delete-reason">Reason (optional)</Label>
-              <Textarea
-                id="delete-reason"
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value)}
-                placeholder="Optional feedback"
-                rows={2}
-              />
-            </div>
-            {deleteError && (
-              <p className="text-sm text-destructive">{deleteError}</p>
+            {isAdmin && (
+              <Card className="border-none bg-primary text-white shadow-2xl rounded-[2.5rem] p-4">
+                <CardHeader className="p-6">
+                  <CardTitle className="text-xl font-black tracking-tight">Admin Portal</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <Button size="lg" asChild className="w-full h-12 rounded-2xl font-black bg-white text-primary hover:bg-white/90">
+                    <Link href="/admin">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Manage Platform
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteModalOpen(false)}
-              disabled={deleteLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAccount}
-              disabled={deleteLoading || deleteConfirmation !== "DELETE"}
-            >
-              {deleteLoading ? "Deleting…" : "Delete my account"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+          <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4 lg:col-span-2">
+            <CardHeader className="p-6">
+              <CardTitle className="text-xl font-black tracking-tight">Venues Dashboard</CardTitle>
+              <CardDescription className="text-sm font-medium text-muted-foreground/60">
+                {loadingVenues
+                  ? "Retrieving your spaces..."
+                  : venues.length === 0
+                    ? "Start sharing your venue with our community"
+                    : `You are managing ${venues.length} space${venues.length > 1 ? 's' : ''}`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 pt-0">
+              {loadingVenues ? (
+                <div className="h-20 flex items-center justify-center">
+                  <div className="h-6 w-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : venues.length === 0 ? (
+                <div className="flex flex-col gap-6">
+                  <p className="text-sm font-medium text-foreground/60 leading-relaxed max-w-lg">
+                    Whether you manage a boutique café, a hotel lobby, or a creative studio, join Nooc to reach thousands of remote workers looking for their next favorite spot.
+                  </p>
+                  <Button size="lg" asChild className="w-full h-14 rounded-2xl font-black shadow-lg shadow-primary/10">
+                    <Link href="/venue/onboard">
+                      <Plus className="mr-2 h-5 w-5" />
+                      Add your workspace
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <Button size="lg" variant="outline" asChild className="w-full h-14 rounded-2xl font-black bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all">
+                  <Link href="/venue/dashboard">
+                    <LayoutDashboard className="mr-2 h-5 w-5" />
+                    Open Management Dashboard
+                  </Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+          <DialogContent className="rounded-[2.5rem] p-8 sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-black tracking-tight">Delete Account</DialogTitle>
+              <DialogDescription className="text-sm font-medium text-muted-foreground pt-2">
+                This will permanently delete your personal data. Any active venues will be paused and future bookings cancelled.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 my-6">
+              <div className="space-y-3">
+                <Label htmlFor="delete-confirmation" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Type DELETE to confirm</Label>
+                <Input
+                  id="delete-confirmation"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder="DELETE"
+                  className="h-12 rounded-xl font-bold border-none bg-primary/[0.03]"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-3">
+                <Label htmlFor="delete-reason" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Optional Feedback</Label>
+                <Textarea
+                  id="delete-reason"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Tell us how we can improve"
+                  rows={2}
+                  className="rounded-xl font-medium border-none bg-primary/[0.03]"
+                />
+              </div>
+              {deleteError && (
+                <p className="text-xs font-bold text-red-500">{deleteError}</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading || deleteConfirmation !== "DELETE"}
+                className="rounded-2xl h-12 font-black shadow-lg shadow-red-500/20"
+              >
+                {deleteLoading ? "Closing account..." : "Permanently Delete Account"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setDeleteModalOpen(false)}
+                disabled={deleteLoading}
+                className="rounded-2xl h-12 font-bold text-muted-foreground"
+              >
+                Go Back
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
+
   )
 }
 

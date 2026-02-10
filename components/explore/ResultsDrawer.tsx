@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { FavoriteButton } from "@/components/venue/FavoriteButton"
+import { Button } from "@/components/ui/button"
 
 export interface ResultsDrawerVenue {
   id: string
@@ -230,10 +231,10 @@ export function ResultsDrawer({
     <div
       ref={containerRef}
       className={cn(
-        "fixed left-0 right-0 flex flex-col rounded-t-xl border-t border-border bg-background shadow-lg",
-        "bottom-[5rem]",
+        "fixed left-0 right-0 flex flex-col rounded-t-[2.5rem] glass shadow-2xl overflow-hidden px-1",
+        "bottom-[4.5rem]",
         isDragging && "transition-none",
-        !isDragging && "transition-[height] duration-300 ease-in-out"
+        !isDragging && "transition-[height] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
       )}
       style={{
         zIndex: 100,
@@ -244,14 +245,14 @@ export function ResultsDrawer({
           : {}),
       }}
     >
-      <div className={cn("flex flex-col shrink-0 pointer-events-none", isExpandedOrDraggingUp ? "pt-1 pb-0" : "pt-1.5 pb-1.5")}>
+      <div className={cn("flex flex-col shrink-0 pointer-events-none transition-all duration-300", isExpandedOrDraggingUp ? "pt-2 pb-1" : "pt-2 pb-3")}>
         <div
           onPointerDown={handlePointerDown}
           onClick={() => {
             if (hasDraggedRef.current) return
             toggle()
           }}
-          className="pointer-events-auto flex w-full max-w-sm mx-auto flex-col items-center gap-1 touch-none cursor-grab active:cursor-grabbing select-none"
+          className="pointer-events-auto flex w-full max-w-sm mx-auto flex-col items-center gap-2 touch-none cursor-grab active:cursor-grabbing select-none"
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
@@ -263,8 +264,8 @@ export function ResultsDrawer({
             }
           }}
         >
-          <div className="h-1 w-12 shrink-0 rounded-full bg-foreground/40" aria-hidden />
-          <span className="text-xs font-medium text-foreground touch-manipulation">
+          <div className="h-1.5 w-12 shrink-0 rounded-full bg-primary/20 backdrop-blur-sm" aria-hidden />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-primary/70 touch-manipulation">
             {label}
           </span>
         </div>
@@ -272,14 +273,14 @@ export function ResultsDrawer({
       <div
         ref={contentRef}
         className={cn(
-          "flex-1 overflow-y-auto overscroll-contain px-4 pb-6 min-h-0",
+          "flex-1 overflow-y-auto overscroll-contain px-5 pb-10 min-h-0",
           !isExpandedOrDraggingUp && "hidden"
         )}
         style={{ touchAction: "pan-y", pointerEvents: "auto" }}
       >
         {/* Loading state */}
         {showLoadingContent ? (
-          <ul className="space-y-2">
+          <ul className="space-y-4 pt-2">
             {Array.from({ length: Math.min(displayCount || 3, 5) }).map((_, i) => (
               <li key={i}>
                 <VenueCardSkeleton />
@@ -287,38 +288,43 @@ export function ResultsDrawer({
             ))}
           </ul>
         ) : venues.length === 0 && favoritesOnly ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-sm font-medium text-foreground mb-2">No favorites yet.</p>
-            <p className="text-xs text-muted-foreground mb-4">
-              Start favoriting venues to see them here.
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in zoom-in duration-500">
+            <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
+              <svg className="h-10 w-10 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+            </div>
+            <p className="text-base font-bold text-foreground/80 mb-2">Your favorites list is empty</p>
+            <p className="text-sm text-muted-foreground/70 mb-8 max-w-[200px]">
+              Save the spots you love to find them again quickly.
             </p>
             {onClearFavoritesFilter && (
-              <button
-                type="button"
+              <Button
+                variant="outline"
                 onClick={onClearFavoritesFilter}
-                className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                className="rounded-2xl font-bold px-8 border-none bg-primary/5 text-primary hover:bg-primary/10"
               >
-                Browse venues
-              </button>
+                Start Exploring
+              </Button>
             )}
           </div>
         ) : venues.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col items-center justify-center py-12 text-center px-8 animate-in fade-in duration-500">
+            <p className="text-sm font-medium text-muted-foreground/80 leading-relaxed">
               {isSearchMode
                 ? searchQuery
-                  ? `No venues found for "${searchQuery}". Try a different search.`
-                  : "No venues match your filters."
-                : "No locations in this area. Tap \"Search this area\" on the map to search."}
+                  ? `We couldn't find any results for "${searchQuery}". Maybe try a different neighborhood?`
+                  : "No venues match your current filters."
+                : "No locations in this area yet. Feel free to search a different spot on the map."}
             </p>
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-4 pt-2">
             {venues.map((venue) => {
               const isFavorited = favoritedVenueIds.has(venue.id)
               return (
-                <li key={venue.id}>
-                  <div className="relative flex w-full gap-3 rounded-lg border border-border bg-card p-3 shadow-sm transition-colors hover:bg-accent/50">
+                <li key={venue.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: `${venues.indexOf(venue) * 50}ms` }}>
+                  <div className="relative group flex w-full gap-4 rounded-3xl border border-white/40 bg-white/40 p-3.5 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98]">
                     <button
                       type="button"
                       onClick={() => handleVenueTap(venue.id)}
@@ -328,35 +334,42 @@ export function ResultsDrawer({
                           handleVenueTap(venue.id)
                         }
                       }}
-                      className="flex flex-1 gap-3 text-left min-w-0 cursor-pointer"
+                      className="flex flex-1 gap-4 text-left min-w-0 cursor-pointer"
                     >
                       {venue.imageUrls && venue.imageUrls.length > 0 && (
-                        <img
-                          src={venue.imageUrls[0]}
-                          alt={venue.name}
-                          className="h-16 w-16 shrink-0 rounded-md object-cover"
-                        />
+                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl">
+                          <img
+                            src={venue.imageUrls[0]}
+                            alt={venue.name}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                          <div className="absolute inset-0 bg-black/5" />
+                        </div>
                       )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold leading-tight text-foreground">{venue.name}</p>
-                        {(venue.address || (venue.city && venue.state)) && (
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {venue.address || `${venue.city}, ${venue.state}`}
-                          </p>
-                        )}
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {venue.minPrice === venue.maxPrice
-                            ? `$${venue.minPrice.toFixed(0)} / seat / hour`
-                            : `$${venue.minPrice.toFixed(0)}–$${venue.maxPrice.toFixed(0)} / seat / hour`}
-                        </p>
-                        {venue.availabilityLabel && (
-                          <p className="mt-1 text-xs font-medium text-primary">
-                            {venue.availabilityLabel}
-                          </p>
-                        )}
+                      <div className="flex-1 min-w-0 py-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex justify-between items-start gap-2">
+                            <p className="font-bold text-base tracking-tight text-foreground/90 group-hover:text-primary transition-colors truncate">{venue.name}</p>
+                            <p className="shrink-0 text-sm font-bold text-primary">${venue.minPrice.toFixed(0)}</p>
+                          </div>
+                          {(venue.address || (venue.city && venue.state)) && (
+                            <p className="mt-0.5 text-xs font-medium text-muted-foreground/70 truncate flex items-center gap-1">
+                              <span className="shrink-0 font-bold opacity-30">·</span> {venue.address || `${venue.city}, ${venue.state}`}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-auto">
+                          {venue.availabilityLabel && (
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/5 px-2 py-0.5 rounded-full">
+                              {venue.availabilityLabel}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter opacity-50">/ hr</span>
+                        </div>
                       </div>
                     </button>
-                    {/* Heart icon - stop propagation so clicking heart doesn't open card */}
+                    {/* Heart icon */}
                     <div
                       className="flex items-start pt-1"
                       onClick={(e) => e.stopPropagation()}
@@ -366,7 +379,7 @@ export function ResultsDrawer({
                         itemId={venue.id}
                         initialFavorited={isFavorited}
                         size="sm"
-                        className="shrink-0"
+                        className="rounded-full bg-white/50 p-2 shadow-sm transition-all hover:scale-110 active:scale-90"
                         onToggle={(favorited) => {
                           if (onToggleFavorite) {
                             onToggleFavorite(venue.id, favorited)
@@ -384,3 +397,4 @@ export function ResultsDrawer({
     </div>
   )
 }
+

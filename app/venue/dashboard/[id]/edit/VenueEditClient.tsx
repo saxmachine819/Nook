@@ -835,13 +835,19 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   // Reuse the form JSX from onboarding (abbreviated - full form would be very long)
   // For now, I'll create a simplified version that includes the key fields
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white">
+      <div className="container mx-auto px-4 py-8">
       {ToastComponent}
-      <h1 className="mb-6 text-3xl font-semibold tracking-tight">Edit venue</h1>
+      <div className="mb-6">
+        <h1 className="text-3xl font-semibold tracking-tight">Edit venue</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Keep details fresh so guests trust your listings.
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Venue Information Card */}
-        <Card>
+        <Card className="border-muted/60 bg-white/90 shadow-sm">
           <CardHeader>
             <CardTitle>Venue Information</CardTitle>
             <CardDescription>Update your venue details</CardDescription>
@@ -929,7 +935,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
 
         {/* Venue Photos (Google + owner uploads) — always show on edit so owner can add first photo */}
         {(catalog.length > 0 || isLoadingPlaceDetails || googlePlaceId || true) && (
-          <Card>
+          <Card className="border-muted/60 bg-white/90 shadow-sm">
             <CardHeader>
               <CardTitle>Venue Photos</CardTitle>
               <CardDescription>Select the best interior shots (3–8 photos). You can add your own.</CardDescription>
@@ -1055,7 +1061,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         )}
 
         {/* Tags */}
-        <Card>
+        <Card className="border-muted/60 bg-white/90 shadow-sm">
           <CardHeader>
             <CardTitle>Tags</CardTitle>
             <CardDescription>Select trust signals for your space</CardDescription>
@@ -1082,7 +1088,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
         </Card>
 
         {/* Rules */}
-        <Card>
+        <Card className="border-muted/60 bg-white/90 shadow-sm">
           <CardHeader>
             <CardTitle>Rules</CardTitle>
             <CardDescription>Venue rules and policies</CardDescription>
@@ -1521,6 +1527,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           </Button>
         </div>
       </form>
+      </div>
     </div>
   )
 }

@@ -63,6 +63,19 @@ interface Reservation {
     tablePricePerHour: number | null
     seats?: { id: string }[]
   } | null
+  payment?: {
+    id: string
+    status: string
+    amount: number
+    currency: string
+    amountRefunded: number
+    refundRequests: Array<{
+      id: string
+      status: string
+      requestedAmount: number
+      approvedAmount: number | null
+    }>
+  } | null
 }
 
 interface ReservationsClientProps {
@@ -224,7 +237,7 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
       const tableName = reservation.table.name
       return tableName ? `Table ${tableName} for ${actualSeatCount}` : `Table for ${actualSeatCount}`
     }
-    
+
     // If multiple seats booked, always show seat count
     if (reservation.seatCount > 1) {
       return `${reservation.seatCount} seat${reservation.seatCount > 1 ? "s" : ""}`
@@ -258,56 +271,41 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
     <div className="min-h-screen bg-background">
       {ToastComponent}
 
-      <div className="container mx-auto px-4 pt-2 pb-6">
+      <div className="container mx-auto px-4 pt-4 pb-10 max-w-2xl">
+        <h1 className="text-4xl font-black tracking-tight mb-8 px-1">My Reservations</h1>
+
         {/* Tabs */}
-        <div className="mb-3 flex gap-2 border-b -mx-4 px-4">
-          <button
-            onClick={() => setActiveTab("upcoming")}
-            className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
-              activeTab === "upcoming"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Upcoming {upcoming.length > 0 && `(${upcoming.length})`}
-          </button>
-          <button
-            onClick={() => setActiveTab("past")}
-            className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
-              activeTab === "past"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Past {past.length > 0 && `(${past.length})`}
-          </button>
-          <button
-            onClick={() => setActiveTab("cancelled")}
-            className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
-              activeTab === "cancelled"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Cancelled {cancelled.length > 0 && `(${cancelled.length})`}
-          </button>
+        <div className="mb-8 flex p-1 gap-1 bg-primary/5 rounded-2xl">
+          {(["upcoming", "past", "cancelled"] as TabType[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all duration-300 rounded-xl",
+                activeTab === tab
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-muted-foreground/60 hover:text-primary/70"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
 
         {/* Upcoming View */}
         {activeTab === "upcoming" && (
-          <>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {upcoming.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-                <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 className="mb-2 text-xl font-semibold">No upcoming reservations</h2>
-                <p className="mb-6 text-sm text-muted-foreground">
-                  When you reserve seats, they&apos;ll appear here.
+              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
+                <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
+                  <Calendar className="h-10 w-10 text-primary/30" />
+                </div>
+                <h2 className="mb-2 text-xl font-bold">Your schedule is empty</h2>
+                <p className="mb-8 text-sm text-muted-foreground/70 max-w-[220px]">
+                  When you reserve your next spot, it will show up right here.
                 </p>
-                <Button asChild>
-                  <Link href="/">Explore workspaces</Link>
+                <Button asChild className="rounded-2xl font-black px-8">
+                  <Link href="/">Book a Workspace</Link>
                 </Button>
               </div>
             ) : (
@@ -329,37 +327,41 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
 
                 {/* Other Upcoming List */}
                 {otherUpcoming.length > 0 && (
-                  <div className="mt-6 space-y-3">
-                    <h2 className="text-sm font-medium text-muted-foreground">Upcoming</h2>
-                    {otherUpcoming.map((reservation) => (
-                      <UpcomingListItem
-                        key={reservation.id}
-                        reservation={reservation}
-                        onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
-                        formatDateTimeRange={formatDateTimeRange}
-                        getSeatInfo={getSeatInfo}
-                      />
-                    ))}
+                  <div className="space-y-4">
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 px-2">Next in line</h2>
+                    <div className="space-y-3">
+                      {otherUpcoming.map((reservation) => (
+                        <UpcomingListItem
+                          key={reservation.id}
+                          reservation={reservation}
+                          onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
+                          formatDateTimeRange={formatDateTimeRange}
+                          getSeatInfo={getSeatInfo}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
             )}
-          </>
+          </div>
         )}
 
         {/* Past View */}
         {activeTab === "past" && (
-          <>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {past.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-                <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 className="mb-2 text-xl font-semibold">No past reservations</h2>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
+                <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
+                  <Calendar className="h-10 w-10 text-primary/30" />
+                </div>
+                <h2 className="mb-2 text-xl font-bold">No history yet</h2>
+                <p className="text-sm text-muted-foreground/70">
                   Your past reservations will appear here.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid gap-4">
                 {past.map((reservation) => (
                   <PastReservationCard
                     key={reservation.id}
@@ -372,22 +374,24 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* Cancelled View */}
         {activeTab === "cancelled" && (
-          <>
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {cancelled.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-                <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 className="mb-2 text-xl font-semibold">No cancelled reservations</h2>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
+                <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
+                  <Calendar className="h-10 w-10 text-primary/30" />
+                </div>
+                <h2 className="mb-2 text-xl font-bold">Clean slate</h2>
+                <p className="text-sm text-muted-foreground/70">
                   Your cancelled reservations will appear here.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid gap-4">
                 {cancelled.map((reservation) => (
                   <CancelledReservationCard
                     key={reservation.id}
@@ -400,35 +404,37 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-        <DialogContent>
+        <DialogContent className="rounded-[2.5rem] p-8">
           <DialogHeader>
-            <DialogTitle>Cancel reservation?</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-2xl font-black tracking-tight">Change of plans?</DialogTitle>
+            <DialogDescription className="text-sm font-medium leading-relaxed text-muted-foreground pt-2">
               Are you sure you want to cancel this reservation? This action cannot be undone.
-              Reservations can be canceled at any time, but all bookings are non-refundable.
+              Refunds are handled through our standard request flow.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCancelConfirm(false)}>
-              Keep reservation
-            </Button>
+          <div className="flex flex-col gap-3 mt-6">
             <Button
               variant="destructive"
               onClick={() => heroReservation && handleCancel(heroReservation.id)}
               disabled={cancellingId !== null}
+              className="rounded-2xl font-black py-6 shadow-lg shadow-red-500/20"
             >
-              {cancellingId ? "Cancelling..." : "Cancel reservation"}
+              {cancellingId ? "Cancelling..." : "Yes, cancel reservation"}
             </Button>
-          </DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCancelConfirm(false)} className="rounded-2xl font-bold py-6 text-muted-foreground">
+              Keep my booking
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
+
   )
 }
 
@@ -462,79 +468,66 @@ function HeroReservationCard({
       : null)
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden border-none shadow-2xl rounded-[2.5rem] bg-white group">
       {imageUrl && (
-        <div className="relative h-64 sm:h-80 w-full overflow-hidden bg-muted">
-          <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover" />
+        <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-muted">
+          <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute bottom-6 left-6 right-6">
+            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 mb-2">
+              <Clock className="h-3 w-3 text-white" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                {formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}
+              </span>
+            </div>
+            <h2 className="text-3xl font-black tracking-tight text-white">{reservation.venue.name}</h2>
+          </div>
         </div>
       )}
-      <CardContent className="p-6">
-        <div className="space-y-4">
-          {/* Venue Name */}
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight">{reservation.venue.name}</h2>
+      <CardContent className="p-8">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-1">
             {reservation.venue.address && (
-              <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground/60">
                 <MapPin className="h-4 w-4" />
-                <span>{reservation.venue.address}</span>
+                <span className="truncate">{reservation.venue.address}</span>
               </div>
             )}
-          </div>
-
-          {/* Date & Time */}
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">
-              {formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}
-            </span>
-          </div>
-
-          {/* Seat Info */}
-          <div className="text-sm text-muted-foreground">
-            {getSeatInfo(reservation)}
-          </div>
-
-          {/* Price Estimate */}
-          <div className="rounded-md bg-muted/50 px-3 py-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Estimated</span>
-              <span className="text-lg font-semibold">${calculatePrice(reservation).toFixed(0)}</span>
+            <div className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full w-fit mt-2">
+              {getSeatInfo(reservation)}
             </div>
           </div>
 
-          {/* Rules Snippet */}
-          {reservation.venue.rulesText && (
-            <div className="text-xs text-muted-foreground line-clamp-2">
-              {reservation.venue.rulesText}
+          <div className="flex items-center justify-between p-6 bg-primary/[0.02] rounded-[2rem]">
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Total Estimate</p>
+              <p className="text-3xl font-black tracking-tighter text-primary">${calculatePrice(reservation).toFixed(0)}</p>
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex flex-col gap-2 pt-2">
-            <Button onClick={onViewDetails} className="w-full" size="lg">
-              View details
+            <Button onClick={onViewDetails} className="rounded-2xl font-black px-8 h-12 shadow-lg shadow-primary/20">
+              Details
             </Button>
-            <div className="grid grid-cols-3 gap-2">
-              <Button variant="outline" size="sm" onClick={onAddToCalendar}>
-                <Calendar className="mr-1.5 h-3.5 w-3.5" />
-                Calendar
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Button variant="outline" size="lg" onClick={onAddToCalendar} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+              <Calendar size={18} className="mr-2 opacity-50" />
+              Sync
+            </Button>
+            <Button variant="outline" size="lg" onClick={onGetDirections} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+              <Navigation size={18} className="mr-2 opacity-50" />
+              Map
+            </Button>
+            {isPast && onViewReceipt ? (
+              <Button variant="outline" size="lg" onClick={onViewReceipt} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+                <Receipt size={18} className="mr-2 opacity-50" />
+                Receipt
               </Button>
-              <Button variant="outline" size="sm" onClick={onGetDirections}>
-                <Navigation className="mr-1.5 h-3.5 w-3.5" />
-                Directions
+            ) : (
+              <Button variant="outline" size="lg" onClick={onCancel} className="rounded-2xl border-none bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-all duration-300">
+                <X size={18} className="mr-2 opacity-50" />
+                Cancel
               </Button>
-              {isPast && onViewReceipt ? (
-                <Button variant="outline" size="sm" onClick={onViewReceipt}>
-                  <Receipt className="mr-1.5 h-3.5 w-3.5" />
-                  Receipt
-                </Button>
-              ) : (
-                <Button variant="outline" size="sm" onClick={onCancel}>
-                  <X className="mr-1.5 h-3.5 w-3.5" />
-                  Cancel
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -555,21 +548,26 @@ function UpcomingListItem({
   getSeatInfo: (r: Reservation) => string
 }) {
   return (
-    <Card className="cursor-pointer transition-colors hover:bg-accent" onClick={onViewDetails}>
-      <CardContent className="flex items-center justify-between p-4">
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium">{reservation.venue.name}</h3>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div
+      className="group relative flex w-full gap-4 rounded-[2rem] border border-white bg-white/40 p-4 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98] cursor-pointer"
+      onClick={onViewDetails}
+    >
+      <div className="flex-1 space-y-1 py-1">
+        <h3 className="font-black text-foreground/90 group-hover:text-primary transition-colors">{reservation.venue.name}</h3>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest">
             <Clock className="h-3 w-3" />
             <span>{formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}</span>
           </div>
-          <div className="text-xs text-muted-foreground">{getSeatInfo(reservation)}</div>
+          <span className="text-[10px] font-black text-primary/40 uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded-full">
+            {getSeatInfo(reservation)}
+          </span>
         </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-      </CardContent>
-    </Card>
+      </div>
+      <div className="flex items-center pr-2">
+        <ChevronRight size={20} className="text-muted-foreground/30 group-hover:text-primary/50 transition-colors" />
+      </div>
+    </div>
   )
 }
 
@@ -588,26 +586,25 @@ function PastReservationCard({
   getSeatInfo: (r: Reservation) => string
 }) {
   return (
-    <Card className="cursor-pointer transition-colors hover:bg-accent" onClick={onViewDetails}>
-      <CardContent className="flex items-center justify-between p-4">
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium">{reservation.venue.name}</h3>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}</span>
-          </div>
-          <div className="text-xs text-muted-foreground">{getSeatInfo(reservation)}</div>
+    <div
+      className="group flex items-center justify-between p-5 rounded-[2rem] border border-white bg-white/40 shadow-sm transition-all duration-300 hover:bg-white/80 hover:premium-shadow active:scale-[0.99] cursor-pointer"
+      onClick={onViewDetails}
+    >
+      <div className="flex-1 space-y-1">
+        <h3 className="font-bold text-foreground/80">{reservation.venue.name}</h3>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">
+          <Clock className="h-3 w-3" />
+          <span>{formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-muted-foreground">
-            ${calculatePrice(reservation).toFixed(0)}
-          </span>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </div>
-      </CardContent>
-    </Card>
+        <div className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{getSeatInfo(reservation)}</div>
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-lg font-black tracking-tight text-foreground/60">
+          ${calculatePrice(reservation).toFixed(0)}
+        </span>
+        <ChevronRight size={18} className="text-muted-foreground/20 group-hover:text-foreground/40 transition-colors" />
+      </div>
+    </div>
   )
 }
 
@@ -626,23 +623,25 @@ function CancelledReservationCard({
   getSeatInfo: (r: Reservation) => string
 }) {
   return (
-    <Card className="cursor-pointer transition-colors hover:bg-accent opacity-75" onClick={onViewDetails}>
-      <CardContent className="flex items-center justify-between p-4">
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium">{reservation.venue.name}</h3>
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
-              Cancelled
-            </span>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span>{formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}</span>
-          </div>
-          <div className="text-xs text-muted-foreground">{getSeatInfo(reservation)}</div>
+    <div
+      className="group flex items-center justify-between p-5 rounded-[2rem] border border-white bg-white/20 shadow-sm grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:bg-white/40 active:scale-[0.99] cursor-pointer"
+      onClick={onViewDetails}
+    >
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-3">
+          <h3 className="font-bold text-foreground/80">{reservation.venue.name}</h3>
+          <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-red-600">
+            Cancelled
+          </span>
         </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-      </CardContent>
-    </Card>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">
+          <Clock className="h-3 w-3" />
+          <span>{formatDateTimeRange(new Date(reservation.startAt), new Date(reservation.endAt))}</span>
+        </div>
+        <div className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{getSeatInfo(reservation)}</div>
+      </div>
+      <ChevronRight size={18} className="text-muted-foreground/20" />
+    </div>
   )
 }
+

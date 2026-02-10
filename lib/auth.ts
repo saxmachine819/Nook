@@ -33,6 +33,7 @@ if (!process.env.NEXTAUTH_URL) {
 export const authOptions = {
   debug: false,
   trustHost: true, // Required for NextAuth v5
+  useSecureCookies: process.env.NODE_ENV === "production",
   adapter: PrismaAdapter(prisma) as any,
   providers: [
     GoogleProvider({

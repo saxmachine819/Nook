@@ -498,7 +498,7 @@ export function VenueBookingWidget({
         requestBody.seatIds = seatIds
       }
 
-      const response = await fetch("/api/reservations", {
+      const response = await fetch("/api/payments/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -523,14 +523,13 @@ export function VenueBookingWidget({
         return
       }
 
-      setConfirmedReservation(data?.reservation || null)
-      setConfirmationOpen(true)
-      showToast("Reservation confirmed.", "success")
-      
-      // Refresh reservations page if user is currently on it
-      if (pathname === "/reservations") {
-        router.refresh()
+      if (!data?.url) {
+        setError("Unable to start checkout. Please try again.")
+        return
       }
+
+      showToast("Redirecting to secure checkout...", "success")
+      window.location.assign(data.url)
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")
@@ -545,7 +544,7 @@ export function VenueBookingWidget({
     setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch("/api/reservations", {
+      const response = await fetch("/api/payments/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -561,10 +560,12 @@ export function VenueBookingWidget({
         return
       }
       pendingReservationPayloadRef.current = null
-      setConfirmedReservation(data?.reservation || null)
-      setConfirmationOpen(true)
-      showToast("Reservation confirmed.", "success")
-      if (pathname === "/reservations") router.refresh()
+      if (!data?.url) {
+        setError("Unable to start checkout. Please try again.")
+        return
+      }
+      showToast("Redirecting to secure checkout...", "success")
+      window.location.assign(data.url)
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")
@@ -1221,9 +1222,16 @@ export function VenueBookingWidget({
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-xl border bg-white/90 p-4 shadow-sm ring-1 ring-black/5"
+      >
         {/* Time Selection */}
         <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Set your time</span>
+            <span>Local time</span>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
@@ -1231,7 +1239,7 @@ export function VenueBookingWidget({
               </label>
               <input
                 type="date"
-                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={date}
                 onChange={(e) => {
                   setDate(e.target.value)
@@ -1254,7 +1262,7 @@ export function VenueBookingWidget({
               </label>
               <input
                 type="time"
-                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={startTime}
                 onChange={(e) => {
                   const newTime = e.target.value
@@ -1292,7 +1300,7 @@ export function VenueBookingWidget({
                 Duration
               </label>
               <select
-                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={durationHours}
                 onChange={(e) => {
                   setDurationHours(Number(e.target.value))
@@ -1318,7 +1326,7 @@ export function VenueBookingWidget({
                 Number of seats
               </label>
               <select
-                className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+                className="rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
                 value={seatCount}
                 onChange={(e) => {
                   setSeatCount(Number(e.target.value))
@@ -1354,7 +1362,7 @@ export function VenueBookingWidget({
 
         {/* Seat Selection */}
         {hasAvailabilityData && (
-          <div className="space-y-4 border-t pt-4">
+          <div className="space-y-4 border-t border-dashed pt-4">
             <h3 className="text-sm font-medium">
               {seatCount === 1 ? "Select a seat" : `Select ${seatCount} seats`}
             </h3>
@@ -1364,7 +1372,7 @@ export function VenueBookingWidget({
             {/* Price estimate */}
             {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) || 
               (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-              <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+              <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
                 <span className="text-xs font-medium text-muted-foreground">
                   Estimated total
                 </span>
@@ -1398,12 +1406,11 @@ export function VenueBookingWidget({
               size="lg"
               loading={isSubmitting}
             >
-              {isSubmitting ? "Reserving..." : "Reserve seat"}
+              {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
             </Button>
 
             <p className="mt-1 text-xs text-muted-foreground">
-              You'll only be charged later when we add payments. For now, this
-              reserves your seat without payment.
+              You'll complete payment securely with Stripe before the booking is confirmed.
             </p>
           </>
         )}
