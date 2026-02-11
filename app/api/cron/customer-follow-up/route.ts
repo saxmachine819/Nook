@@ -31,6 +31,7 @@ export async function GET(request: Request) {
   const auth = request.headers.get("Authorization")?.trim() ?? ""
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : ""
   if (!secret || token !== secret) {
+    console.error("[customer-follow-up] Unauthorized: missing or invalid CRON_SECRET")
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
@@ -38,22 +39,34 @@ export async function GET(request: Request) {
   const now = new Date()
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
 
+  console.log(`[customer-follow-up] Cron triggered at ${now.toISOString()}, target window: ${targetHour}:${minuteStart.toString().padStart(2, "0")}-${targetHour}:${minuteEnd.toString().padStart(2, "0")}`)
+
   const venues = await prisma.venue.findMany({
     where: { status: "ACTIVE" },
     select: { id: true, name: true, timezone: true },
   })
 
+  console.log(`[customer-follow-up] Found ${venues.length} active venues`)
+
   let enqueued = 0
   let skipped = 0
+  const skipReasons: Record<string, number> = {}
 
   for (const venue of venues) {
     const tz = venue.timezone?.trim() || DEFAULT_TIMEZONE
     const { hour, minute } = getHourAndMinuteInTimezone(now, tz)
+    
+    // Fixed: use inclusive boundaries (minute >= minuteStart && minute <= minuteEnd)
     if (hour !== targetHour || minute < minuteStart || minute > minuteEnd) {
+      const reason = hour !== targetHour 
+        ? `hour mismatch (${hour} !== ${targetHour})` 
+        : `minute out of range (${minute} not in [${minuteStart}, ${minuteEnd}])`
+      skipReasons[reason] = (skipReasons[reason] || 0) + 1
       continue
     }
 
     const todayInTz = formatDateAndTimeInZone(now, tz).date
+    console.log(`[customer-follow-up] Processing venue ${venue.id} (${venue.name}) at ${hour}:${minute.toString().padStart(2, "0")} in ${tz}, today: ${todayInTz}`)
 
     const reservations = await prisma.reservation.findMany({
       where: { venueId: venue.id, status: "active" },
@@ -62,19 +75,26 @@ export async function GET(request: Request) {
       },
     })
 
+    console.log(`[customer-follow-up] Found ${reservations.length} active reservations for venue ${venue.id}`)
+
     for (const reservation of reservations) {
       const startAtDateInTz = formatDateAndTimeInZone(reservation.startAt, tz).date
-      if (startAtDateInTz !== todayInTz) continue
+      if (startAtDateInTz !== todayInTz) {
+        skipped++
+        skipReasons[`reservation not today (start: ${startAtDateInTz}, today: ${todayInTz})`] = (skipReasons[`reservation not today (start: ${startAtDateInTz}, today: ${todayInTz})`] || 0) + 1
+        continue
+      }
 
       const email = reservation.user?.email?.trim()
       if (!email) {
         skipped++
+        skipReasons["no user email"] = (skipReasons["no user email"] || 0) + 1
         continue
       }
 
       try {
         const rebookUrl = baseUrl ? `${baseUrl}/venue/${venue.id}` : ""
-        await enqueueNotification({
+        const result = await enqueueNotification({
           type: "customer_follow_up",
           dedupeKey: `customer_follow_up:${reservation.id}`,
           toEmail: email,
@@ -88,13 +108,31 @@ export async function GET(request: Request) {
             rebookUrl,
           },
         })
-        enqueued++
+        if (result.created) {
+          console.log(`[customer-follow-up] Enqueued notification for reservation ${reservation.id} (${email})`)
+          enqueued++
+        } else {
+          console.log(`[customer-follow-up] Notification already exists for reservation ${reservation.id} (dedupe)`)
+          skipped++
+          skipReasons["duplicate dedupeKey"] = (skipReasons["duplicate dedupeKey"] || 0) + 1
+        }
       } catch (err) {
-        console.error("Failed to enqueue customer_follow_up for reservation", reservation.id, err)
+        console.error(`[customer-follow-up] Failed to enqueue customer_follow_up for reservation ${reservation.id}:`, err)
         skipped++
+        skipReasons["enqueue error"] = (skipReasons["enqueue error"] || 0) + 1
       }
     }
   }
 
-  return NextResponse.json({ enqueued, skipped })
+  const summary = {
+    enqueued,
+    skipped,
+    skipReasons,
+    venuesProcessed: venues.length,
+    timestamp: now.toISOString(),
+  }
+
+  console.log(`[customer-follow-up] Completed:`, JSON.stringify(summary, null, 2))
+
+  return NextResponse.json(summary)
 }
