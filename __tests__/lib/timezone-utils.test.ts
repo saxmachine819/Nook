@@ -170,13 +170,12 @@ describe("timezone-utils", () => {
     });
 
     it("dateAtTimeInTimezone handles non-existent time (Spring Forward gap)", () => {
-      // 2:30 AM doesn't exist on March 9, 2025 in NY
+      // 2:30 AM doesn't exist on March 9, 2025 in NY (Spring Forward at 2:00 AM)
       const ref = new Date("2025-03-09T10:00:00Z");
       const result = dateAtTimeInTimezone(NY_TZ, ref, 2, 30);
-      // Dayjs (depending on version/config) might fallback or skip.
-      // Observed behavior in this env: Received 1 (1:30 AM).
+      // Dayjs advances past the non-existent time to the next valid time (3:30 AM)
       const parts = getPartsInTimezone(result, NY_TZ);
-      expect(parts.hour).toBe(1);
+      expect(parts.hour).toBe(3);
       expect(parts.minute).toBe(30);
     });
 
