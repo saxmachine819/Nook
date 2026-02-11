@@ -10,38 +10,46 @@ import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-// Mock auth function
-const mockAuth = vi.fn()
+const { mockAuth, mockIsAdmin, mockPrismaFindMany } = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockIsAdmin: vi.fn(),
+  mockPrismaFindMany: vi.fn(),
+}))
+
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
 }))
 
-// Mock isAdmin function
-const mockIsAdmin = vi.fn()
 vi.mock('@/lib/venue-auth', () => ({
   isAdmin: (user: { email?: string | null } | null | undefined) => mockIsAdmin(user),
 }))
 
-// Mock Prisma
-const mockPrisma = {
-  user: {
-    findMany: vi.fn(),
-  },
-}
 vi.mock('@/lib/prisma', () => ({
-  prisma: mockPrisma,
+  prisma: {
+    user: {
+      findMany: mockPrismaFindMany,
+    },
+  },
 }))
 
-// Mock fetch
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => '/admin/users',
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 global.fetch = vi.fn()
 
-// Import after mocks are set up
 import AdminUsersPage from '@/app/(root)/admin/users/page'
 
 describe('AdminUsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.user.findMany.mockResolvedValue([])
+    mockPrismaFindMany.mockResolvedValue([])
     ;(global.fetch as any).mockResolvedValue({
       ok: true,
       json: async () => ({ users: [] }),

@@ -138,7 +138,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({ ownerEmail: 'newowner@example.com' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(401)
@@ -158,7 +158,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({ ownerEmail: 'newowner@example.com' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(403)
@@ -174,7 +174,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({}),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(400)
@@ -190,7 +190,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({ ownerEmail: 'invalid-email' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(400)
@@ -207,7 +207,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({ ownerEmail: 'newowner@example.com' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(404)
@@ -228,7 +228,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       method: 'POST',
       body: JSON.stringify({ ownerEmail: 'nonexistent@example.com' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(404)
@@ -263,7 +263,7 @@ describe('POST /api/admin/venues/[id]/reassign-owner', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ownerEmail: 'newowner@example.com' }),
     })
-    const response = await POSTReassign(request, { params: Promise.resolve({ id: 'venue-1' }) })
+    const response = await POSTReassign(request as any, { params: Promise.resolve({ id: 'venue-1' }) })
     const data = await response.json()
 
     expect(response.status).toBe(200)

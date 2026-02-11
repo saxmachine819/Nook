@@ -1,11 +1,14 @@
 /**
  * Profile Page Tests
- * 
+ *
  * Note: These tests require jsdom environment to run React component tests.
  * To run these tests, configure vitest to use jsdom for this test file,
  * or run with: vitest --environment=jsdom
  */
 
+// @vitest-environment jsdom
+
+import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import ProfilePage from '@/app/(root)/profile/page'

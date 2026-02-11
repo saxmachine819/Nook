@@ -1,7 +1,20 @@
 import type { OpenStatus } from "@/lib/hours"
 
 /** YYYY-MM-DD for the given date in local timezone (for date inputs and "today" checks). */
-export function getLocalDateString(date: Date = new Date()): string {
+export function getLocalDateString(date: Date = new Date(), timeZone?: string): string {
+  if (timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+    const parts = formatter.formatToParts(date)
+    const year = parts.find((p) => p.type === "year")?.value
+    const month = parts.find((p) => p.type === "month")?.value
+    const day = parts.find((p) => p.type === "day")?.value
+    return `${year}-${month}-${day}`
+  }
   const yyyy = date.getFullYear()
   const mm = String(date.getMonth() + 1).padStart(2, "0")
   const dd = String(date.getDate()).padStart(2, "0")
@@ -97,10 +110,10 @@ export function computeAvailabilityLabel(
       const todayKey = `${nowParts.year}-${nowParts.month}-${nowParts.day}`
       const nextKey = `${nextParts.year}-${nextParts.month}-${nextParts.day}`
       isToday = todayKey === nextKey
-      const tomorrowParts = getDatePartsInTimezone(
-        new Date(now.getTime() + 24 * 60 * 60 * 1000),
-        timeZone
-      )
+      // Compute tomorrow by getting "now + 1 day" in the venue timezone
+      const tomorrow = new Date(now)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const tomorrowParts = getDatePartsInTimezone(tomorrow, timeZone)
       const tomorrowKey = `${tomorrowParts.year}-${tomorrowParts.month}-${tomorrowParts.day}`
       isTomorrow = nextKey === tomorrowKey
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -111,7 +124,9 @@ export function computeAvailabilityLabel(
       const nextOpenDate = new Date(nextOpenTime)
       nextOpenDate.setHours(0, 0, 0, 0)
       isToday = nextOpenDate.getTime() === today.getTime()
-      isTomorrow = nextOpenDate.getTime() === today.getTime() + 24 * 60 * 60 * 1000
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      isTomorrow = nextOpenDate.getTime() === tomorrow.getTime()
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
       dayName = dayNames[nextOpenTime.getDay()]
     }

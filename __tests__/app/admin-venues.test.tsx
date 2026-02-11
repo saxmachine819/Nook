@@ -10,35 +10,44 @@ import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-// Mock auth function
-const mockAuth = vi.fn()
+const { mockAuth, mockIsAdmin, mockPrismaFindMany } = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockIsAdmin: vi.fn(),
+  mockPrismaFindMany: vi.fn(),
+}))
+
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
 }))
 
-// Mock isAdmin function
-const mockIsAdmin = vi.fn()
 vi.mock('@/lib/venue-auth', () => ({
   isAdmin: (user: { email?: string | null } | null | undefined) => mockIsAdmin(user),
 }))
 
-// Mock Prisma
-const mockPrisma = {
-  venue: {
-    findMany: vi.fn(),
-  },
-}
 vi.mock('@/lib/prisma', () => ({
-  prisma: mockPrisma,
+  prisma: {
+    venue: {
+      findMany: mockPrismaFindMany,
+    },
+  },
 }))
 
-// Import after mocks are set up
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => '/admin/venues',
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 import AdminVenuesPage from '@/app/(root)/admin/venues/page'
 
 describe('AdminVenuesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.venue.findMany.mockResolvedValue([])
+    mockPrismaFindMany.mockResolvedValue([])
   })
 
   describe('when user is not authenticated', () => {
@@ -95,7 +104,7 @@ describe('AdminVenuesPage', () => {
         },
       ]
 
-      mockPrisma.venue.findMany.mockResolvedValue(mockVenues)
+      mockPrismaFindMany.mockResolvedValue(mockVenues)
 
       const component = await AdminVenuesPage({ searchParams: {} })
       render(component)

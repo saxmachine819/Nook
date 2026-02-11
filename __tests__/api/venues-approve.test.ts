@@ -41,7 +41,7 @@ describe('POST /api/venues/[id]/approve', () => {
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
         method: 'POST',
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -59,7 +59,7 @@ describe('POST /api/venues/[id]/approve', () => {
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
         method: 'POST',
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -76,7 +76,7 @@ describe('POST /api/venues/[id]/approve', () => {
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
         method: 'POST',
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(404)
@@ -94,7 +94,7 @@ describe('POST /api/venues/[id]/approve', () => {
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
         method: 'POST',
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -119,7 +119,7 @@ describe('POST /api/venues/[id]/approve', () => {
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
         method: 'POST',
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)

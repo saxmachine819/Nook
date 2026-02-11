@@ -1,7 +1,7 @@
 "use client"
 
+import React, { useMemo } from "react"
 import Link from "next/link"
-import { useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { CheckCircle2, Clock, MapPin, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"

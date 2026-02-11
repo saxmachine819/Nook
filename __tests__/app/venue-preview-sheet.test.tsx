@@ -26,6 +26,18 @@ vi.mock("@/components/ui/toast", () => ({
   }),
 }))
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: null, status: "unauthenticated" }),
+}))
+
+vi.mock("@/lib/hooks/use-favorite-toggle", () => ({
+  useFavoriteToggle: () => ({
+    isFavorited: false,
+    toggleFavorite: vi.fn(),
+    isLoading: false,
+  }),
+}))
+
 const minimalVenue = {
   id: "v1",
   name: "Test Venue",
@@ -63,11 +75,12 @@ describe("VenuePreviewSheet", () => {
     const pointerId = 1
     const startY = 200
 
-    // pointerdown at top (scrollTop will be 0 for initial render)
+    // pointerdown at top (scrollTop will be 0 for initial render) - must be touch type
     scroll.dispatchEvent(
       new PointerEvent("pointerdown", {
         clientY: startY,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )
@@ -77,6 +90,7 @@ describe("VenuePreviewSheet", () => {
       new PointerEvent("pointermove", {
         clientY: startY + 90,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )
@@ -86,6 +100,7 @@ describe("VenuePreviewSheet", () => {
       new PointerEvent("pointerup", {
         clientY: startY + 90,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )
@@ -111,6 +126,7 @@ describe("VenuePreviewSheet", () => {
       new PointerEvent("pointerdown", {
         clientY: startY,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )
@@ -120,6 +136,7 @@ describe("VenuePreviewSheet", () => {
       new PointerEvent("pointermove", {
         clientY: startY + 40,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )
@@ -128,6 +145,7 @@ describe("VenuePreviewSheet", () => {
       new PointerEvent("pointerup", {
         clientY: startY + 40,
         pointerId,
+        pointerType: "touch",
         bubbles: true,
       })
     )

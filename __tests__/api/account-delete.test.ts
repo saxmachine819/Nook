@@ -4,7 +4,7 @@ import { createTestUser } from "../helpers/test-utils"
 
 const mockPrisma = createMockPrisma()
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }))
-vi.mock("@/lib/auth", () => ({ auth: vi.fn() }))
+vi.mock("@/lib/auth", () => ({ auth: vi.fn() as any }))
 vi.mock("@/lib/audit", () => ({ writeAuditLog: vi.fn().mockResolvedValue(undefined) }))
 
 const { POST } = await import("@/app/api/account/delete/route")
@@ -26,12 +26,12 @@ describe("POST /api/account/delete", () => {
       return (cb as any)(tx)
     })
     const { auth } = await import("@/lib/auth")
-    vi.mocked(auth).mockResolvedValue(createMockSession(user))
+    vi.mocked(auth).mockResolvedValue(createMockSession(user) as any)
   })
 
   it("returns 401 if not authenticated", async () => {
     const { auth } = await import("@/lib/auth")
-    vi.mocked(auth).mockResolvedValue(null)
+    vi.mocked(auth).mockResolvedValue(null as any)
 
     const req = new Request("http://localhost/api/account/delete", {
       method: "POST",

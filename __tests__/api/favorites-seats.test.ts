@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createMockPrisma, createMockSession } from '../setup/mocks'
-import { createTestUser, createTestVenue, createTestTable, createTestSeat, createTestFavoriteSeat, createTestFavoriteVenue } from '../helpers/test-utils'
+import {
+  createTestUser,
+  createTestVenue,
+  createTestTable,
+  createTestSeat,
+  createTestFavoriteSeat,
+  createTestFavoriteVenue,
+} from '../helpers/test-utils'
 
 // Mock Prisma before importing the route
 const mockPrisma = createMockPrisma()
@@ -10,7 +17,7 @@ vi.mock('@/lib/prisma', () => ({
 
 // Mock auth
 vi.mock('@/lib/auth', () => ({
-  auth: vi.fn(),
+  auth: vi.fn() as any,
 }))
 
 // Import route after mocks are set up
@@ -24,22 +31,28 @@ describe('POST /api/favorites/seats/[seatId]', () => {
     // Reset mockPrisma
     Object.keys(mockPrisma).forEach((key) => {
       if (key === '$transaction') return
-      Object.keys(mockPrisma[key as keyof typeof mockPrisma]).forEach((method) => {
-        if (typeof mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]] === 'function') {
-          vi.mocked(mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]]).mockReset()
+
+      // 1. Cast the model to 'any' to stop the keyof madness
+      const model = mockPrisma[key as keyof typeof mockPrisma] as any
+
+      Object.keys(model).forEach((method) => {
+        // 2. Check if it's a function
+        if (typeof model[method] === 'function') {
+          // 3. Just call it. Since 'model' is any, TS won't complain.
+          model[method].mockReset()
         }
       })
     })
 
     // Default mock session
     const { auth } = await import('@/lib/auth')
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()) as any)
   })
 
   describe('authentication', () => {
     it('returns 401 if user is not authenticated', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(null)
+      vi.mocked(auth).mockResolvedValue(null as any)
 
       const context = { params: Promise.resolve({ seatId: 'seat-1' }) }
       mockRequest = new Request('http://localhost/api/favorites/seats/seat-1', {
@@ -125,7 +138,7 @@ describe('POST /api/favorites/seats/[seatId]', () => {
 
     it('creates FavoriteSeat and FavoriteVenue (cascade) if not exists', async () => {
       vi.mocked(mockPrisma.favoriteSeat.findUnique).mockResolvedValue(null)
-      
+
       // Mock transaction
       vi.mocked(mockPrisma.$transaction).mockImplementation(async (callback: any) => {
         const tx = {

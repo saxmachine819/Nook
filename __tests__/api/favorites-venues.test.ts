@@ -10,7 +10,7 @@ vi.mock('@/lib/prisma', () => ({
 
 // Mock auth
 vi.mock('@/lib/auth', () => ({
-  auth: vi.fn(),
+  auth: vi.fn() as any,
 }))
 
 // Import route after mocks are set up
@@ -26,20 +26,20 @@ describe('POST /api/favorites/venues/[venueId]', () => {
       if (key === '$transaction') return
       Object.keys(mockPrisma[key as keyof typeof mockPrisma]).forEach((method) => {
         if (typeof mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]] === 'function') {
-          vi.mocked(mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]]).mockReset()
+          (vi.mocked(mockPrisma[key as keyof typeof mockPrisma][method as keyof typeof mockPrisma[keyof typeof mockPrisma]]) as any).mockReset()
         }
       })
     })
 
     // Default mock session
     const { auth } = await import('@/lib/auth')
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser() as any) as any)
   })
 
   describe('authentication', () => {
     it('returns 401 if user is not authenticated', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(null)
+      vi.mocked(auth).mockResolvedValue(null as any)
 
       const context = { params: Promise.resolve({ venueId: 'venue-1' }) }
       mockRequest = new Request('http://localhost/api/favorites/venues/venue-1', {
@@ -54,7 +54,7 @@ describe('POST /api/favorites/venues/[venueId]', () => {
 
     it('returns 401 if session user has no id', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue({ user: { email: 'test@example.com' } })
+      vi.mocked(auth).mockResolvedValue({ user: { email: 'test@example.com' } } as any)
 
       const context = { params: Promise.resolve({ venueId: 'venue-1' }) }
       mockRequest = new Request('http://localhost/api/favorites/venues/venue-1', {
