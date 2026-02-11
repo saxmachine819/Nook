@@ -170,6 +170,7 @@ export function getPartsInTimezone(
 
 /**
  * Create a Date object for a specific hour/minute on a given reference date's calendar day in a timezone.
+ * Handles DST transitions: if the requested time doesn't exist (Spring Forward), advances to the next valid time.
  */
 export function dateAtTimeInTimezone(
   tz: string,
@@ -177,10 +178,13 @@ export function dateAtTimeInTimezone(
   hour: number,
   minute: number,
 ): Date {
-  return dayjs
-    .tz(ref, tz)
-    .hour(hour)
-    .minute(minute)
+  const refDayjs = dayjs.tz(ref, tz);
+  const dateStr = refDayjs.format("YYYY-MM-DD");
+  const timeStr = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  
+  // Parse date+time string directly - dayjs will automatically handle DST transitions
+  // If time doesn't exist (Spring Forward gap), it advances to the next valid time
+  return dayjs.tz(`${dateStr} ${timeStr}`, "YYYY-MM-DD HH:mm", tz)
     .second(0)
     .millisecond(0)
     .toDate();

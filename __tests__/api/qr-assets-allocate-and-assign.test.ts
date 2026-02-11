@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server"
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { createMockPrisma } from "../setup/mocks"
 
@@ -50,8 +51,8 @@ vi.mock("@/lib/qr-asset-allocator", () => ({
 
 const { POST } = await import("@/app/api/qr-assets/allocate-and-assign/route")
 
-function jsonRequest(body: object) {
-  return new Request("http://localhost/api/qr-assets/allocate-and-assign", {
+function jsonRequest(body: object): NextRequest {
+  return new NextRequest("http://localhost/api/qr-assets/allocate-and-assign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
