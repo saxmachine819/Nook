@@ -281,7 +281,7 @@ function ProfileContent() {
             ) : venues.length === 0 ? (
               <>
                 <p className="mb-4 text-sm text-muted-foreground">
-                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.
+                  If you own a café with workspace seating, you can request to be added to Nooc.
                 </p>
                 <Button size="lg" asChild className="w-full">
                   <Link href="/venue/onboard">

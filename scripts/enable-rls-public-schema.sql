@@ -4,6 +4,7 @@
 -- PostgREST anon/authenticated access is denied until policies are added.
 -- The app uses Prisma with DATABASE_URL, which bypasses RLS, so no policies are required.
 
+-- Core application tables
 ALTER TABLE public."tables"     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.venues       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.seats        ENABLE ROW LEVEL SECURITY;
@@ -21,3 +22,19 @@ ALTER TABLE public.favorite_tables  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.favorite_seats  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.qr_assets    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.qr_events    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.venue_members      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public._prisma_migrations  ENABLE ROW LEVEL SECURITY;
+
+-- Payment tables (only enable if they exist - these may not exist in all environments)
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payments') THEN
+    ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'refund_requests') THEN
+    ALTER TABLE public.refund_requests ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
