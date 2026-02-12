@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -24,53 +24,28 @@ import {
   ArrowLeft,
   Receipt,
 } from "lucide-react"
+import { ReservationDetail } from "@/lib/types/reservations"
+import { useReservationDetail } from "@/lib/hooks"
 
 interface ReservationDetailClientProps {
-  reservation: {
-    id: string
-    startAt: Date
-    endAt: Date
-    seatId: string | null
-    tableId: string | null
-    seatCount: number
-    status: string
-    createdAt: Date
-    venue: {
-      id: string
-      name: string
-      address: string | null
-      heroImageUrl: string | null
-      imageUrls: any
-      hourlySeatPrice: number
-      googleMapsUrl: string | null
-      rulesText: string | null
-      tags: string[]
-    }
-    seat: {
-      id: string
-      label: string | null
-      position: number | null
-      pricePerHour: number
-      table: {
-        name: string | null
-        directionsText: string | null
-      } | null
-    } | null
-    table: {
-      name: string | null
-      seatCount: number | null
-      tablePricePerHour: number | null
-      directionsText: string | null
-      seats?: { id: string }[]
-    } | null
-  }
+  reservation: ReservationDetail
 }
 
-export function ReservationDetailClient({ reservation }: ReservationDetailClientProps) {
+export function ReservationDetailClient({ reservation: serverReservation }: ReservationDetailClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+
+  const { data: fullReservation, isLoading: isHydrating } = useReservationDetail(serverReservation.id)
+  const reservation = useMemo(() => ({
+    ...serverReservation,
+    ...fullReservation,
+    // Ensure nested objects are merged correctly if they exist in fullReservation
+    venue: { ...serverReservation.venue, ...fullReservation?.venue },
+    seat: fullReservation?.seat ?? serverReservation.seat,
+    table: fullReservation?.table ?? serverReservation.table,
+  }), [serverReservation, fullReservation])
 
   const handleCancel = async () => {
     setCancelling(true)
@@ -230,6 +205,8 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
       ? reservation.venue.imageUrls[0]
       : null)
 
+  const showImageSkeleton = isHydrating && !reservation.venue.heroImageUrl
+
   const isCancelled = reservation.status === "cancelled"
   const isPast = new Date(reservation.endAt) < new Date()
 
@@ -260,11 +237,13 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
         )}
 
         <Card className="overflow-hidden">
-          {imageUrl && (
+          {showImageSkeleton ? (
+            <div className="relative h-64 w-full bg-muted animate-pulse" />
+          ) : imageUrl ? (
             <div className="relative h-64 w-full overflow-hidden bg-muted">
               <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover" />
             </div>
-          )}
+          ) : null}
           <CardContent className="p-6">
             <div className="space-y-6">
               {/* Venue Name */}
@@ -299,12 +278,19 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
               </div>
 
               {/* Directions */}
-              {getDirectionsText() && (
+              {(getDirectionsText() || isHydrating) && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Directions to your seat</h3>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {getDirectionsText()}
-                  </p>
+                  {isHydrating && !getDirectionsText() ? (
+                    <div className="space-y-2">
+                      <div className="h-4 w-full bg-muted animate-pulse rounded" />
+                      <div className="h-4 w-2/3 bg-muted animate-pulse rounded" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {getDirectionsText()}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -356,12 +342,20 @@ export function ReservationDetailClient({ reservation }: ReservationDetailClient
               </div>
 
               {/* Rules */}
-              {reservation.venue.rulesText && (
+              {(reservation.venue.rulesText || isHydrating) && (
                 <div className="space-y-2">
                   <h3 className="text-sm font-medium">Venue rules</h3>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {reservation.venue.rulesText}
-                  </p>
+                  {isHydrating && !reservation.venue.rulesText ? (
+                    <div className="space-y-2">
+                      <div className="h-4 w-full bg-muted animate-pulse rounded" />
+                      <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
+                      <div className="h-4 w-1/2 bg-muted animate-pulse rounded" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {reservation.venue.rulesText}
+                    </p>
+                  )}
                 </div>
               )}
 

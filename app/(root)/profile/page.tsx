@@ -31,21 +31,20 @@ function initialsFromName(name?: string | null) {
     .join("")
 }
 
-interface Venue {
-  id: string
-  name: string
-  address: string
-  thumbnail: string | null
-}
+import { useMe, useMyVenuesCount } from "@/lib/hooks"
 
 function ProfileContent() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const router = useRouter()
   const callbackUrl = searchParams?.get("callbackUrl")
-  const [venues, setVenues] = useState<Venue[]>([])
-  const [loadingVenues, setLoadingVenues] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+  
+  const { data: userData, isLoading: loadingUser } = useMe(status === "authenticated")
+  const { data: venueData, isLoading: loadingVenues } = useMyVenuesCount(status === "authenticated")
+
+  const isAdmin = userData?.isAdmin ?? false
+  const venueCount = venueData?.count ?? 0
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -60,27 +59,6 @@ function ProfileContent() {
     }, 0)
     return () => clearTimeout(t)
   }, [session, callbackUrl, router])
-
-  // Fetch venues when authenticated
-  useEffect(() => {
-    if (!session?.user?.id) {
-      setLoadingVenues(false)
-      return
-    }
-    fetch("/api/users/me/venues")
-      .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
-      .then((data) => {
-        setVenues(data.venues ?? [])
-        setIsAdmin(data.isAdmin ?? false)
-      })
-      .catch(() => {
-        setVenues([])
-        setIsAdmin(false)
-      })
-      .finally(() => {
-        setLoadingVenues(false)
-      })
-  }, [session?.user?.id])
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmation !== "DELETE") {
@@ -245,7 +223,18 @@ function ProfileContent() {
           </CardContent>
         </Card>
 
-        {isAdmin && (
+        {/* Admin Section Hydration */}
+        {loadingUser ? (
+          <Card className="animate-pulse">
+            <CardHeader className="space-y-2">
+              <div className="h-5 w-1/4 bg-muted rounded" />
+              <div className="h-4 w-1/2 bg-muted rounded" />
+            </CardHeader>
+            <CardContent>
+              <div className="h-11 w-full bg-muted rounded" />
+            </CardContent>
+          </Card>
+        ) : isAdmin ? (
           <Card>
             <CardHeader>
               <CardTitle>Admin</CardTitle>
@@ -262,44 +251,53 @@ function ProfileContent() {
               </Button>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>My Venues</CardTitle>
-            <CardDescription>
-              {loadingVenues
-                ? "Loading..."
-                : venues.length === 0
+        {/* My Venues Section Hydration */}
+        {loadingVenues ? (
+          <Card className="animate-pulse">
+            <CardHeader className="space-y-2">
+              <div className="h-5 w-1/4 bg-muted rounded" />
+              <div className="h-4 w-1/2 bg-muted rounded" />
+            </CardHeader>
+            <CardContent>
+              <div className="h-11 w-full bg-muted rounded" />
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>My Venues</CardTitle>
+              <CardDescription>
+                {venueCount === 0
                   ? "List your venue on Nooc"
                   : "Manage your venues from the dashboard"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingVenues ? (
-              <p className="text-sm text-muted-foreground">Loading venues…</p>
-            ) : venues.length === 0 ? (
-              <>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.
-                </p>
-                <Button size="lg" asChild className="w-full">
-                  <Link href="/venue/onboard">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add your venue
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {venueCount === 0 ? (
+                <>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.
+                  </p>
+                  <Button size="lg" asChild className="w-full">
+                    <Link href="/venue/onboard">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add your venue
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <Button size="lg" variant="outline" asChild className="w-full">
+                  <Link href="/venue/dashboard">
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    Open Venue Dashboard
                   </Link>
                 </Button>
-              </>
-            ) : (
-              <Button size="lg" variant="outline" asChild className="w-full">
-                <Link href="/venue/dashboard">
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Open Venue Dashboard
-                </Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
