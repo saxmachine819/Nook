@@ -37,12 +37,9 @@ interface VenuePageProps {
 }
 
 export default async function VenuePage({ params, searchParams }: VenuePageProps) {
-  // Get session for favorite state fetching
-  const session = await auth()
-  
-  let venue
-  try {
-    venue = await prisma.venue.findUnique({
+  // Fetch venue data in parallel with other essential checks
+  const [venue, session, canonicalHours] = await Promise.all([
+    prisma.venue.findUnique({
       where: { id: params.id },
       include: {
         tables: {
@@ -61,14 +58,13 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             { featured: "desc" },
             { createdAt: "desc" },
           ],
-          take: 1, // Get the primary deal (featured first, then most recent)
+          take: 1,
         },
       } as any,
-    })
-  } catch (error) {
-    console.error("Error fetching venue:", error)
-    throw error
-  }
+    }),
+    auth(),
+    getCanonicalVenueHours(params.id),
+  ])
 
   if (!venue) {
     notFound()
@@ -85,57 +81,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   const canView = venue.onboardingStatus === "APPROVED" || isOwner || userIsAdmin
 
   if (!canView) {
-    // Redirect non-owners to Explore page
     redirect("/")
-  }
-
-  // Fetch favorite states in batch
-  let favoriteStates = {
-    venue: false,
-    tables: new Set<string>(),
-    seats: new Set<string>(),
-  }
-
-  if (session?.user?.id) {
-    const userId = session.user.id
-    const venueId = venue.id
-    const tableIds = venue.tables.map((t) => t.id)
-    const seatIds = (
-      venue.tables as unknown as Array<{ id: string; seats: { id: string }[] }>
-    ).flatMap((t) => t.seats.map((s) => s.id))
-
-    const [venueFav, tableFavs, seatFavs] = await Promise.all([
-      prisma.favoriteVenue.findUnique({
-        where: {
-          userId_venueId: {
-            userId,
-            venueId,
-          },
-        },
-      }),
-      tableIds.length > 0
-        ? prisma.favoriteTable.findMany({
-            where: {
-              userId,
-              venueId,
-              tableId: { in: tableIds },
-            },
-          })
-        : Promise.resolve([]),
-      seatIds.length > 0
-        ? prisma.favoriteSeat.findMany({
-            where: {
-              userId,
-              venueId,
-              seatId: { in: seatIds },
-            },
-          })
-        : Promise.resolve([]),
-    ])
-
-    favoriteStates.venue = !!venueFav
-    favoriteStates.tables = new Set(tableFavs.map((t) => t.tableId))
-    favoriteStates.seats = new Set(seatFavs.map((s) => s.seatId))
   }
   
   // Ensure tables and seats arrays exist
@@ -216,33 +162,12 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     return mode === "individual" || mode === null || mode === undefined
   })
 
-  const now = new Date()
-  const futureReservations = await prisma.reservation.findMany({
-    where: {
-      venueId: venue.id,
-      status: { not: "cancelled" },
-      endAt: { gte: now },
-    },
-    select: {
-      startAt: true,
-      endAt: true,
-      seatCount: true,
-    },
-  })
-
-  const canonical = await getCanonicalVenueHours(venue.id)
-  const openStatus = canonical ? getOpenStatus(canonical, new Date()) : null
-  const weeklyFormatted = canonical ? formatWeeklyHoursFromCanonical(canonical) : []
-  const availabilityLabel = computeAvailabilityLabel(
-    capacity,
-    futureReservations.map((r) => ({
-      startAt: r.startAt,
-      endAt: r.endAt,
-      seatCount: r.seatCount,
-    })),
-    openStatus,
-    { timeZone: canonical?.timezone }
-  )
+  const openStatus = canonicalHours ? getOpenStatus(canonicalHours, new Date()) : null
+  const weeklyFormatted = canonicalHours ? formatWeeklyHoursFromCanonical(canonicalHours) : []
+  
+  // We'll delegate full availability calculations to the client (VenueBookingWidget)
+  // For the server render, we just show a basic status.
+  const availabilityLabel = openStatus?.isOpen ? "Open" : "Closed"
 
   const venueHeroImages: string[] = (() => {
     const images = new Set<string>()
@@ -272,7 +197,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             name={venue.name} 
             address={venue.address}
             returnTo={searchParams?.returnTo}
-            isFavorited={favoriteStates.venue}
             venueId={venue.id}
             deal={(() => {
               const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
@@ -379,8 +303,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               <VenueBookingWidget
                 venueId={venue.id}
                 tables={individualTablesForBooking as any}
-                favoritedTableIds={favoriteStates.tables}
-                favoritedSeatIds={favoriteStates.seats}
+                canonicalHours={canonicalHours}
               />
             </CardContent>
           </Card>

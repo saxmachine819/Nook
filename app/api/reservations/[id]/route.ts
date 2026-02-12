@@ -1,8 +1,80 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { canEditVenue } from "@/lib/venue-auth"
+import { canEditVenue, isAdmin } from "@/lib/venue-auth"
 import { enqueueNotification } from "@/lib/notification-queue"
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const params = await context.params
+  const reservationId = params.id
+
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const reservation = await prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: {
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            heroImageUrl: true,
+            imageUrls: true,
+            hourlySeatPrice: true,
+            googleMapsUrl: true,
+            rulesText: true,
+            tags: true,
+          },
+        },
+        seat: {
+          include: {
+            table: {
+              select: {
+                name: true,
+                directionsText: true,
+              },
+            },
+          },
+        },
+        table: {
+          select: {
+            name: true,
+            seatCount: true,
+            tablePricePerHour: true,
+            directionsText: true,
+            seats: {
+              select: { id: true },
+            },
+          },
+        },
+      },
+    })
+
+    if (!reservation) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    // Authorization: owner or admin
+    const isOwner = reservation.userId === session.user.id
+    const userIsAdmin = isAdmin(session.user)
+
+    if (!isOwner && !userIsAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    return NextResponse.json(reservation)
+  } catch (error) {
+    console.error("Error fetching reservation:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
 export async function PATCH(
   request: Request,

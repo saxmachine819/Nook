@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -30,23 +31,23 @@ type TabType = "upcoming" | "past" | "cancelled"
 
 interface Reservation {
   id: string
-  startAt: Date
-  endAt: Date
+  userId: string | null
+  startAt: Date | string
+  endAt: Date | string
   seatId: string | null
   tableId: string | null
   seatCount: number
   status: string
-  createdAt: Date
+  createdAt: Date | string
   venue: {
     id: string
     name: string
     address: string | null
     heroImageUrl: string | null
-    imageUrls: any
+    imageUrls: string[] | null | any
     hourlySeatPrice: number
-    googleMapsUrl: string | null
-    rulesText: string | null
-    tags: string[]
+    googleMapsUrl?: string | null
+    rulesText?: string | null
   }
   seat: {
     id: string
@@ -58,6 +59,7 @@ interface Reservation {
     } | null
   } | null
   table: {
+    id: string
     name: string | null
     seatCount: number | null
     tablePricePerHour: number | null
@@ -66,18 +68,46 @@ interface Reservation {
 }
 
 interface ReservationsClientProps {
-  upcoming: Reservation[]
-  past: Reservation[]
-  cancelled: Reservation[]
+  initialUpcoming: Reservation[]
+  counts: {
+    upcoming: number
+    past: number
+    cancelled: number
+  }
 }
 
-export function ReservationsClient({ upcoming, past, cancelled }: ReservationsClientProps) {
+export function ReservationsClient({ initialUpcoming, counts }: ReservationsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast, ToastComponent } = useToast()
   const [activeTab, setActiveTab] = useState<TabType>("upcoming")
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+
+  // On-demand fetching for past and cancelled
+  const { data: pastReservations, isLoading: isLoadingPast } = useQuery<Reservation[]>({
+    queryKey: ["reservations", "past"],
+    queryFn: async () => {
+      const resp = await fetch("/api/reservations?tab=past")
+      if (!resp.ok) throw new Error("Failed to fetch past reservations")
+      return resp.json()
+    },
+    enabled: activeTab === "past",
+    staleTime: 60 * 1000,
+  })
+
+  const { data: cancelledReservations, isLoading: isLoadingCancelled } = useQuery<Reservation[]>({
+    queryKey: ["reservations", "cancelled"],
+    queryFn: async () => {
+      const resp = await fetch("/api/reservations?tab=cancelled")
+      if (!resp.ok) throw new Error("Failed to fetch cancelled reservations")
+      return resp.json()
+    },
+    enabled: activeTab === "cancelled",
+    staleTime: 60 * 1000,
+  })
+
+  const upcoming = initialUpcoming
 
   // When returning from detail page after cancel, refresh list and clean URL
   useEffect(() => {
@@ -244,12 +274,13 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
       case "upcoming":
         return upcoming
       case "past":
-        return past
+        return pastReservations || []
       case "cancelled":
-        return cancelled
+        return cancelledReservations || []
     }
   }
 
+  const isLoading = (activeTab === "past" && isLoadingPast) || (activeTab === "cancelled" && isLoadingCancelled)
   const heroReservation = activeTab === "upcoming" && upcoming.length > 0 ? upcoming[0] : null
   const otherUpcoming = activeTab === "upcoming" && upcoming.length > 1 ? upcoming.slice(1) : []
   const currentReservations = getCurrentReservations()
@@ -260,39 +291,39 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
 
       <div className="container mx-auto px-4 pt-2 pb-6">
         {/* Tabs */}
-        <div className="mb-3 flex gap-2 border-b -mx-4 px-4">
+        <div className="mb-3 flex gap-2 border-b -mx-4 px-4 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab("upcoming")}
             className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
+              "px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
               activeTab === "upcoming"
                 ? "border-b-2 border-primary text-primary"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Upcoming {upcoming.length > 0 && `(${upcoming.length})`}
+            Upcoming {counts.upcoming > 0 && `(${counts.upcoming})`}
           </button>
           <button
             onClick={() => setActiveTab("past")}
             className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
+              "px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
               activeTab === "past"
                 ? "border-b-2 border-primary text-primary"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Past {past.length > 0 && `(${past.length})`}
+            Past {counts.past > 0 && `(${counts.past})`}
           </button>
           <button
             onClick={() => setActiveTab("cancelled")}
             className={cn(
-              "px-2 py-2 text-sm font-medium transition-colors",
+              "px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap",
               activeTab === "cancelled"
                 ? "border-b-2 border-primary text-primary"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            Cancelled {cancelled.length > 0 && `(${cancelled.length})`}
+            Cancelled {counts.cancelled > 0 && `(${counts.cancelled})`}
           </button>
         </div>
 
@@ -347,56 +378,48 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
           </>
         )}
 
-        {/* Past View */}
-        {activeTab === "past" && (
+        {(activeTab === "past" || activeTab === "cancelled") && (
           <>
-            {past.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
-                <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 className="mb-2 text-xl font-semibold">No past reservations</h2>
-                <p className="text-sm text-muted-foreground">
-                  Your past reservations will appear here.
-                </p>
-              </div>
-            ) : (
+            {isLoading ? (
               <div className="space-y-3">
-                {past.map((reservation) => (
-                  <PastReservationCard
-                    key={reservation.id}
-                    reservation={reservation}
-                    onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
-                    calculatePrice={calculatePrice}
-                    formatDateTimeRange={formatDateTimeRange}
-                    getSeatInfo={getSeatInfo}
-                  />
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardContent className="h-20" />
+                  </Card>
                 ))}
               </div>
-            )}
-          </>
-        )}
-
-        {/* Cancelled View */}
-        {activeTab === "cancelled" && (
-          <>
-            {cancelled.length === 0 ? (
+            ) : currentReservations.length === 0 ? (
               <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
                 <Calendar className="mb-4 h-12 w-12 text-muted-foreground" />
-                <h2 className="mb-2 text-xl font-semibold">No cancelled reservations</h2>
+                <h2 className="mb-2 text-xl font-semibold">
+                  No {activeTab} reservations
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Your cancelled reservations will appear here.
+                  Your {activeTab} reservations will appear here.
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {cancelled.map((reservation) => (
-                  <CancelledReservationCard
-                    key={reservation.id}
-                    reservation={reservation}
-                    onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
-                    calculatePrice={calculatePrice}
-                    formatDateTimeRange={formatDateTimeRange}
-                    getSeatInfo={getSeatInfo}
-                  />
+                {currentReservations.map((reservation) => (
+                  activeTab === "past" ? (
+                    <PastReservationCard
+                      key={reservation.id}
+                      reservation={reservation}
+                      onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
+                      calculatePrice={calculatePrice}
+                      formatDateTimeRange={formatDateTimeRange}
+                      getSeatInfo={getSeatInfo}
+                    />
+                  ) : (
+                    <CancelledReservationCard
+                      key={reservation.id}
+                      reservation={reservation}
+                      onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
+                      calculatePrice={calculatePrice}
+                      formatDateTimeRange={formatDateTimeRange}
+                      getSeatInfo={getSeatInfo}
+                    />
+                  )
                 ))}
               </div>
             )}

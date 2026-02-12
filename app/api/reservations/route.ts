@@ -1,9 +1,77 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
+import { ReservationListItem } from "@/lib/types/reservations"
 import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
 import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
 import { enqueueNotification } from "@/lib/notification-queue"
+
+export async function GET(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const tab = searchParams.get("tab") as "upcoming" | "past" | "cancelled" | null
+    const now = new Date()
+
+    const where: Prisma.ReservationWhereInput = { userId: session.user.id }
+
+    if (tab === "upcoming") {
+      where.status = { not: "cancelled" }
+      where.endAt = { gte: now }
+    } else if (tab === "past") {
+      where.status = { not: "cancelled" }
+      where.endAt = { lt: now }
+    } else if (tab === "cancelled") {
+      where.status = "cancelled"
+    }
+
+    const reservations = await prisma.reservation.findMany({
+      where,
+      include: {
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            heroImageUrl: true,
+            imageUrls: true,
+            hourlySeatPrice: true,
+          },
+        },
+        seat: {
+          select: {
+            id: true,
+            label: true,
+            position: true,
+            pricePerHour: true,
+            table: { select: { name: true } },
+          },
+        },
+        table: {
+          select: {
+            name: true,
+            seatCount: true,
+            tablePricePerHour: true,
+            seats: { select: { id: true } },
+          },
+        },
+      },
+      orderBy: {
+        startAt: tab === "upcoming" ? "asc" : "desc",
+      },
+    })
+
+    return NextResponse.json(reservations)
+  } catch (error) {
+    console.error("Error in GET /api/reservations:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -480,8 +548,8 @@ export async function POST(request: Request) {
             timeZone: reservation.venue?.timezone ?? undefined,
             tableId: reservation.tableId ?? null,
             seatId: reservation.seatId ?? null,
-            startAt: reservation.startAt.toISOString(),
-            endAt: reservation.endAt.toISOString(),
+            startAt: new Date(reservation.startAt).toISOString(),
+            endAt: new Date(reservation.endAt).toISOString(),
             ...(baseUrl ? { confirmationUrl: `${baseUrl}/reservations/${reservation.id}` } : {}),
           },
         })
@@ -504,8 +572,8 @@ export async function POST(request: Request) {
             venueName: reservation.venue?.name ?? "",
             timeZone: reservation.venue?.timezone ?? undefined,
             guestEmail: userRecord.email ?? "",
-            startAt: reservation.startAt.toISOString(),
-            endAt: reservation.endAt.toISOString(),
+            startAt: new Date(reservation.startAt).toISOString(),
+            endAt: new Date(reservation.endAt).toISOString(),
           },
         })
       } catch (enqueueErr) {
@@ -527,7 +595,8 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     )
-  } catch (error: any) {
+  } catch (err: unknown) {
+    const error = err as any // Local cast for logging properties safely
     console.error("❌ Error creating reservation:", error)
     console.error("Error details:", {
       message: error?.message,

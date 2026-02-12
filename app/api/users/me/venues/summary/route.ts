@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { claimVenueMembershipForUser } from "@/lib/venue-members"
+import { isAdmin } from "@/lib/venue-auth"
 
 export const dynamic = "force-dynamic"
 
@@ -12,17 +13,27 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    let emailForClaim: string | null = session.user.email ?? null
-    if (!emailForClaim) {
+    let email = session.user.email
+    if (!email) {
       const dbUser = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: { email: true },
       })
-      emailForClaim = dbUser?.email ?? null
+      email = dbUser?.email ?? null
     }
+
+    const isUserAdmin = isAdmin({ email })
+
+    if (isUserAdmin) {
+      const count = await prisma.venue.count({
+        where: { status: { not: "DELETED" } },
+      })
+      return NextResponse.json({ count, singleVenueId: null })
+    }
+
     await claimVenueMembershipForUser({
       id: session.user.id,
-      email: emailForClaim ?? undefined,
+      email: email ?? undefined,
     })
 
     const [memberRows, ownedVenues] = await Promise.all([
@@ -30,8 +41,8 @@ export async function GET() {
         where: {
           OR: [
             { userId: session.user.id },
-            ...(emailForClaim
-              ? [{ email: { equals: emailForClaim, mode: "insensitive" as const } }]
+            ...(email
+              ? [{ email: { equals: email, mode: "insensitive" as const } }]
               : []),
           ],
         },
@@ -43,22 +54,14 @@ export async function GET() {
         select: { id: true },
       }),
     ])
+
     const allVenueIds = new Set([
       ...memberRows.map((m) => m.venueId),
       ...ownedVenues.map((v) => v.id),
     ])
-    const managedVenues =
-      allVenueIds.size === 0
-        ? []
-        : await prisma.venue.findMany({
-            where: {
-              id: { in: Array.from(allVenueIds) },
-              status: { not: "DELETED" },
-            },
-            select: { id: true },
-          })
-    const count = managedVenues.length
-    const singleVenueId = count === 1 ? managedVenues[0]?.id ?? null : null
+
+    const count = allVenueIds.size
+    const singleVenueId = count === 1 ? Array.from(allVenueIds)[0] : null
 
     return NextResponse.json({ count, singleVenueId })
   } catch (e) {
