@@ -53,6 +53,13 @@ export async function PATCH(
       )
     }
 
+    if (body.ownerPhone !== undefined && (typeof body.ownerPhone !== "string" || !body.ownerPhone.trim())) {
+      return NextResponse.json(
+        { error: "Owner phone number is required" },
+        { status: 400 }
+      )
+    }
+
     // Validate tables if provided
     if (body.tables) {
       if (!Array.isArray(body.tables) || body.tables.length === 0) {
@@ -136,6 +143,9 @@ export async function PATCH(
           rulesText: body.rulesText?.trim() || null,
           tags: Array.isArray(body.tags) ? body.tags : [],
           description: body.description?.trim() || null,
+          ...(body.ownerFirstName !== undefined && { ownerFirstName: body.ownerFirstName?.trim() || null }),
+          ...(body.ownerLastName !== undefined && { ownerLastName: body.ownerLastName?.trim() || null }),
+          ...(body.ownerPhone !== undefined && { ownerPhone: body.ownerPhone.trim() }),
           googlePlaceId: body.googlePlaceId?.trim() || null,
           googleMapsUrl: body.googleMapsUrl?.trim() || null,
           openingHoursJson: body.openingHoursJson ?? undefined,

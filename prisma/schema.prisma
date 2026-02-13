@@ -102,6 +102,9 @@ model Venue {
   heroImageUrl         String?
   imageUrls            Json?
   placePhotoUrls       Json?            // Supabase URLs for all place photos (persisted once)
+  ownerFirstName       String?
+  ownerLastName        String?
+  ownerPhone           String              @default("")
   owner                User?            @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   approvedBy           User?            @relation("ApprovedVenues", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   rejectedBy           User?            @relation("RejectedVenues", fields: [rejectedByUserId], references: [id], onDelete: SetNull)

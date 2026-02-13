@@ -59,6 +59,9 @@ interface VenueEditClientProps {
     zipCode: string | null
     latitude: number | null
     longitude: number | null
+    ownerFirstName: string | null
+    ownerLastName: string | null
+    ownerPhone: string
     tags: string[]
     rulesText: string | null
     heroImageUrl: string | null
@@ -168,6 +171,9 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [zipCode, setZipCode] = useState(venue.zipCode || "")
   const [latitude, setLatitude] = useState(venue.latitude?.toString() || "")
   const [longitude, setLongitude] = useState(venue.longitude?.toString() || "")
+  const [ownerFirstName, setOwnerFirstName] = useState(venue.ownerFirstName || "")
+  const [ownerLastName, setOwnerLastName] = useState(venue.ownerLastName || "")
+  const [ownerPhone, setOwnerPhone] = useState(venue.ownerPhone || "")
   const [tags, setTags] = useState<string[]>(venue.tags || [])
   const [rulesText, setRulesText] = useState(venue.rulesText || "")
   const [seatCountInputs, setSeatCountInputs] = useState<Record<string, string>>({})
@@ -816,6 +822,9 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           zipCode: zipCode.trim() || null,
           latitude: latitude || null,
           longitude: longitude || null,
+          ownerFirstName: ownerFirstName.trim() || null,
+          ownerLastName: ownerLastName.trim() || null,
+          ownerPhone: ownerPhone.trim(),
           tags,
           rulesText: rulesText.trim() || null,
           tables: validTables.map((table) => ({
@@ -964,6 +973,53 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                     onChange={(e) => setZipCode(e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder="94102"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Owner Info</p>
+                <p className="mb-3 text-xs text-muted-foreground">Contact details for the venue owner</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="ownerFirstName" className="mb-2 block text-sm font-medium">
+                      First Name
+                    </label>
+                    <input
+                      id="ownerFirstName"
+                      type="text"
+                      value={ownerFirstName}
+                      onChange={(e) => setOwnerFirstName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Jane"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ownerLastName" className="mb-2 block text-sm font-medium">
+                      Last Name
+                    </label>
+                    <input
+                      id="ownerLastName"
+                      type="text"
+                      value={ownerLastName}
+                      onChange={(e) => setOwnerLastName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label htmlFor="ownerPhone" className="mb-2 block text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="ownerPhone"
+                    type="tel"
+                    required
+                    value={ownerPhone}
+                    onChange={(e) => setOwnerPhone(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="+1 (555) 000-0000"
                   />
                 </div>
               </div>

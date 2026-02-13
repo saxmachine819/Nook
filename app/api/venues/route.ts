@@ -30,6 +30,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!body.ownerPhone || typeof body.ownerPhone !== "string" || !body.ownerPhone.trim()) {
+      return NextResponse.json(
+        { error: "Owner phone number is required" },
+        { status: 400 }
+      )
+    }
+
     // For non-draft venues, still validate hourlySeatPrice for backward compatibility
     if (onboardingStatus !== "DRAFT" && (!body.hourlySeatPrice || parseFloat(body.hourlySeatPrice) <= 0)) {
       return NextResponse.json(
@@ -124,6 +131,9 @@ export async function POST(request: NextRequest) {
           description: body.description?.trim() || null,
           onboardingStatus: onboardingStatus,
           ownerId: session.user.id,
+          ownerFirstName: body.ownerFirstName?.trim() || null,
+          ownerLastName: body.ownerLastName?.trim() || null,
+          ownerPhone: body.ownerPhone.trim(),
           googlePlaceId: body.googlePlaceId?.trim() || null,
           googleMapsUrl: body.googleMapsUrl?.trim() || null,
           openingHoursJson: body.openingHoursJson || null,
