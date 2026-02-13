@@ -274,6 +274,9 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [placePhotoUrls, setPlacePhotoUrls] = useState<string[]>(() =>
     parsePlacePhotoUrls(venue.placePhotoUrls)
   )
+  const [availablePhotos, setAvailablePhotos] = useState<
+    Array<{ photoUrl: string; photoReference: string | null; name: string }>
+  >([])
   const [ownerUploadedUrls, setOwnerUploadedUrls] = useState<string[]>([])
   const [selectedCatalogIndices, setSelectedCatalogIndices] = useState<number[]>([])
   const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false)
@@ -284,11 +287,15 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [showAllPhotoOptions, setShowAllPhotoOptions] = useState(false)
   const lastSyncedVenueDataRef = useRef<string | null>(null)
 
-  // Catalog = place photos (Supabase) + owner uploads; dedupe by same-photo so each image appears once
+  // Catalog = place photos (from newly loaded place details, or Supabase) + owner uploads; dedupe by same-photo
+  const placeSegment =
+    availablePhotos.length > 0
+      ? availablePhotos.map((p) => ({ source: "place" as const, photoUrl: p.photoUrl }))
+      : placePhotoUrls.map((url) => ({ source: "place" as const, photoUrl: url }))
   const catalog: Array<{ source: "place" | "upload"; photoUrl: string }> = [
-    ...placePhotoUrls.map((url) => ({ source: "place" as const, photoUrl: url })),
+    ...placeSegment,
     ...ownerUploadedUrls
-      .filter((url) => !placePhotoUrls.some((p) => samePhotoUrl(p, url)))
+      .filter((url) => !placeSegment.some((p) => samePhotoUrl(p.photoUrl, url)))
       .map((url) => ({ source: "upload" as const, photoUrl: url })),
   ]
 
