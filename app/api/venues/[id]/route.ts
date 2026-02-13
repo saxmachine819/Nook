@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { persistVenuePhotos } from "@/lib/persist-venue-photos"
@@ -153,7 +154,7 @@ export async function PATCH(
           placePhotoUrls: Array.isArray(body.placePhotoUrls) ? body.placePhotoUrls : undefined,
           heroImageUrl: persisted.heroImageUrl,
           ...hoursSourceUpdate,
-          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : null,
+          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : Prisma.JsonNull,
         },
       })
 

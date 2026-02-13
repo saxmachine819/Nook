@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { persistVenuePhotos } from "@/lib/persist-venue-photos"
@@ -189,7 +190,7 @@ export async function POST(request: NextRequest) {
       await tx.venue.update({
         where: { id: created.id },
         data: {
-          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : null,
+          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : Prisma.JsonNull,
           heroImageUrl: persisted.heroImageUrl,
         },
       })
