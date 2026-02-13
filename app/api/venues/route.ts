@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { persistVenuePhotos } from "@/lib/persist-venue-photos"
 import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function POST(request: NextRequest) {
@@ -105,68 +106,96 @@ export async function POST(request: NextRequest) {
       ? (typeof body.longitude === 'string' ? parseFloat(body.longitude) : body.longitude)
       : null
 
-    // Create venue with tables and seats in a transaction
-    const venue = await prisma.venue.create({
-      data: {
-        name: body.name.trim(),
-        address: body.address.trim(),
-        neighborhood: body.neighborhood?.trim() || null,
-        city: body.city?.trim() || null,
-        state: body.state?.trim() || null,
-        zipCode: body.zipCode?.trim() || null,
-        latitude: parsedLatitude && !isNaN(parsedLatitude) ? parsedLatitude : null,
-        longitude: parsedLongitude && !isNaN(parsedLongitude) ? parsedLongitude : null,
-        hourlySeatPrice: parsedHourlyPrice,
-        rulesText: body.rulesText?.trim() || null,
-        tags: Array.isArray(body.tags) ? body.tags : [],
-        description: body.description?.trim() || null,
-        onboardingStatus: onboardingStatus,
-        ownerId: session.user.id, // Set the venue owner to the authenticated user
-        // Google Places enrichment fields
-        googlePlaceId: body.googlePlaceId?.trim() || null,
-        googleMapsUrl: body.googleMapsUrl?.trim() || null,
-        openingHoursJson: body.openingHoursJson || null,
-        googlePhotoRefs: body.googlePhotoRefs || null,
-        heroImageUrl: body.heroImageUrl?.trim() || null,
-        imageUrls: body.imageUrls || null,
-        tables: {
-          create: body.tables.map((table: any) => {
-            const bookingMode = table.bookingMode || "individual"
-            const tablePricePerHour = bookingMode === "group" ? Number(table.tablePricePerHour) : null
+    // Create venue, persist Google photos to Supabase, then update venue with persisted URLs (all in one transaction)
+    const venue = await prisma.$transaction(async (tx) => {
+      const created = await tx.venue.create({
+        data: {
+          name: body.name.trim(),
+          address: body.address.trim(),
+          neighborhood: body.neighborhood?.trim() || null,
+          city: body.city?.trim() || null,
+          state: body.state?.trim() || null,
+          zipCode: body.zipCode?.trim() || null,
+          latitude: parsedLatitude && !isNaN(parsedLatitude) ? parsedLatitude : null,
+          longitude: parsedLongitude && !isNaN(parsedLongitude) ? parsedLongitude : null,
+          hourlySeatPrice: parsedHourlyPrice,
+          rulesText: body.rulesText?.trim() || null,
+          tags: Array.isArray(body.tags) ? body.tags : [],
+          description: body.description?.trim() || null,
+          onboardingStatus: onboardingStatus,
+          ownerId: session.user.id,
+          googlePlaceId: body.googlePlaceId?.trim() || null,
+          googleMapsUrl: body.googleMapsUrl?.trim() || null,
+          openingHoursJson: body.openingHoursJson || null,
+          googlePhotoRefs: body.googlePhotoRefs || null,
+          heroImageUrl: body.heroImageUrl?.trim() || null,
+          imageUrls: body.imageUrls || null,
+          tables: {
+            create: body.tables.map((table: any) => {
+              const bookingMode = table.bookingMode || "individual"
+              const tablePricePerHour = bookingMode === "group" ? Number(table.tablePricePerHour) : null
 
-            return {
-              name: table.name.trim(),
-              seatCount: table.seats.length,
-              bookingMode,
-              tablePricePerHour,
-              imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
-                ? table.imageUrls
-                : null,
-              directionsText: table.directionsText?.trim() || null,
-              seats: {
-                create: table.seats.map((seat: any, index: number) => ({
-                  pricePerHour: Number(seat.pricePerHour),
-                  position: seat.position ?? index + 1, // Auto-assign position if not provided (1-indexed)
-                  label: seat.label?.trim() || null,
-                  tags: seat.tags && Array.isArray(seat.tags) && seat.tags.length > 0
-                    ? seat.tags
-                    : null,
-                  imageUrls: seat.imageUrls && Array.isArray(seat.imageUrls) && seat.imageUrls.length > 0
-                    ? seat.imageUrls
-                    : null,
-                })),
-              },
-            }
-          }),
-        },
-      },
-      include: {
-        tables: {
-          include: {
-            seats: true,
+              return {
+                name: table.name.trim(),
+                seatCount: table.seats.length,
+                bookingMode,
+                tablePricePerHour,
+                imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
+                  ? table.imageUrls
+                  : null,
+                directionsText: table.directionsText?.trim() || null,
+                seats: {
+                  create: table.seats.map((seat: any, index: number) => ({
+                    pricePerHour: Number(seat.pricePerHour),
+                    position: seat.position ?? index + 1,
+                    label: seat.label?.trim() || null,
+                    tags: seat.tags && Array.isArray(seat.tags) && seat.tags.length > 0
+                      ? seat.tags
+                      : null,
+                    imageUrls: seat.imageUrls && Array.isArray(seat.imageUrls) && seat.imageUrls.length > 0
+                      ? seat.imageUrls
+                      : null,
+                  })),
+                },
+              }
+            }),
           },
         },
-      },
+        include: {
+          tables: {
+            include: {
+              seats: true,
+            },
+          },
+        },
+      })
+
+      const persisted = await persistVenuePhotos({
+        venueId: created.id,
+        imageUrls: body.imageUrls,
+        heroImageUrl: body.heroImageUrl,
+      })
+
+      await tx.venue.update({
+        where: { id: created.id },
+        data: {
+          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : null,
+          heroImageUrl: persisted.heroImageUrl,
+        },
+      })
+
+      const updated = await tx.venue.findUnique({
+        where: { id: created.id },
+        include: {
+          tables: {
+            include: {
+              seats: true,
+            },
+          },
+        },
+      })
+      if (!updated) throw new Error("Venue not found after create")
+      return updated
     })
 
     // Parse and save venue hours if openingHoursJson exists (new venue: hoursSource is null)

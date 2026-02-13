@@ -2,8 +2,8 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Use DATABASE_URL only (no directUrl). Local: use pooler (port 6543) + ?pgbouncer=true; add ?sslmode=require if connection fails.
-// Vercel/production: unchanged — use whatever DATABASE_URL you already have. No DIRECT_URL required anywhere.
+// DATABASE_URL: use pooler (port 6543) for app runtime; add ?pgbouncer=true and ?sslmode=require if needed.
+// If "prisma migrate" hangs, add DIRECT_URL in .env with the direct connection (port 5432) — see docs/PRISMA_MIGRATE_SUPABASE.md
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -101,6 +101,7 @@ model Venue {
   googlePhotoRefs      Json?
   heroImageUrl         String?
   imageUrls            Json?
+  placePhotoUrls       Json?            // Supabase URLs for all place photos (persisted once)
   owner                User?            @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   approvedBy           User?            @relation("ApprovedVenues", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   rejectedBy           User?            @relation("RejectedVenues", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
