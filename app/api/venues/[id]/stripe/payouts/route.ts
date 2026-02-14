@@ -59,12 +59,14 @@ export async function POST(
       stripeAccount: venue.stripeAccountId,
     })
 
-    const available =
-      balance.available.find((item) => item.currency === "usd")?.amount ?? 0
+    const currency = "usd"
+    const available = balance.available
+      .filter((item) => item.currency === currency)
+      .reduce((sum, item) => sum + item.amount, 0)
 
     if (amount > available) {
       return NextResponse.json(
-        { error: "Amount exceeds available balance." },
+        { error: `Amount exceeds available balance. Current available: ${(available / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}` },
         { status: 400 }
       )
     }

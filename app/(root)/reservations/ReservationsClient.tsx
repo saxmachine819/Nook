@@ -423,7 +423,7 @@ export function ReservationsClient({ upcoming, past, cancelled }: ReservationsCl
               variant="destructive"
               onClick={() => heroReservation && handleCancel(heroReservation.id)}
               disabled={cancellingId !== null}
-              className="rounded-2xl font-black py-6 shadow-lg shadow-red-500/20"
+              className="rounded-2xl font-black py-6 shadow-md shadow-red-500/10"
             >
               {cancellingId ? "Cancelling..." : "Yes, cancel reservation"}
             </Button>
@@ -468,7 +468,7 @@ function HeroReservationCard({
       : null)
 
   return (
-    <Card className="overflow-hidden border-none shadow-2xl rounded-[2.5rem] bg-white group">
+    <Card className="overflow-hidden border-none shadow-xl rounded-[2.5rem] bg-white group">
       {imageUrl && (
         <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-muted">
           <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
@@ -503,7 +503,7 @@ function HeroReservationCard({
               <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Total Estimate</p>
               <p className="text-3xl font-black tracking-tighter text-primary">${calculatePrice(reservation).toFixed(0)}</p>
             </div>
-            <Button onClick={onViewDetails} className="rounded-2xl font-black px-8 h-12 shadow-lg shadow-primary/20">
+            <Button onClick={onViewDetails} className="rounded-2xl font-black px-8 h-12 shadow-md shadow-primary/10">
               Details
             </Button>
           </div>

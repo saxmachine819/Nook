@@ -43,14 +43,24 @@ export async function GET(
     })
 
     const currency = "usd"
-    const available =
-      balance.available.find((item) => item.currency === currency)?.amount ?? 0
-    const pending =
-      balance.pending.find((item) => item.currency === currency)?.amount ?? 0
+    
+    // Sum all amounts for the target currency (Stripe may split them by source_type)
+    const available = balance.available
+      .filter((item) => item.currency === currency)
+      .reduce((sum, item) => sum + item.amount, 0)
+    
+    const pending = balance.pending
+      .filter((item) => item.currency === currency)
+      .reduce((sum, item) => sum + item.amount, 0)
+
+    const instantAvailable = (balance as any).instant_available
+      ?.filter((item: any) => item.currency === currency)
+      .reduce((sum: number, item: any) => sum + item.amount, 0) ?? 0
 
     return NextResponse.json({
       available,
       pending,
+      instantAvailable,
       currency,
     })
   } catch (error) {

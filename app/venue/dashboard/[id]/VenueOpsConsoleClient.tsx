@@ -162,6 +162,7 @@ export function VenueOpsConsoleClient({
   const [stripeBalance, setStripeBalance] = useState<{
     available: number
     pending: number
+    instantAvailable: number
     currency: string
   } | null>(null)
   const [isPayoutDialogOpen, setIsPayoutDialogOpen] = useState(false)
@@ -178,12 +179,12 @@ export function VenueOpsConsoleClient({
   const [deleteVenueConfirmation, setDeleteVenueConfirmation] = useState("")
   const [deleteVenueLoading, setDeleteVenueLoading] = useState(false)
   const [deleteVenueError, setDeleteVenueError] = useState<string | null>(null)
-  
+
   // Refs for intersection observer (sticky header)
   const nowSectionRef = useRef<HTMLDivElement>(null)
   const todaySectionRef = useRef<HTMLDivElement>(null)
   const weekSectionRef = useRef<HTMLDivElement>(null)
-  
+
   const [visibleSection, setVisibleSection] = useState<"Now" | "Today" | "This week">("Now")
 
   const fetchTeamMembers = useCallback(() => {
@@ -852,14 +853,14 @@ export function VenueOpsConsoleClient({
     const activeReservation = reservations.find((r) => {
       if (r.status === "cancelled") return false
       if (r.tableId !== tableId) return false
-      
+
       const start = normalizeDate(r.startAt)
       const end = normalizeDate(r.endAt)
       const isCurrentlyActive = start <= currentTime && currentTime < end
-      
+
       return isCurrentlyActive
     })
-    
+
     if (activeReservation) {
       return {
         status: "reserved",
@@ -903,13 +904,13 @@ export function VenueOpsConsoleClient({
     // Check if reserved
     const activeReservation = reservations.find((r) => {
       if (r.status === "cancelled") return false
-      
+
       const start = normalizeDate(r.startAt)
       const end = normalizeDate(r.endAt)
       const isCurrentlyActive = start <= currentTime && currentTime < end
-      
+
       if (!isCurrentlyActive) return false
-      
+
       // For individual booking mode, ONLY check seat-level reservations
       // For group booking mode, check table-level reservations
       if (bookingMode === "group") {
@@ -923,10 +924,10 @@ export function VenueOpsConsoleClient({
           return true
         }
       }
-      
+
       return false
     })
-    
+
     if (activeReservation) {
       return {
         status: "reserved",
@@ -1259,15 +1260,15 @@ export function VenueOpsConsoleClient({
                       const allUpcoming = [...upcomingSections.now, ...upcomingSections.today, ...upcomingSections.week]
                       const filteredUpcoming = searchQuery.trim()
                         ? allUpcoming.filter((r) => {
-                            const query = searchQuery.toLowerCase()
-                            const booker = getBookerDisplay(r)
-                            const seatInfo = getReservationSeatInfo(r)
-                            return (
-                              booker.toLowerCase().includes(query) ||
-                              seatInfo.toLowerCase().includes(query) ||
-                              r.id.toLowerCase().includes(query)
-                            )
-                          })
+                          const query = searchQuery.toLowerCase()
+                          const booker = getBookerDisplay(r)
+                          const seatInfo = getReservationSeatInfo(r)
+                          return (
+                            booker.toLowerCase().includes(query) ||
+                            seatInfo.toLowerCase().includes(query) ||
+                            r.id.toLowerCase().includes(query)
+                          )
+                        })
                         : allUpcoming
 
                       if (filteredUpcoming.length === 0) {
@@ -1380,10 +1381,10 @@ export function VenueOpsConsoleClient({
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="rounded-lg border bg-muted/40 p-3">
-                      <div className="text-xs text-muted-foreground">Available</div>
+                      <div className="text-xs text-muted-foreground">Total balance</div>
                       <div className="text-lg font-semibold">
                         {stripeBalance
-                          ? formatMoney(stripeBalance.available, stripeBalance.currency)
+                          ? formatMoney(stripeBalance.available + stripeBalance.pending, stripeBalance.currency)
                           : "—"}
                       </div>
                     </div>
@@ -1396,8 +1397,8 @@ export function VenueOpsConsoleClient({
                       </div>
                     </div>
                     <div className="rounded-lg border bg-muted/40 p-3">
-                      <div className="text-xs text-muted-foreground">Withdrawable</div>
-                      <div className="text-lg font-semibold">
+                      <div className="text-xs text-muted-foreground">Available</div>
+                      <div className="text-lg font-semibold text-emerald-600">
                         {stripeBalance
                           ? formatMoney(stripeBalance.available, stripeBalance.currency)
                           : "—"}
@@ -1441,7 +1442,7 @@ export function VenueOpsConsoleClient({
               <CardContent className="space-y-4">
                 {venue.tables.map((table) => {
                   const isGroupTable = table.bookingMode === "group"
-                  
+
                   // For group tables, show a single table card
                   if (isGroupTable) {
                     const tableStatus = getTableStatus(table.id)
@@ -1953,9 +1954,9 @@ export function VenueOpsConsoleClient({
                       <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
                     )}
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleRefresh("manual")}
                     disabled={isRefreshing}
                   >
@@ -2236,11 +2237,11 @@ export function VenueOpsConsoleClient({
               seatBlocks={
                 selectedSeat.isGroupTable
                   ? seatBlocks.filter((b) => {
-                      // For group tables, show blocks for any seat in the table or venue-wide blocks
-                      if (b.seatId === null) return true // Venue-wide block
-                      const table = venue.tables.find((t) => t.id === selectedSeat.tableId)
-                      return table?.seats.some((s) => s.id === b.seatId) || false
-                    })
+                    // For group tables, show blocks for any seat in the table or venue-wide blocks
+                    if (b.seatId === null) return true // Venue-wide block
+                    const table = venue.tables.find((t) => t.id === selectedSeat.tableId)
+                    return table?.seats.some((s) => s.id === b.seatId) || false
+                  })
                   : seatBlocks.filter((b) => b.seatId === selectedSeat.seatId)
               }
               currentTime={currentTime}

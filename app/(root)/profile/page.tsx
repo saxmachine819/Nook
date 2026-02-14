@@ -135,7 +135,7 @@ function ProfileContent() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-16 max-w-xl">
           <div className="flex flex-col items-center text-center space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="flex h-24 w-24 items-center justify-center rounded-[2.5rem] bg-white shadow-2xl ring-1 ring-black/5">
+            <div className="flex h-24 w-24 items-center justify-center rounded-[2.5rem] bg-white shadow-lg ring-1 ring-black/5">
               <User className="h-10 w-10 text-primary/40" />
             </div>
             <div className="space-y-2">
@@ -145,9 +145,9 @@ function ProfileContent() {
               </p>
             </div>
 
-            <Card className="w-full border-none bg-white shadow-2xl rounded-[2.5rem] p-8">
+            <Card className="w-full border-none bg-white shadow-lg rounded-[2.5rem] p-8">
               <CardContent className="p-0 space-y-6">
-                <Button onClick={handleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-lg shadow-primary/20">
+                <Button onClick={handleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-md shadow-primary/10">
                   <LogIn className="mr-3 h-5 w-5" />
                   Continue with Google
                 </Button>
@@ -166,7 +166,7 @@ function ProfileContent() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="mb-12 flex items-center gap-6 px-1 animate-in fade-in duration-700">
-          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[2rem] bg-white shadow-2xl ring-1 ring-black/5">
+          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[2rem] bg-white shadow-lg ring-1 ring-black/5">
             <div className="flex h-full w-full items-center justify-center text-xl font-black text-primary/40">
               {initialsFromName(session.user?.name) ? (
                 initialsFromName(session.user?.name)
@@ -184,7 +184,7 @@ function ProfileContent() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4">
+          <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4">
             <CardHeader className="p-6">
               <CardTitle className="text-xl font-black tracking-tight">Profile Info</CardTitle>
             </CardHeader>
@@ -205,7 +205,7 @@ function ProfileContent() {
           </Card>
 
           <div className="space-y-8">
-            <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4">
+            <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4">
               <CardHeader className="p-6">
                 <CardTitle className="text-xl font-black tracking-tight">Security & Privacy</CardTitle>
               </CardHeader>
@@ -235,7 +235,7 @@ function ProfileContent() {
             </Card>
 
             {isAdmin && (
-              <Card className="border-none bg-primary text-white shadow-2xl rounded-[2.5rem] p-4">
+              <Card className="border-none bg-primary text-white shadow-lg rounded-[2.5rem] p-4">
                 <CardHeader className="p-6">
                   <CardTitle className="text-xl font-black tracking-tight">Admin Portal</CardTitle>
                 </CardHeader>
@@ -251,7 +251,7 @@ function ProfileContent() {
             )}
           </div>
 
-          <Card className="border-none bg-white shadow-2xl rounded-[2.5rem] p-4 lg:col-span-2">
+          <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4 lg:col-span-2">
             <CardHeader className="p-6">
               <CardTitle className="text-xl font-black tracking-tight">Venues Dashboard</CardTitle>
               <CardDescription className="text-sm font-medium text-muted-foreground/60">
@@ -272,7 +272,7 @@ function ProfileContent() {
                   <p className="text-sm font-medium text-foreground/60 leading-relaxed max-w-lg">
                     Whether you manage a boutique café, a hotel lobby, or a creative studio, join Nooc to reach thousands of remote workers looking for their next favorite spot.
                   </p>
-                  <Button size="lg" asChild className="w-full h-14 rounded-2xl font-black shadow-lg shadow-primary/10">
+                  <Button size="lg" asChild className="w-full h-14 rounded-2xl font-black shadow-md shadow-primary/5">
                     <Link href="/venue/onboard">
                       <Plus className="mr-2 h-5 w-5" />
                       Add your workspace
@@ -331,7 +331,7 @@ function ProfileContent() {
                 variant="destructive"
                 onClick={handleDeleteAccount}
                 disabled={deleteLoading || deleteConfirmation !== "DELETE"}
-                className="rounded-2xl h-12 font-black shadow-lg shadow-red-500/20"
+                className="rounded-2xl h-12 font-black shadow-md shadow-red-500/10"
               >
                 {deleteLoading ? "Closing account..." : "Permanently Delete Account"}
               </Button>

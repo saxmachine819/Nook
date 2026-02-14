@@ -283,14 +283,14 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               })()}
             />
 
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-2xl">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-xl">
               <VenueImageCarousel
                 images={venueHeroImages}
                 className="h-[300px] sm:h-[450px] lg:h-[650px]"
               />
               <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-black/5" />
               {availabilityLabel && (
-                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary shadow-2xl">
+                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary shadow-xl">
                   {availabilityLabel}
                 </span>
               )}
@@ -347,7 +347,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               const dealDescription = generateDescription(primaryDeal.type, eligibility)
               return (
                 <div className="hidden lg:block">
-                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-xl shadow-emerald-500/20 rounded-[2rem]">
+                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/10 rounded-[2rem]">
                     <CardContent className="p-6">
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
@@ -377,7 +377,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )
             })()}
 
-            <Card className="overflow-hidden border-none bg-white shadow-2xl rounded-[2.5rem]">
+            <Card className="overflow-hidden border-none bg-white shadow-xl rounded-[2.5rem]">
               <CardHeader className="p-8 pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">

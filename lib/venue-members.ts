@@ -17,26 +17,32 @@ async function getVenueRoleImpl(
 
   // First check by user_id match if user has id
   if (user.id) {
-    const byUserId = await prisma.venueMember.findFirst({
-      where: { venueId, userId: user.id },
-      select: { role: true },
-    })
-    if (byUserId) {
-      return byUserId.role as VenueRole
+    const venueMember = (prisma as any).venueMember
+    if (venueMember) {
+      const byUserId = await venueMember.findFirst({
+        where: { venueId, userId: user.id },
+        select: { role: true },
+      })
+      if (byUserId) {
+        return byUserId.role as VenueRole
+      }
     }
   }
 
   // Fallback to lower(email) match
   if (user.email) {
-    const byEmail = await prisma.venueMember.findFirst({
-      where: {
-        venueId,
-        email: user.email.toLowerCase(),
-      },
-      select: { role: true },
-    })
-    if (byEmail) {
-      return byEmail.role as VenueRole
+    const venueMember = (prisma as any).venueMember
+    if (venueMember) {
+      const byEmail = await venueMember.findFirst({
+        where: {
+          venueId,
+          email: user.email.toLowerCase(),
+        },
+        select: { role: true },
+      })
+      if (byEmail) {
+        return byEmail.role as VenueRole
+      }
     }
   }
 
@@ -142,7 +148,16 @@ export async function claimVenueMembershipForUser(
   }
 
   const email = user.email.toLowerCase()
-  await prisma.venueMember.updateMany({
+  const venueMember = (prisma as any).venueMember
+  if (!venueMember) {
+    console.error(
+      "[Debug] prisma.venueMember is undefined. Available keys:",
+      Object.keys(prisma).filter((k) => !k.startsWith("_"))
+    )
+    return
+  }
+
+  await venueMember.updateMany({
     where: {
       userId: null,
       email,

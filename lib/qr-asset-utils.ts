@@ -17,7 +17,7 @@ export function getQRBaseUrl(
   const host =
     request?.headers?.get("host") ||
     process.env.NEXTAUTH_URL?.replace(/^https?:\/\//, "") ||
-    "localhost:3000"
+    "localhost:3001"
   const protocol =
     request?.headers?.get("x-forwarded-proto") ||
     (host.includes("localhost") ? "http" : "https")
