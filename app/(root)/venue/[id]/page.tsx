@@ -314,7 +314,12 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
             </div>
 
-            <VenueHoursDisplay openStatus={openStatus} weeklyFormatted={weeklyFormatted} />
+            <VenueHoursDisplay
+              openStatus={openStatus}
+              weeklyFormatted={weeklyFormatted}
+              venueTimezone={canonicalHours?.timezone ?? null}
+              weeklyHours={canonicalHours?.weeklyHours ?? []}
+            />
 
             {venue.rulesText && (
               <div className="rounded-xl border bg-background p-4">

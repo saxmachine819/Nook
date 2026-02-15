@@ -347,7 +347,7 @@ export function ExploreClient({
                 longitude: p.lng,
                 minPrice: p.minPrice,
                 maxPrice: card?.maxPrice ?? p.minPrice,
-                availabilityLabel: p.status === "OPEN_NOW" ? "Available now" : undefined,
+                availabilityLabel: card?.availabilityLabel ?? (p.status === "OPEN_NOW" ? "Available now" : undefined),
               };
             })}
             userLocation={userLocation}

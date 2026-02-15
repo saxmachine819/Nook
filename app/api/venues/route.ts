@@ -3,13 +3,13 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { persistVenuePhotos } from "@/lib/persist-venue-photos"
-import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHoursWithTimezone, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function POST(request: NextRequest) {
   try {
     // Require authentication
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: "You must be signed in to create a venue." },
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     // Allow onboardingStatus field (defaults to "DRAFT" for new venues)
     const onboardingStatus = body.onboardingStatus || "DRAFT"
-    
+
     // For draft status, relax hourlySeatPrice requirement (it's deprecated anyway)
     if (!body.name || !body.address) {
       return NextResponse.json(
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate numeric fields
     // For draft venues, use 0 as default hourlySeatPrice (deprecated field)
-    const parsedHourlyPrice = body.hourlySeatPrice 
+    const parsedHourlyPrice = body.hourlySeatPrice
       ? parseFloat(body.hourlySeatPrice)
       : 0
     if (isNaN(parsedHourlyPrice) || (onboardingStatus !== "DRAFT" && parsedHourlyPrice <= 0)) {
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const parsedLatitude = body.latitude 
+    const parsedLatitude = body.latitude
       ? (typeof body.latitude === 'string' ? parseFloat(body.latitude) : body.latitude)
       : null
     const parsedLongitude = body.longitude
@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
           ownerPhone: body.ownerPhone.trim(),
           googlePlaceId: body.googlePlaceId?.trim() || null,
           googleMapsUrl: body.googleMapsUrl?.trim() || null,
+          timezone: body.openingHoursJson?.timeZone || "America/New_York",
           openingHoursJson: body.openingHoursJson || null,
           googlePhotoRefs: body.googlePhotoRefs || null,
           heroImageUrl: body.heroImageUrl?.trim() || null,
@@ -214,7 +215,8 @@ export async function POST(request: NextRequest) {
       try {
         const openingHours = body.openingHoursJson as any
         if (openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
-          const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venue.id, "google")
+          const timezone = openingHours.timeZone || "America/New_York"
+          const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(openingHours.periods, venue.id, timezone, "google")
           await syncVenueHoursFromGoogle(prisma, venue.id, hoursData, null)
         }
       } catch (error) {
@@ -226,10 +228,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ venue }, { status: 201 })
   } catch (error: any) {
     console.error("Error creating venue:", error)
-    
+
     // Return more specific error message
     const errorMessage = error?.message || "Failed to create venue. Please try again."
-    
+
     // Check for Prisma errors
     if (error?.code === "P2002") {
       return NextResponse.json(
@@ -237,7 +239,7 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       )
     }
-    
+
     return NextResponse.json(
       { error: errorMessage, details: process.env.NODE_ENV === "development" ? error?.message : undefined },
       { status: 500 }

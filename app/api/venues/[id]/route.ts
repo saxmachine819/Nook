@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { persistVenuePhotos } from "@/lib/persist-venue-photos"
 import { canEditVenue } from "@/lib/venue-auth"
-import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHoursWithTimezone, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function PATCH(
   request: NextRequest,
@@ -235,9 +235,10 @@ export async function PATCH(
           if (openingHours && openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
             const current = await tx.venue.findUnique({
               where: { id: venueId },
-              select: { hoursSource: true },
+              select: { hoursSource: true, timezone: true },
             })
-            const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venueId, "google")
+            const timezone = current?.timezone || "America/New_York"
+            const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(openingHours.periods, venueId, timezone, "google")
             await syncVenueHoursFromGoogle(tx, venueId, hoursData, current?.hoursSource ?? null)
             if (body.hoursSource === "google") {
               await tx.venue.update({
