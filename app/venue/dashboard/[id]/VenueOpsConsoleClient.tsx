@@ -160,6 +160,8 @@ export function VenueOpsConsoleClient({
   const venueRole = useVenueRole()
   const showStripe = venueRole === "admin" || venueRole === null
   const showTeam = venueRole === "admin" || venueRole === null
+  // QR Code Management (order signage, generate QR) visible to all dashboard users (admin, staff, owner)
+  const showQrManagement = venueRole === "admin" || venueRole === "staff" || venueRole === null
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string; email: string; role: string }>>([])
   const [teamMembersLoading, setTeamMembersLoading] = useState(false)
   const [newMemberEmail, setNewMemberEmail] = useState("")
@@ -1783,7 +1785,7 @@ export function VenueOpsConsoleClient({
                     )}
                   </>
                 )}
-                {showStripe && (
+                {showQrManagement && (
                   <>
                     <Button
                       variant="outline"
