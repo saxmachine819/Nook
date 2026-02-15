@@ -116,6 +116,9 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
           },
         },
       },
+    }).catch((error) => {
+      console.error("Error fetching signage orders:", error)
+      return []
     }),
   ])
 
@@ -160,15 +163,21 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
   )
 
   return (
-    <VenueOpsConsoleClient
-      venue={venue}
-      reservations={reservations}
-      seatBlocks={seatBlocks}
-      deals={deals}
-      now={now.toISOString()}
-      assignedQrByResourceKey={assignedQrByResourceKey}
-      venueQrToken={venueQrToken}
-      signageOrders={incompleteSignageOrders}
-    />
+    <>
+      {/* Server-rendered marker: if you see this, the server is running the latest deploy */}
+      <div className="sticky top-0 z-50 border-b-2 border-green-600 bg-green-100 px-4 py-2 text-center text-sm font-bold text-green-900">
+        Ops console (with QR ordering) — server render OK
+      </div>
+      <VenueOpsConsoleClient
+        venue={venue}
+        reservations={reservations}
+        seatBlocks={seatBlocks}
+        deals={deals}
+        now={now.toISOString()}
+        assignedQrByResourceKey={assignedQrByResourceKey}
+        venueQrToken={venueQrToken}
+        signageOrders={incompleteSignageOrders}
+      />
+    </>
   )
 }
