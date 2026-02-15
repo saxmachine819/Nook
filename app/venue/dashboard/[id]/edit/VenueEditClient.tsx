@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { Plus, Trash2, Search, Upload, X, Expand } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { parseGooglePeriodsToVenueHours } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHoursWithTimezone } from "@/lib/venue-hours"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -65,6 +65,7 @@ interface VenueEditClientProps {
     imageUrls: unknown
     googlePlaceId: string | null
     googleMapsUrl: string | null
+    timezone: string | null
     openingHoursJson: unknown
     venueHours?: Array<{
       id: string
@@ -189,26 +190,32 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   // Initialize hours state - create 7 days if none exist
   const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
   const initializeHours = () => {
+    const venueTimezone = venue.timezone || "America/New_York"
+
     // Priority 1: Manual edits (venueHours) - these take precedence
+    // Hours are stored as venue-local time, so use directly
     if (venue.venueHours && venue.venueHours.length === 7) {
       return venue.venueHours.map(h => ({
         dayOfWeek: h.dayOfWeek,
         isClosed: h.isClosed,
-        openTime: h.openTime || "",
-        closeTime: h.closeTime || "",
+        openTime: h.isClosed ? "" : (h.openTime || ""),
+        closeTime: h.isClosed ? "" : (h.closeTime || ""),
       }))
     }
     
     // Priority 2: Google hours (openingHoursJson) - parse if available
-    const jsonHours = venue.openingHoursJson as { periods?: unknown[] } | null | undefined
+    const jsonHours = venue.openingHoursJson as { periods?: unknown[]; timeZone?: string } | null | undefined
     if (jsonHours?.periods && Array.isArray(jsonHours.periods) && jsonHours.periods.length > 0) {
       try {
-        const hoursData = parseGooglePeriodsToVenueHours(
-          jsonHours.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
+        const timezone = jsonHours.timeZone || venueTimezone
+        const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(
+          jsonHours.periods as Parameters<typeof parseGooglePeriodsToVenueHoursWithTimezone>[0],
           venue.id,
+          timezone,
           "google"
         )
         // Ensure we have all 7 days
+        // parseGooglePeriodsToVenueHoursWithTimezone returns local times, use directly
         const hoursMap = new Map(hoursData.map(h => [h.dayOfWeek, h]))
         return Array.from({ length: 7 }, (_, i) => {
           const existing = hoursMap.get(i)
@@ -216,8 +223,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             return {
               dayOfWeek: existing.dayOfWeek,
               isClosed: existing.isClosed,
-              openTime: existing.openTime || "",
-              closeTime: existing.closeTime || "",
+              openTime: existing.isClosed ? "" : (existing.openTime || ""),
+              closeTime: existing.isClosed ? "" : (existing.closeTime || ""),
             }
           }
           return {
@@ -790,8 +797,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           venueHours: hours.map(h => ({
             dayOfWeek: h.dayOfWeek,
             isClosed: h.isClosed,
-            openTime: h.isClosed ? null : h.openTime || null,
-            closeTime: h.isClosed ? null : h.closeTime || null,
+            openTime: h.isClosed ? null : (h.openTime || null),
+            closeTime: h.isClosed ? null : (h.closeTime || null),
           })),
           googlePhotoRefs:
             selectedCatalogIndices.length > 0
@@ -1111,12 +1118,16 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                 size="sm"
                 onClick={() => {
                   try {
-                    const hoursData = parseGooglePeriodsToVenueHours(
-                      openingHoursJson.periods as Parameters<typeof parseGooglePeriodsToVenueHours>[0],
+                    const venueTimezone = venue.timezone || "America/New_York"
+                    const timezone = openingHoursJson.timeZone || venueTimezone
+                    const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(
+                      openingHoursJson.periods as Parameters<typeof parseGooglePeriodsToVenueHoursWithTimezone>[0],
                       venue.id,
+                      timezone,
                       "google"
                     )
-                    const hoursMap = new Map(hoursData.map((h) => [h.dayOfWeek, h]))
+                    // parseGooglePeriodsToVenueHoursWithTimezone returns local times, use directly
+                    const hoursMap = new Map(hoursData.map((h: { dayOfWeek: number; isClosed: boolean; openTime: string | null; closeTime: string | null }) => [h.dayOfWeek, h]))
                     setHours(
                       Array.from({ length: 7 }, (_, i) => {
                         const existing = hoursMap.get(i)
@@ -1124,8 +1135,8 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                           return {
                             dayOfWeek: existing.dayOfWeek,
                             isClosed: existing.isClosed,
-                            openTime: existing.openTime || "",
-                            closeTime: existing.closeTime || "",
+                            openTime: existing.isClosed ? "" : (existing.openTime || ""),
+                            closeTime: existing.isClosed ? "" : (existing.closeTime || ""),
                           }
                         }
                         return { dayOfWeek: i, isClosed: true, openTime: "", closeTime: "" }

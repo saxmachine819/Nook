@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHoursWithTimezone, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function POST(request: NextRequest) {
   try {
@@ -125,6 +125,7 @@ export async function POST(request: NextRequest) {
         // Google Places enrichment fields
         googlePlaceId: body.googlePlaceId?.trim() || null,
         googleMapsUrl: body.googleMapsUrl?.trim() || null,
+        timezone: body.openingHoursJson?.timeZone || "America/New_York",
         openingHoursJson: body.openingHoursJson || null,
         googlePhotoRefs: body.googlePhotoRefs || null,
         heroImageUrl: body.heroImageUrl?.trim() || null,
@@ -174,7 +175,8 @@ export async function POST(request: NextRequest) {
       try {
         const openingHours = body.openingHoursJson as any
         if (openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
-          const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venue.id, "google")
+          const timezone = openingHours.timeZone || "America/New_York"
+          const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(openingHours.periods, venue.id, timezone, "google")
           await syncVenueHoursFromGoogle(prisma, venue.id, hoursData, null)
         }
       } catch (error) {

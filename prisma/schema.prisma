@@ -322,8 +322,8 @@ model VenueHours {
   venueId   String
   dayOfWeek Int // 0=Sunday, 1=Monday, ..., 6=Saturday
   isClosed  Boolean  @default(false)
-  openTime  String? // "HH:MM" format, nullable if closed
-  closeTime String? // "HH:MM" format, nullable if closed
+  openTime  String? // "HH:MM" format in venue local time, nullable if closed
+  closeTime String? // "HH:MM" format in venue local time, nullable if closed
   source    String   @default("google")
   updatedAt DateTime @updatedAt
   venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
