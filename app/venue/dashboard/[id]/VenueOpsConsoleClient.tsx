@@ -1725,6 +1725,7 @@ export function VenueOpsConsoleClient({
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">Debug: role={String(venueRole)} qr={String(showQrManagement)}</p>
                 {venue.status !== "DELETED" && (
                   <>
                     <div className="flex flex-wrap items-center gap-2">
