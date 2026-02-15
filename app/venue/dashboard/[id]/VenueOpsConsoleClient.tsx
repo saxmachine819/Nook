@@ -1274,6 +1274,10 @@ export function VenueOpsConsoleClient({
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
+        {/* DEBUG: remove after staging check - shows role + QR visibility */}
+        <div className="mb-4 rounded border-2 border-amber-500 bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
+          DEBUG: role={String(venueRole)} | showQrManagement={String(showQrManagement)}
+        </div>
         {showStripe && stripeAlerts.length > 0 && (
           <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
             <CardHeader>
