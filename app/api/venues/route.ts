@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { persistVenuePhotos } from "@/lib/persist-venue-photos"
 import { parseGooglePeriodsToVenueHoursWithTimezone, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function POST(request: NextRequest) {
   try {
     // Require authentication
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: "You must be signed in to create a venue." },
@@ -20,11 +22,18 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     // Allow onboardingStatus field (defaults to "DRAFT" for new venues)
     const onboardingStatus = body.onboardingStatus || "DRAFT"
-    
+
     // For draft status, relax hourlySeatPrice requirement (it's deprecated anyway)
     if (!body.name || !body.address) {
       return NextResponse.json(
         { error: "Missing required fields: name and address are required" },
+        { status: 400 }
+      )
+    }
+
+    if (!body.ownerPhone || typeof body.ownerPhone !== "string" || !body.ownerPhone.trim()) {
+      return NextResponse.json(
+        { error: "Owner phone number is required" },
         { status: 400 }
       )
     }
@@ -88,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate numeric fields
     // For draft venues, use 0 as default hourlySeatPrice (deprecated field)
-    const parsedHourlyPrice = body.hourlySeatPrice 
+    const parsedHourlyPrice = body.hourlySeatPrice
       ? parseFloat(body.hourlySeatPrice)
       : 0
     if (isNaN(parsedHourlyPrice) || (onboardingStatus !== "DRAFT" && parsedHourlyPrice <= 0)) {
@@ -98,76 +107,107 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const parsedLatitude = body.latitude 
+    const parsedLatitude = body.latitude
       ? (typeof body.latitude === 'string' ? parseFloat(body.latitude) : body.latitude)
       : null
     const parsedLongitude = body.longitude
       ? (typeof body.longitude === 'string' ? parseFloat(body.longitude) : body.longitude)
       : null
 
-    // Create venue with tables and seats in a transaction
-    const venue = await prisma.venue.create({
-      data: {
-        name: body.name.trim(),
-        address: body.address.trim(),
-        neighborhood: body.neighborhood?.trim() || null,
-        city: body.city?.trim() || null,
-        state: body.state?.trim() || null,
-        zipCode: body.zipCode?.trim() || null,
-        latitude: parsedLatitude && !isNaN(parsedLatitude) ? parsedLatitude : null,
-        longitude: parsedLongitude && !isNaN(parsedLongitude) ? parsedLongitude : null,
-        hourlySeatPrice: parsedHourlyPrice,
-        rulesText: body.rulesText?.trim() || null,
-        tags: Array.isArray(body.tags) ? body.tags : [],
-        description: body.description?.trim() || null,
-        onboardingStatus: onboardingStatus,
-        ownerId: session.user.id, // Set the venue owner to the authenticated user
-        // Google Places enrichment fields
-        googlePlaceId: body.googlePlaceId?.trim() || null,
-        googleMapsUrl: body.googleMapsUrl?.trim() || null,
-        timezone: body.openingHoursJson?.timeZone || "America/New_York",
-        openingHoursJson: body.openingHoursJson || null,
-        googlePhotoRefs: body.googlePhotoRefs || null,
-        heroImageUrl: body.heroImageUrl?.trim() || null,
-        imageUrls: body.imageUrls || null,
-        tables: {
-          create: body.tables.map((table: any) => {
-            const bookingMode = table.bookingMode || "individual"
-            const tablePricePerHour = bookingMode === "group" ? Number(table.tablePricePerHour) : null
+    // Create venue, persist Google photos to Supabase, then update venue with persisted URLs (all in one transaction)
+    const venue = await prisma.$transaction(async (tx) => {
+      const created = await tx.venue.create({
+        data: {
+          name: body.name.trim(),
+          address: body.address.trim(),
+          neighborhood: body.neighborhood?.trim() || null,
+          city: body.city?.trim() || null,
+          state: body.state?.trim() || null,
+          zipCode: body.zipCode?.trim() || null,
+          latitude: parsedLatitude && !isNaN(parsedLatitude) ? parsedLatitude : null,
+          longitude: parsedLongitude && !isNaN(parsedLongitude) ? parsedLongitude : null,
+          hourlySeatPrice: parsedHourlyPrice,
+          rulesText: body.rulesText?.trim() || null,
+          tags: Array.isArray(body.tags) ? body.tags : [],
+          description: body.description?.trim() || null,
+          onboardingStatus: onboardingStatus,
+          ownerId: session.user.id,
+          ownerFirstName: body.ownerFirstName?.trim() || null,
+          ownerLastName: body.ownerLastName?.trim() || null,
+          ownerPhone: body.ownerPhone.trim(),
+          googlePlaceId: body.googlePlaceId?.trim() || null,
+          googleMapsUrl: body.googleMapsUrl?.trim() || null,
+          timezone: body.openingHoursJson?.timeZone || "America/New_York",
+          openingHoursJson: body.openingHoursJson || null,
+          googlePhotoRefs: body.googlePhotoRefs || null,
+          heroImageUrl: body.heroImageUrl?.trim() || null,
+          imageUrls: body.imageUrls || null,
+          tables: {
+            create: body.tables.map((table: any) => {
+              const bookingMode = table.bookingMode || "individual"
+              const tablePricePerHour = bookingMode === "group" ? Number(table.tablePricePerHour) : null
 
-            return {
-              name: table.name.trim(),
-              seatCount: table.seats.length,
-              bookingMode,
-              tablePricePerHour,
-              imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
-                ? table.imageUrls
-                : null,
-              directionsText: table.directionsText?.trim() || null,
-              seats: {
-                create: table.seats.map((seat: any, index: number) => ({
-                  pricePerHour: Number(seat.pricePerHour),
-                  position: seat.position ?? index + 1, // Auto-assign position if not provided (1-indexed)
-                  label: seat.label?.trim() || null,
-                  tags: seat.tags && Array.isArray(seat.tags) && seat.tags.length > 0
-                    ? seat.tags
-                    : null,
-                  imageUrls: seat.imageUrls && Array.isArray(seat.imageUrls) && seat.imageUrls.length > 0
-                    ? seat.imageUrls
-                    : null,
-                })),
-              },
-            }
-          }),
-        },
-      },
-      include: {
-        tables: {
-          include: {
-            seats: true,
+              return {
+                name: table.name.trim(),
+                seatCount: table.seats.length,
+                bookingMode,
+                tablePricePerHour,
+                imageUrls: table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0
+                  ? table.imageUrls
+                  : null,
+                directionsText: table.directionsText?.trim() || null,
+                seats: {
+                  create: table.seats.map((seat: any, index: number) => ({
+                    pricePerHour: Number(seat.pricePerHour),
+                    position: seat.position ?? index + 1,
+                    label: seat.label?.trim() || null,
+                    tags: seat.tags && Array.isArray(seat.tags) && seat.tags.length > 0
+                      ? seat.tags
+                      : null,
+                    imageUrls: seat.imageUrls && Array.isArray(seat.imageUrls) && seat.imageUrls.length > 0
+                      ? seat.imageUrls
+                      : null,
+                  })),
+                },
+              }
+            }),
           },
         },
-      },
+        include: {
+          tables: {
+            include: {
+              seats: true,
+            },
+          },
+        },
+      })
+
+      const persisted = await persistVenuePhotos({
+        venueId: created.id,
+        imageUrls: body.imageUrls,
+        heroImageUrl: body.heroImageUrl,
+      })
+
+      await tx.venue.update({
+        where: { id: created.id },
+        data: {
+          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : Prisma.JsonNull,
+          heroImageUrl: persisted.heroImageUrl,
+        },
+      })
+
+      const updated = await tx.venue.findUnique({
+        where: { id: created.id },
+        include: {
+          tables: {
+            include: {
+              seats: true,
+            },
+          },
+        },
+      })
+      if (!updated) throw new Error("Venue not found after create")
+      return updated
     })
 
     // Parse and save venue hours if openingHoursJson exists (new venue: hoursSource is null)
@@ -188,10 +228,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ venue }, { status: 201 })
   } catch (error: any) {
     console.error("Error creating venue:", error)
-    
+
     // Return more specific error message
     const errorMessage = error?.message || "Failed to create venue. Please try again."
-    
+
     // Check for Prisma errors
     if (error?.code === "P2002") {
       return NextResponse.json(
@@ -199,7 +239,7 @@ export async function POST(request: NextRequest) {
         { status: 409 }
       )
     }
-    
+
     return NextResponse.json(
       { error: errorMessage, details: process.env.NODE_ENV === "development" ? error?.message : undefined },
       { status: 500 }

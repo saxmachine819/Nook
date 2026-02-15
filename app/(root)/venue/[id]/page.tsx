@@ -170,18 +170,10 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   const availabilityLabel = openStatus?.isOpen ? "Open" : "Closed"
 
   const venueHeroImages: string[] = (() => {
-    const images = new Set<string>()
     const hero = (venue as any).heroImageUrl
-    if (typeof hero === "string" && hero.length > 0) images.add(hero)
-    safeStringArray((venue as any).imageUrls).forEach((u) => images.add(u))
-    for (const t of venue.tables) {
-      safeStringArray((t as any).imageUrls).forEach((u) => images.add(u))
-      for (const s of (t as any).seats ?? []) {
-        safeStringArray((s as any).imageUrls).forEach((u) => images.add(u))
-      }
-      if (images.size >= 8) break
-    }
-    return Array.from(images).slice(0, 8)
+    const rest = safeStringArray((venue as any).imageUrls).filter((u) => u !== hero)
+    const combined = typeof hero === "string" && hero.length > 0 ? [hero, ...rest] : rest
+    return combined.slice(0, 8)
   })()
 
   const googleMapsHref =

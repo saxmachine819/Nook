@@ -59,10 +59,14 @@ interface VenueEditClientProps {
     zipCode: string | null
     latitude: number | null
     longitude: number | null
+    ownerFirstName: string | null
+    ownerLastName: string | null
+    ownerPhone: string
     tags: string[]
     rulesText: string | null
     heroImageUrl: string | null
     imageUrls: unknown
+    placePhotoUrls?: unknown
     googlePlaceId: string | null
     googleMapsUrl: string | null
     timezone: string | null
@@ -133,6 +137,24 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
     )
   }
 
+  const parsePlacePhotoUrls = (urls: unknown): string[] => {
+    if (!urls) return []
+    if (Array.isArray(urls)) {
+      return urls.filter((u): u is string => typeof u === "string" && u.length > 0)
+    }
+    return []
+  }
+
+  // Same photo by pathname so query/encoding differences don't create duplicate catalog entries
+  const samePhotoUrl = (a: string, b: string): boolean => {
+    if (!a || !b || a === b) return a === b
+    try {
+      return new URL(a).pathname === new URL(b).pathname
+    } catch {
+      return a === b
+    }
+  }
+
   // Parse seat/tags
   const parseTags = (tags: unknown): string[] => {
     if (!tags) return []
@@ -150,6 +172,9 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [zipCode, setZipCode] = useState(venue.zipCode || "")
   const [latitude, setLatitude] = useState(venue.latitude?.toString() || "")
   const [longitude, setLongitude] = useState(venue.longitude?.toString() || "")
+  const [ownerFirstName, setOwnerFirstName] = useState(venue.ownerFirstName || "")
+  const [ownerLastName, setOwnerLastName] = useState(venue.ownerLastName || "")
+  const [ownerPhone, setOwnerPhone] = useState(venue.ownerPhone || "")
   const [tags, setTags] = useState<string[]>(venue.tags || [])
   const [rulesText, setRulesText] = useState(venue.rulesText || "")
   const [seatCountInputs, setSeatCountInputs] = useState<Record<string, string>>({})
@@ -253,11 +278,12 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [hoursSourceChoice, setHoursSourceChoice] = useState<"manual" | "google">(
     (venue as { hoursSource?: string | null }).hoursSource === "google" ? "google" : "manual"
   )
-  const [availablePhotos, setAvailablePhotos] = useState<Array<{
-    photoUrl: string
-    photoReference: string | null
-    name: string
-  }>>([])
+  const [placePhotoUrls, setPlacePhotoUrls] = useState<string[]>(() =>
+    parsePlacePhotoUrls(venue.placePhotoUrls)
+  )
+  const [availablePhotos, setAvailablePhotos] = useState<
+    Array<{ photoUrl: string; photoReference: string | null; name: string }>
+  >([])
   const [ownerUploadedUrls, setOwnerUploadedUrls] = useState<string[]>([])
   const [selectedCatalogIndices, setSelectedCatalogIndices] = useState<number[]>([])
   const [isLoadingPlaceDetails, setIsLoadingPlaceDetails] = useState(false)
@@ -265,87 +291,124 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const [uploadingVenuePhoto, setUploadingVenuePhoto] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
+  const [showAllPhotoOptions, setShowAllPhotoOptions] = useState(false)
+  const lastSyncedVenueDataRef = useRef<string | null>(null)
 
-  // Catalog = Google photos + owner uploads (same order as onboard)
-  const catalog: Array<
-    | { source: "google"; photoUrl: string; photoReference: string | null; name: string; indexInGoogle: number }
-    | { source: "upload"; photoUrl: string }
-  > = [
-    ...availablePhotos.map((p, i) => ({ source: "google" as const, photoUrl: p.photoUrl, photoReference: p.photoReference, name: p.name, indexInGoogle: i })),
-    ...ownerUploadedUrls.map((url) => ({ source: "upload" as const, photoUrl: url })),
+  // Catalog = place photos (from newly loaded place details, or Supabase) + owner uploads; dedupe by same-photo
+  const placeSegment =
+    availablePhotos.length > 0
+      ? availablePhotos.map((p) => ({ source: "place" as const, photoUrl: p.photoUrl }))
+      : placePhotoUrls.map((url) => ({ source: "place" as const, photoUrl: url }))
+  const catalog: Array<{ source: "place" | "upload"; photoUrl: string }> = [
+    ...placeSegment,
+    ...ownerUploadedUrls
+      .filter((url) => !placeSegment.some((p) => samePhotoUrl(p.photoUrl, url)))
+      .map((url) => ({ source: "upload" as const, photoUrl: url })),
   ]
+
+  // Selected photos for default view: ordered by selection, deduped by same-photo so no duplicate tiles
+  const selectedPhotoUrlsForDisplay = (() => {
+    const ordered = selectedCatalogIndices
+      .map((i) => catalog[i]?.photoUrl)
+      .filter((url): url is string => Boolean(url))
+    const seen: string[] = []
+    return ordered.filter((url) => {
+      if (seen.some((s) => samePhotoUrl(s, url))) return false
+      seen.push(url)
+      return true
+    })
+  })()
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-  // Initialize owner uploads and selection when venue has no Google place (all images are owner uploads)
+  // When venue has no Google place: all images are owner uploads; set catalog and selection
   useEffect(() => {
     if (venue.googlePlaceId) return
-    const urls = [
-      ...new Set(parseImageUrls(venue.imageUrls).filter((u) => !isGooglePlacesPhotoUrl(u))),
-    ]
+    const hero = venue.heroImageUrl ?? null
+    const fromImageUrls = parseImageUrls(venue.imageUrls).filter((u) => !isGooglePlacesPhotoUrl(u))
+    const urls = [...new Set([...(hero ? [hero] : []), ...fromImageUrls])]
     setOwnerUploadedUrls(urls)
     setSelectedCatalogIndices(urls.map((_, i) => i))
-  }, [venue.googlePlaceId, venue.imageUrls])
+  }, [venue.googlePlaceId, venue.imageUrls, venue.heroImageUrl])
 
-  // Load Google photos if venue has a googlePlaceId
+  // When venue has Google place but no placePhotoUrls yet: persist all place photos to Supabase
   useEffect(() => {
-    if (!venue.googlePlaceId || availablePhotos.length > 0) return
+    if (!venue.googlePlaceId || placePhotoUrls.length > 0) return
 
-    const loadPlacePhotos = async () => {
+    const persistPlacePhotos = async () => {
       setIsLoadingPlaceDetails(true)
       try {
-        const response = await fetch(`/api/google/place-details?placeId=${venue.googlePlaceId}`)
+        const response = await fetch(`/api/venues/${venue.id}/persist-place-photos`, { method: "POST" })
         const data = await response.json()
-
-        if (response.ok && data) {
-          if (data.photos && data.photos.length > 0) {
-            setAvailablePhotos(data.photos)
-            const venueImageUrls = parseImageUrls(venue.imageUrls)
-            const heroImageUrl = venue.heroImageUrl
-            const googleUrls = (data.photos as Array<{ photoUrl: string }>).map((p) => p.photoUrl)
-            const ownerUploaded = [
-              ...new Set(
-                venueImageUrls.filter((u) => !isGooglePlacesPhotoUrl(u) && !googleUrls.includes(u))
-              ),
-            ]
-            setOwnerUploadedUrls(ownerUploaded)
-
-            const builtCatalog: Array<{ source: "google"; photoUrl: string } | { source: "upload"; photoUrl: string }> = [
-              ...data.photos.map((p: { photoUrl: string }) => ({ source: "google" as const, photoUrl: p.photoUrl })),
-              ...ownerUploaded.map((url: string) => ({ source: "upload" as const, photoUrl: url })),
-            ]
-            const desiredOrder = [
-              ...(heroImageUrl ? [heroImageUrl] : []),
-              ...venueImageUrls.filter((u) => u !== heroImageUrl),
-            ]
-            const selected: number[] = []
-            for (const url of desiredOrder) {
-              const idx = builtCatalog.findIndex((item) => item.photoUrl === url)
-              if (idx >= 0 && !selected.includes(idx)) selected.push(idx)
-            }
-            if (selected.length === 0 && builtCatalog.length > 0) {
-              const defaultCount = Math.min(5, Math.max(3, builtCatalog.length))
-              for (let i = 0; i < defaultCount; i++) selected.push(i)
-            }
-            setSelectedCatalogIndices(selected)
-          } else {
-            setAvailablePhotos([])
-            const urls = [
-              ...new Set(parseImageUrls(venue.imageUrls).filter((u) => !isGooglePlacesPhotoUrl(u))),
-            ]
-            setOwnerUploadedUrls(urls)
-            setSelectedCatalogIndices(urls.map((_, i) => i))
-          }
+        if (response.ok && data.placePhotoUrls && Array.isArray(data.placePhotoUrls)) {
+          setPlacePhotoUrls(data.placePhotoUrls)
         }
       } catch (error) {
-        console.error("Error loading place photos:", error)
+        console.error("Error persisting place photos:", error)
       } finally {
         setIsLoadingPlaceDetails(false)
       }
     }
 
-    loadPlacePhotos()
-  }, [venue.googlePlaceId, venue.imageUrls, venue.heroImageUrl, availablePhotos.length])
+    persistPlacePhotos()
+  }, [venue.googlePlaceId, venue.id, placePhotoUrls.length])
+
+  // Owner uploads and selection: when venue has Google place, owner = hero+imageUrls not same as any place photo; selection = same-photo match in catalog
+  // Skip until we have placePhotoUrls (from server or persist API) so we don't show only the selected photos while loading
+  useEffect(() => {
+    if (!venue.googlePlaceId) return
+    if (placePhotoUrls.length === 0) return
+
+    const hero = venue.heroImageUrl ?? null
+    const venueImageUrls = parseImageUrls(venue.imageUrls)
+    const allVenueUrls = [...(hero ? [hero] : []), ...venueImageUrls.filter((u) => u !== hero)]
+    const ownerUploaded = [...new Set(allVenueUrls.filter((u) => u && !placePhotoUrls.some((p) => samePhotoUrl(u, p))))]
+    setOwnerUploadedUrls(ownerUploaded)
+
+    const builtCatalog: Array<{ source: "place" | "upload"; photoUrl: string }> = [
+      ...placePhotoUrls.map((url) => ({ source: "place" as const, photoUrl: url })),
+      ...ownerUploaded.map((url) => ({ source: "upload" as const, photoUrl: url })),
+    ]
+    const desiredOrder = [...(hero ? [hero] : []), ...venueImageUrls.filter((u) => u !== hero)]
+    const selected: number[] = []
+    for (const url of desiredOrder) {
+      const idx = builtCatalog.findIndex((item) => samePhotoUrl(item.photoUrl, url))
+      if (idx >= 0 && !selected.includes(idx)) selected.push(idx)
+    }
+    if (selected.length === 0 && builtCatalog.length > 0) {
+      const defaultCount = Math.min(5, Math.max(3, builtCatalog.length))
+      for (let i = 0; i < defaultCount; i++) selected.push(i)
+    }
+    setSelectedCatalogIndices(selected)
+  }, [venue.googlePlaceId, venue.heroImageUrl, venue.imageUrls, placePhotoUrls])
+
+  // Re-sync photo selection when venue.placePhotoUrls, venue.heroImageUrl, or venue.imageUrls change (same-photo match)
+  useEffect(() => {
+    const venueImageUrls = parseImageUrls(venue.imageUrls)
+    const heroImageUrl = venue.heroImageUrl ?? null
+    const currentDataKey = JSON.stringify({
+      placePhotoUrls,
+      imageUrls: venueImageUrls,
+      heroImageUrl,
+    })
+    if (lastSyncedVenueDataRef.current === currentDataKey) return
+    lastSyncedVenueDataRef.current = currentDataKey
+
+    const builtCatalog: Array<{ source: "place" | "upload"; photoUrl: string }> = [
+      ...placePhotoUrls.map((url) => ({ source: "place" as const, photoUrl: url })),
+      ...ownerUploadedUrls.map((url) => ({ source: "upload" as const, photoUrl: url })),
+    ]
+    const desiredOrder = [
+      ...(heroImageUrl ? [heroImageUrl] : []),
+      ...venueImageUrls.filter((u) => u !== heroImageUrl),
+    ]
+    const selected: number[] = []
+    for (const url of desiredOrder) {
+      const idx = builtCatalog.findIndex((item) => samePhotoUrl(item.photoUrl, url))
+      if (idx >= 0 && !selected.includes(idx)) selected.push(idx)
+    }
+    setSelectedCatalogIndices(selected)
+  }, [venue.imageUrls, venue.heroImageUrl, placePhotoUrls, ownerUploadedUrls])
 
   // Load Google Places API script
   useEffect(() => {
@@ -639,7 +702,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
   const removeOwnerUpload = (url: string) => {
     const idx = ownerUploadedUrls.indexOf(url)
     if (idx < 0) return
-    const catalogIndexToRemove = availablePhotos.length + idx
+    const catalogIndexToRemove = placePhotoUrls.length + idx
     setOwnerUploadedUrls((prev) => prev.filter((u) => u !== url))
     setSelectedCatalogIndices((prev) =>
       prev.filter((i) => i !== catalogIndexToRemove).map((i) => (i > catalogIndexToRemove ? i - 1 : i))
@@ -773,6 +836,9 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
           zipCode: zipCode.trim() || null,
           latitude: latitude || null,
           longitude: longitude || null,
+          ownerFirstName: ownerFirstName.trim() || null,
+          ownerLastName: ownerLastName.trim() || null,
+          ownerPhone: ownerPhone.trim(),
           tags,
           rulesText: rulesText.trim() || null,
           tables: validTables.map((table) => ({
@@ -800,13 +866,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
             openTime: h.isClosed ? null : (h.openTime || null),
             closeTime: h.isClosed ? null : (h.closeTime || null),
           })),
-          googlePhotoRefs:
-            selectedCatalogIndices.length > 0
-              ? selectedCatalogIndices
-                  .map((i) => catalog[i])
-                  .filter((item): item is typeof catalog[0] & { source: "google" } => item?.source === "google")
-                  .map((item) => ({ name: item.name, photoReference: item.photoReference }))
-              : null,
+          googlePhotoRefs: null,
           heroImageUrl:
             selectedCatalogIndices.length > 0 && catalog[selectedCatalogIndices[0]]
               ? catalog[selectedCatalogIndices[0]].photoUrl
@@ -930,16 +990,67 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                   />
                 </div>
               </div>
+
+              <div className="border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Owner Info</p>
+                <p className="mb-3 text-xs text-muted-foreground">Contact details for the venue owner</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="ownerFirstName" className="mb-2 block text-sm font-medium">
+                      First Name
+                    </label>
+                    <input
+                      id="ownerFirstName"
+                      type="text"
+                      value={ownerFirstName}
+                      onChange={(e) => setOwnerFirstName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Jane"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ownerLastName" className="mb-2 block text-sm font-medium">
+                      Last Name
+                    </label>
+                    <input
+                      id="ownerLastName"
+                      type="text"
+                      value={ownerLastName}
+                      onChange={(e) => setOwnerLastName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label htmlFor="ownerPhone" className="mb-2 block text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="ownerPhone"
+                    type="tel"
+                    required
+                    value={ownerPhone}
+                    onChange={(e) => setOwnerPhone(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="+1 (555) 000-0000"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Venue Photos (Google + owner uploads) — always show on edit so owner can add first photo */}
+        {/* Venue Photos: default = Selected photos only; expanded = full catalog */}
         {(catalog.length > 0 || isLoadingPlaceDetails || googlePlaceId || true) && (
           <Card>
             <CardHeader>
               <CardTitle>Venue Photos</CardTitle>
-              <CardDescription>Select the best interior shots (3–8 photos). You can add your own.</CardDescription>
+              <CardDescription>
+                {showAllPhotoOptions
+                  ? "Choose or change which photos to use (3–8 recommended)."
+                  : "Selected photos for your listing."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingPlaceDetails ? (
@@ -970,19 +1081,33 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                     {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
                   </Button>
                 </div>
-              ) : (
+              ) : showAllPhotoOptions ? (
                 <div className="space-y-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowAllPhotoOptions(false)}
+                  >
+                    Done
+                  </Button>
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
                     {catalog.map((item, catalogIndex) => {
                       const isSelected = selectedCatalogIndices.includes(catalogIndex)
                       const orderIndex = selectedCatalogIndices.indexOf(catalogIndex)
                       return (
-                        <button
+                        <div
                           key={catalogIndex}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => toggleCatalogPhotoSelection(catalogIndex)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault()
+                              toggleCatalogPhotoSelection(catalogIndex)
+                            }
+                          }}
                           className={cn(
-                            "group relative aspect-square overflow-hidden rounded-lg border-2 transition-all",
+                            "group relative aspect-square cursor-pointer overflow-hidden rounded-lg border-2 transition-all",
                             isSelected
                               ? "border-primary ring-2 ring-primary ring-offset-2"
                               : "border-muted hover:border-primary/50"
@@ -990,7 +1115,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                         >
                           <img
                             src={item.photoUrl}
-                            alt={item.source === "google" ? item.name : "Your photo"}
+                            alt={item.source === "place" ? "Place photo" : "Your photo"}
                             className="h-full w-full object-cover"
                           />
                           {isSelected && (
@@ -1025,16 +1150,10 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                               <X className="h-3.5 w-3.5" />
                             </button>
                           )}
-                        </button>
+                        </div>
                       )
                     })}
                   </div>
-                  <ImageGalleryModal
-                    images={catalog.map((c) => c.photoUrl)}
-                    initialIndex={galleryInitialIndex}
-                    isOpen={galleryOpen}
-                    onClose={() => setGalleryOpen(false)}
-                  />
                   <input
                     ref={venuePhotoInputRef}
                     type="file"
@@ -1056,6 +1175,68 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                     {uploadingVenuePhoto ? "Uploading…" : "Add your own photo"}
                   </Button>
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  {selectedPhotoUrlsForDisplay.length === 0 ? (
+                    <>
+                      <p className="text-sm text-muted-foreground">No photos selected.</p>
+                      <Button
+                        type="button"
+                        onClick={() => setShowAllPhotoOptions(true)}
+                      >
+                        See All Photo Options
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                        {selectedPhotoUrlsForDisplay.map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="group relative aspect-square overflow-hidden rounded-lg border-2 border-primary ring-2 ring-primary ring-offset-2"
+                          >
+                            <img
+                              src={url}
+                              alt="Selected"
+                              className="h-full w-full object-cover"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                <span className="text-xs font-semibold">{idx + 1}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              aria-label="View full size"
+                              className="absolute right-1 top-1 rounded bg-black/50 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                              onClick={() => {
+                                setGalleryInitialIndex(idx)
+                                setGalleryOpen(true)
+                              }}
+                            >
+                              <Expand className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowAllPhotoOptions(true)}
+                      >
+                        See All Photo Options
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+              {!isLoadingPlaceDetails && catalog.length > 0 && (
+                <ImageGalleryModal
+                  images={showAllPhotoOptions ? catalog.map((c) => c.photoUrl) : selectedPhotoUrlsForDisplay}
+                  initialIndex={galleryInitialIndex}
+                  isOpen={galleryOpen}
+                  onClose={() => setGalleryOpen(false)}
+                />
               )}
             </CardContent>
           </Card>

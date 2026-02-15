@@ -203,26 +203,26 @@ function compareDatabases(db1: any, db2: any) {
     
     if (db1Cols.length === 0 && db2Cols.length === 0) continue
     
-    const db1ColNames = new Set(db1Cols.map(c => c.column_name))
-    const db2ColNames = new Set(db2Cols.map(c => c.column_name))
+    const db1ColNames = new Set(db1Cols.map((c: TableInfo) => c.column_name))
+    const db2ColNames = new Set(db2Cols.map((c: TableInfo) => c.column_name))
     
-    const missingColsInDb2 = db1Cols.filter(c => !db2ColNames.has(c.column_name))
-    const missingColsInDb1 = db2Cols.filter(c => !db1ColNames.has(c.column_name))
+    const missingColsInDb2 = db1Cols.filter((c: TableInfo) => !db2ColNames.has(c.column_name))
+    const missingColsInDb1 = db2Cols.filter((c: TableInfo) => !db1ColNames.has(c.column_name))
     
     if (missingColsInDb2.length > 0 || missingColsInDb1.length > 0) {
       console.log(`  ⚠️  ${tableName} columns differ:`)
       if (missingColsInDb2.length > 0) {
-        console.log(`     Missing in ${db2.dbName}: ${missingColsInDb2.map(c => c.column_name).join(", ")}`)
+        console.log(`     Missing in ${db2.dbName}: ${missingColsInDb2.map((c: TableInfo) => c.column_name).join(", ")}`)
       }
       if (missingColsInDb1.length > 0) {
-        console.log(`     Missing in ${db1.dbName}: ${missingColsInDb1.map(c => c.column_name).join(", ")}`)
+        console.log(`     Missing in ${db1.dbName}: ${missingColsInDb1.map((c: TableInfo) => c.column_name).join(", ")}`)
       }
       hasDifferences = true
     } else if (db1Cols.length > 0 && db2Cols.length > 0) {
       // Compare column properties
       const colDiffs: string[] = []
       for (const col1 of db1Cols) {
-        const col2 = db2Cols.find(c => c.column_name === col1.column_name)
+        const col2 = db2Cols.find((c: TableInfo) => c.column_name === col1.column_name)
         if (col2) {
           if (col1.data_type !== col2.data_type || 
               col1.is_nullable !== col2.is_nullable) {
@@ -242,8 +242,8 @@ function compareDatabases(db1: any, db2: any) {
   // Compare indexes
   console.log("\n📋 Indexes:")
   for (const tableName of allTables) {
-    const db1Idx = (db1.paymentIndexes[tableName] || []).map(i => i.indexname).sort()
-    const db2Idx = (db2.paymentIndexes[tableName] || []).map(i => i.indexname).sort()
+    const db1Idx = (db1.paymentIndexes[tableName] || []).map((i: IndexInfo) => i.indexname).sort()
+    const db2Idx = (db2.paymentIndexes[tableName] || []).map((i: IndexInfo) => i.indexname).sort()
     
     if (JSON.stringify(db1Idx) !== JSON.stringify(db2Idx)) {
       console.log(`  ⚠️  ${tableName} indexes differ:`)
@@ -259,12 +259,12 @@ function compareDatabases(db1: any, db2: any) {
   console.log("\n📋 Foreign Key Constraints:")
   for (const tableName of allTables) {
     const db1Fks = (db1.paymentConstraints[tableName] || [])
-      .filter(c => c.constraint_type === 'FOREIGN KEY')
-      .map(c => c.constraint_name)
+      .filter((c: ConstraintInfo) => c.constraint_type === 'FOREIGN KEY')
+      .map((c: ConstraintInfo) => c.constraint_name)
       .sort()
     const db2Fks = (db2.paymentConstraints[tableName] || [])
-      .filter(c => c.constraint_type === 'FOREIGN KEY')
-      .map(c => c.constraint_name)
+      .filter((c: ConstraintInfo) => c.constraint_type === 'FOREIGN KEY')
+      .map((c: ConstraintInfo) => c.constraint_name)
       .sort()
     
     if (JSON.stringify(db1Fks) !== JSON.stringify(db2Fks)) {

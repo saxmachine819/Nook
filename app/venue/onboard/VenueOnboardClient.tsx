@@ -63,7 +63,16 @@ declare global {
   }
 }
 
-export function VenueOnboardClient() {
+const splitName = (name: string | null | undefined): [string, string] => {
+  const parts = name?.trim().split(/\s+/) ?? []
+  return [parts[0] ?? "", parts.slice(1).join(" ") ?? ""]
+}
+
+interface VenueOnboardClientProps {
+  initialOwnerName?: string | null
+}
+
+export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps = {}) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
   const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)
@@ -82,6 +91,9 @@ export function VenueOnboardClient() {
   const [zipCode, setZipCode] = useState("")
   const [latitude, setLatitude] = useState("")
   const [longitude, setLongitude] = useState("")
+  const [ownerFirstName, setOwnerFirstName] = useState(() => splitName(initialOwnerName)[0])
+  const [ownerLastName, setOwnerLastName] = useState(() => splitName(initialOwnerName)[1])
+  const [ownerPhone, setOwnerPhone] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [rulesText, setRulesText] = useState("")
   const [tables, setTables] = useState<Table[]>([
@@ -542,6 +554,11 @@ export function VenueOnboardClient() {
       return false
     }
 
+    if (!ownerPhone.trim()) {
+      showToast("Phone number is required", "error")
+      return false
+    }
+
     // Validate tables based on booking mode
     const validTables = tables.filter((t) => {
       if (!t.name.trim() || t.seats.length === 0) return false
@@ -639,6 +656,9 @@ export function VenueOnboardClient() {
             selectedCatalogIndices.length > 0
               ? selectedCatalogIndices.map((i) => catalog[i]?.photoUrl).filter(Boolean) as string[]
               : null,
+          ownerFirstName: ownerFirstName.trim() || null,
+          ownerLastName: ownerLastName.trim() || null,
+          ownerPhone: ownerPhone.trim(),
         }),
       })
 
@@ -669,6 +689,10 @@ export function VenueOnboardClient() {
     }
     if (!address.trim()) {
       showToast("Address is required", "error")
+      return false
+    }
+    if (!ownerPhone.trim()) {
+      showToast("Phone number is required", "error")
       return false
     }
     return true
@@ -924,6 +948,53 @@ export function VenueOnboardClient() {
                     onChange={(e) => setZipCode(e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder="94102"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Owner Info</p>
+                <p className="mb-3 text-xs text-muted-foreground">Contact details for the venue owner (you)</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="ownerFirstName" className="mb-2 block text-sm font-medium">
+                      First Name
+                    </label>
+                    <input
+                      id="ownerFirstName"
+                      type="text"
+                      value={ownerFirstName}
+                      onChange={(e) => setOwnerFirstName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Jane"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ownerLastName" className="mb-2 block text-sm font-medium">
+                      Last Name
+                    </label>
+                    <input
+                      id="ownerLastName"
+                      type="text"
+                      value={ownerLastName}
+                      onChange={(e) => setOwnerLastName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label htmlFor="ownerPhone" className="mb-2 block text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="ownerPhone"
+                    type="tel"
+                    required
+                    value={ownerPhone}
+                    onChange={(e) => setOwnerPhone(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="+1 (555) 000-0000"
                   />
                 </div>
               </div>
