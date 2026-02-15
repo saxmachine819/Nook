@@ -34,8 +34,8 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
 
   const now = new Date()
 
-  // Fetch reservations, seat blocks, deals, QR assets (seat/table), and venue-level QR
-  const [reservations, seatBlocks, dealsResult, qrAssets, venueQrAsset] = await Promise.all([
+  // Fetch reservations, seat blocks, deals, QR assets (seat/table), venue-level QR, and last 5 signage orders
+  const [reservations, seatBlocks, dealsResult, qrAssets, venueQrAsset, signageOrders] = await Promise.all([
     prisma.reservation.findMany({
       where: {
         venueId: venue.id,
@@ -104,6 +104,19 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       },
       select: { token: true },
     }),
+    prisma.signageOrder.findMany({
+      where: { venueId: venue.id },
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      include: {
+        template: { select: { name: true } },
+        items: {
+          include: {
+            qrAsset: { select: { token: true } },
+          },
+        },
+      },
+    }),
   ])
 
   const deals = dealsResult || []
@@ -142,6 +155,9 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
   }
 
   const venueQrToken = venueQrAsset?.token ?? null
+  const incompleteSignageOrders = signageOrders.filter(
+    (o) => o.status !== "DELIVERED" && o.status !== "CANCELLED"
+  )
 
   return (
     <VenueOpsConsoleClient
@@ -152,6 +168,7 @@ export default async function VenueOpsConsolePage({ params }: VenueOpsConsolePag
       now={now.toISOString()}
       assignedQrByResourceKey={assignedQrByResourceKey}
       venueQrToken={venueQrToken}
+      signageOrders={incompleteSignageOrders}
     />
   )
 }

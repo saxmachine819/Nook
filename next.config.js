@@ -3,6 +3,10 @@ const { withSentryConfig } = require("@sentry/nextjs");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Prevent webpack from bundling pdfkit so it can load its font files (Helvetica.afm etc.) from node_modules
+  experimental: {
+    serverComponentsExternalPackages: ["pdfkit"],
+  },
   images: {
     remotePatterns: [
       {

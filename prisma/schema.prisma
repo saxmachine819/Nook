@@ -51,6 +51,35 @@ enum VenueMemberRole {
   admin
 }
 
+enum SignageOrderStatus {
+  NEW
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum SignageTemplateCategory {
+  WINDOW
+  COUNTER
+  TABLE_TENT
+  REGISTER
+  STANDARD
+}
+
+enum SignageQrScopeType {
+  STORE
+  TABLE
+  SEAT
+}
+
+enum SignageDesignOption {
+  COUNTER_SIGN
+  WINDOW_DECAL
+  TABLE_TENT
+  STANDARD_SEAT_QR
+}
+
 model Venue {
   id                   String           @id @default(cuid())
   name                 String
@@ -90,6 +119,8 @@ model Venue {
   favoriteTables       FavoriteTable[]
   favoriteSeats        FavoriteSeat[]
   qrAssets             QRAsset[]
+  signageOrders        SignageOrder[]
+  signageOrderItems    SignageOrderItem[]
   // Hours: canonical source and timezone (see docs/HOURS_AUDIT.md)
   timezone             String?
   hoursSource          String? // "google" | "manual"; null = use google
@@ -148,10 +179,11 @@ model Table {
   isActive          Boolean         @default(true)
   imageUrls         Json?
   directionsText    String? // "Directions to your seat"
-  reservations      Reservation[]
-  seats             Seat[]
-  favoriteTables    FavoriteTable[]
-  venue             Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  reservations             Reservation[]
+  seats                    Seat[]
+  favoriteTables           FavoriteTable[]
+  intendedSignageOrderItems SignageOrderItem[]
+  venue                    Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@map("tables")
 }
@@ -168,10 +200,11 @@ model Seat {
   imageUrls     Json?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
-  reservations  Reservation[]
-  seatBlocks    SeatBlock[]
-  favoriteSeats FavoriteSeat[]
-  table         Table          @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  reservations              Reservation[]
+  seatBlocks                SeatBlock[]
+  favoriteSeats             FavoriteSeat[]
+  intendedSignageOrderItems SignageOrderItem[]
+  table                     Table          @relation(fields: [tableId], references: [id], onDelete: Cascade)
 
   @@map("seats")
 }
@@ -274,6 +307,7 @@ model User {
   refundRequestsRequested RefundRequest[]  @relation("RefundRequestedBy")
   refundRequestsProcessed RefundRequest[]  @relation("RefundProcessedBy")
   venueMemberships        VenueMember[]
+  signageOrdersCreated    SignageOrder[]
 
   @@index([status])
   @@map("users")
@@ -395,8 +429,9 @@ model QRAsset {
   retiredAt        DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
-  venue            Venue?        @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  venue            Venue?         @relation(fields: [venueId], references: [id], onDelete: SetNull)
   qrEvents         QREvent[]
+  signageOrderItems SignageOrderItem[]
 
   @@index([venueId])
   @@index([status])
@@ -423,6 +458,74 @@ model QREvent {
   @@index([venueId, createdAt])
   @@index([eventType, createdAt])
   @@map("qr_events")
+}
+
+model SignageTemplate {
+  id               String                  @id @default(cuid())
+  name             String
+  description      String?
+  category         SignageTemplateCategory
+  isActive         Boolean                 @default(true)
+  previewImageUrl  String?
+  createdAt        DateTime                @default(now())
+  signageOrders    SignageOrder[]
+
+  @@map("signage_templates")
+}
+
+model SignageOrder {
+  id                String              @id @default(cuid())
+  venueId           String
+  createdByUserId   String
+  templateId        String
+  status            SignageOrderStatus   @default(NEW)
+  contactName       String
+  contactEmail      String
+  contactPhone      String?
+  shipAddress1      String
+  shipAddress2      String?
+  shipCity          String
+  shipState         String
+  shipPostalCode    String
+  shipCountry       String
+  shippingNotes     String?
+  adminNotes        String?
+  trackingCarrier   String?
+  trackingNumber    String?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  venue             Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  createdBy         User?               @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  template          SignageTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  items             SignageOrderItem[]
+
+  @@index([venueId])
+  @@map("signage_orders")
+}
+
+model SignageOrderItem {
+  id                String               @id @default(cuid())
+  orderId           String
+  venueId           String
+  qrScopeType       SignageQrScopeType
+  qrAssetId         String
+  designOption      SignageDesignOption  @default(COUNTER_SIGN)
+  intendedTableId   String?
+  intendedSeatId    String?
+  label             String
+  createdAt         DateTime             @default(now())
+  order             SignageOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  venue             Venue                @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  qrAsset           QRAsset              @relation(fields: [qrAssetId], references: [id], onDelete: Restrict)
+  intendedTable     Table?               @relation(fields: [intendedTableId], references: [id], onDelete: SetNull)
+  intendedSeat      Seat?                @relation(fields: [intendedSeatId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([venueId])
+  @@index([qrAssetId])
+  @@map("signage_order_items")
 }
 
 model AuditLog {

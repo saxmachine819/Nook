@@ -15,6 +15,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "db:seed-signage": "tsx scripts/seed-signage-templates.ts",
     "resync-hours": "tsx scripts/resync-venue-hours.ts",
     "email:dev": "PORT=3001 npx react-email dev",
     "email:export": "npx react-email export"

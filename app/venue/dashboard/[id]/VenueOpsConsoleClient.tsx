@@ -57,6 +57,7 @@ import {
 } from "@/lib/venue-ops"
 import { DealList } from "@/components/venue/DealList"
 import { DealForm } from "@/components/venue/DealForm"
+import { SignageOrderWizard } from "@/components/venue/SignageOrderWizard"
 import { type Deal } from "@prisma/client"
 import { useVenueRole } from "./VenueRoleProvider"
 
@@ -68,6 +69,12 @@ interface VenueOpsConsoleClientProps {
     pauseMessage?: string | null
     openingHoursJson?: any
     stripeAccountId?: string | null
+    address?: string | null
+    city?: string | null
+    state?: string | null
+    zipCode?: string | null
+    ownerFirstName?: string | null
+    ownerLastName?: string | null
     tables: Array<{
       id: string
       name: string | null
@@ -108,6 +115,32 @@ interface VenueOpsConsoleClientProps {
   now: string
   assignedQrByResourceKey?: Record<string, string>
   venueQrToken?: string | null
+  signageOrders?: Array<{
+    id: string
+    status: string
+    createdAt: Date | string
+    template: { name: string }
+    items: Array<{
+      id: string
+      label: string
+      qrScopeType: string
+      qrAsset: { token: string }
+    }>
+    contactName: string
+    contactEmail: string
+    contactPhone: string | null
+    shipAddress1: string
+    shipAddress2: string | null
+    shipCity: string
+    shipState: string
+    shipPostalCode: string
+    shipCountry: string
+    shippingNotes: string | null
+    trackingCarrier: string | null
+    trackingNumber: string | null
+    shippedAt: Date | string | null
+    deliveredAt: Date | string | null
+  }>
 }
 
 type TabMode = "upcoming" | "past" | "cancelled"
@@ -120,6 +153,7 @@ export function VenueOpsConsoleClient({
   now: initialNow,
   assignedQrByResourceKey = {},
   venueQrToken: initialVenueQrToken = null,
+  signageOrders: initialSignageOrders = [],
 }: VenueOpsConsoleClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
@@ -140,6 +174,11 @@ export function VenueOpsConsoleClient({
   const [venueQrRetiring, setVenueQrRetiring] = useState(false)
   const [localVenueQrToken, setLocalVenueQrToken] = useState<string | null>(null)
   const [qrManagementOpen, setQrManagementOpen] = useState(false)
+  const [signageOrdersOpen, setSignageOrdersOpen] = useState(false)
+  const [selectedSignageOrder, setSelectedSignageOrder] = useState<
+    NonNullable<VenueOpsConsoleClientProps["signageOrders"]>[number] | null
+  >(null)
+  const [signageOrderWizardOpen, setSignageOrderWizardOpen] = useState(false)
   const [teamManagementOpen, setTeamManagementOpen] = useState(false)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
@@ -1759,8 +1798,103 @@ export function VenueOpsConsoleClient({
                     </Button>
                     {qrManagementOpen && (
                       <div className="rounded-md border bg-muted/30 overflow-hidden">
-                        <div className="max-h-64 overflow-y-auto p-1 space-y-0.5">
-                          {/* Venue QR (Register / Front Window) — first option */}
+                        <div className="max-h-96 overflow-y-auto">
+                          {/* Orders section */}
+                          <div className="border-b border-border/60 bg-background/50">
+                            <p className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Orders
+                            </p>
+                            <div className="p-1 space-y-0.5 pb-2">
+                              {initialSignageOrders.length > 0 && (
+                                <>
+                                  <div
+                                    className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+                                    onClick={() => setSignageOrdersOpen((open) => !open)}
+                                  >
+                                    <span className="text-xs font-medium truncate min-w-0">
+                                      Manage Existing QR Code Orders
+                                    </span>
+                                    <ChevronDown className={cn("h-4 w-4 transition-transform", signageOrdersOpen && "rotate-180")} />
+                                  </div>
+                                  {signageOrdersOpen && (
+                                    <div className="pl-2 pb-1 space-y-0.5">
+                                      {initialSignageOrders.map((order) => {
+                                        const storeCount = order.items.filter((i) => i.qrScopeType === "STORE").length
+                                        const tableCount = order.items.filter((i) => i.qrScopeType === "TABLE").length
+                                        const seatCount = order.items.filter((i) => i.qrScopeType === "SEAT").length
+                                        const statusLabel =
+                                          order.status === "NEW"
+                                            ? "New"
+                                            : order.status === "IN_PRODUCTION"
+                                              ? "In production"
+                                              : order.status === "SHIPPED"
+                                                ? "Shipped"
+                                                : order.status === "DELIVERED"
+                                                  ? "Delivered"
+                                                  : order.status === "CANCELLED"
+                                                    ? "Cancelled"
+                                                    : order.status
+                                        const orderDate = new Date(order.createdAt).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          year: "numeric",
+                                        })
+                                        return (
+                                          <div
+                                            key={order.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            className="flex flex-col gap-0.5 rounded px-2 py-1.5 text-sm hover:bg-muted/50 cursor-pointer"
+                                            onClick={() => setSelectedSignageOrder(order)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault()
+                                                setSelectedSignageOrder(order)
+                                              }
+                                            }}
+                                          >
+                                            <div className="flex items-center justify-between gap-2">
+                                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                                {statusLabel}
+                                              </span>
+                                              <span className="text-xs text-muted-foreground truncate">{orderDate}</span>
+                                            </div>
+                                            <span className="text-xs font-medium truncate">{order.template.name}</span>
+                                            <span className="text-[10px] text-muted-foreground">
+                                              Store: {storeCount} · Tables: {tableCount} · Seats: {seatCount}
+                                            </span>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                              <div
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                              >
+                                <span className="text-xs font-medium truncate min-w-0">
+                                  Order QR Code Signage
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-[10px] px-1.5"
+                                  onClick={() => setSignageOrderWizardOpen(true)}
+                                >
+                                  Order signage
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Generate section */}
+                          <div>
+                            <p className="px-2 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              Generate QR
+                            </p>
+                            <div className="p-1 space-y-0.5 pb-2">
+                          {/* Venue QR (Register / Front Window) */}
                           <div
                             className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
                           >
@@ -1932,6 +2066,8 @@ export function VenueOpsConsoleClient({
                               })
                             })
                           )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2181,6 +2317,112 @@ export function VenueOpsConsoleClient({
                 </Button>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <SignageOrderWizard
+        venue={venue}
+        open={signageOrderWizardOpen}
+        onOpenChange={setSignageOrderWizardOpen}
+        onSuccess={() => {
+          showToast("Signage order submitted", "success")
+          router.refresh()
+        }}
+      />
+
+      {/* Signage order detail modal */}
+      <Dialog open={!!selectedSignageOrder} onOpenChange={(open) => !open && setSelectedSignageOrder(null)}>
+        <DialogContent className="sm:max-w-md">
+          {selectedSignageOrder && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Signage order</DialogTitle>
+                <DialogDescription>Shipping and line items for this order.</DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {selectedSignageOrder.status === "NEW"
+                    ? "New"
+                    : selectedSignageOrder.status === "IN_PRODUCTION"
+                      ? "In production"
+                      : selectedSignageOrder.status === "SHIPPED"
+                        ? "Shipped"
+                        : selectedSignageOrder.status === "DELIVERED"
+                          ? "Delivered"
+                          : selectedSignageOrder.status === "CANCELLED"
+                            ? "Cancelled"
+                            : selectedSignageOrder.status}
+                </span>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium text-muted-foreground">Shipping</p>
+                  <p>{selectedSignageOrder.contactName}</p>
+                  <p className="text-muted-foreground">{selectedSignageOrder.contactEmail}</p>
+                  {selectedSignageOrder.contactPhone && (
+                    <p className="text-muted-foreground">{selectedSignageOrder.contactPhone}</p>
+                  )}
+                  <p className="text-muted-foreground">
+                    {selectedSignageOrder.shipAddress1}
+                    {selectedSignageOrder.shipAddress2 ? `, ${selectedSignageOrder.shipAddress2}` : ""}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {selectedSignageOrder.shipCity}, {selectedSignageOrder.shipState} {selectedSignageOrder.shipPostalCode}
+                  </p>
+                  <p className="text-muted-foreground">{selectedSignageOrder.shipCountry}</p>
+                  {selectedSignageOrder.shippingNotes && (
+                    <p className="text-muted-foreground pt-1">{selectedSignageOrder.shippingNotes}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="font-medium text-muted-foreground">Line items</p>
+                  <ul className="space-y-2">
+                    {selectedSignageOrder.items.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center gap-3 rounded-md border bg-muted/30 p-2 text-sm"
+                      >
+                        <img
+                          src={`/api/qr-assets/${item.qrAsset.token}/qr-only.svg`}
+                          alt=""
+                          className="h-12 w-12 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{item.label}</p>
+                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {item.qrScopeType}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {(selectedSignageOrder.shippedAt ||
+                  selectedSignageOrder.trackingCarrier ||
+                  selectedSignageOrder.trackingNumber) && (
+                  <div className="space-y-1 border-t pt-3 text-sm">
+                    <p className="font-medium text-muted-foreground">Tracking</p>
+                    {selectedSignageOrder.trackingCarrier && (
+                      <p className="text-muted-foreground">{selectedSignageOrder.trackingCarrier}</p>
+                    )}
+                    {selectedSignageOrder.trackingNumber && (
+                      <p className="text-muted-foreground">{selectedSignageOrder.trackingNumber}</p>
+                    )}
+                    {selectedSignageOrder.shippedAt && (
+                      <p className="text-muted-foreground">
+                        Shipped {new Date(selectedSignageOrder.shippedAt).toLocaleDateString("en-US")}
+                      </p>
+                    )}
+                    {selectedSignageOrder.deliveredAt && (
+                      <p className="text-muted-foreground">
+                        Delivered {new Date(selectedSignageOrder.deliveredAt).toLocaleDateString("en-US")}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
