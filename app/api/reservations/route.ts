@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           }
         }
         
-        await canBookVenue(venueId, session.user.id)
+        await canBookVenue(venueId, { userId: session.user.id })
       } catch (err) {
         if (err instanceof BookingNotAllowedError) {
           return NextResponse.json({ error: err.message }, { status: 403 })
