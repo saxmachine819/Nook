@@ -10,7 +10,8 @@ import { claimVenueMembershipForUser } from "@/lib/venue-members";
 // Production (NODE_ENV=production on Vercel) is never touched.
 if (process.env.NODE_ENV === "development") {
   process.env.NEXTAUTH_URL =
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+  console.log("[Auth] Dev mode NEXTAUTH_URL set to:", process.env.NEXTAUTH_URL);
 }
 
 // Verify required environment variables
@@ -31,8 +32,9 @@ if (!process.env.NEXTAUTH_URL) {
 }
 
 export const authOptions = {
-  debug: false,
+  debug: true,
   trustHost: true, // Required for NextAuth v5
+  useSecureCookies: process.env.NODE_ENV === "production",
   adapter: PrismaAdapter(prisma) as any,
   providers: [
     GoogleProvider({

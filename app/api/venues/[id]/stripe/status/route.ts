@@ -77,11 +77,28 @@ export async function GET(
       messages.push("Stripe account is connected.")
     }
 
+    let balance = null
+    if (venue.stripeAccountId && !needsOnboarding) {
+      try {
+        const stripeBalance = await stripe.balance.retrieve({
+          stripeAccount: venue.stripeAccountId,
+        })
+        balance = {
+          available: stripeBalance.available.reduce((acc, b) => acc + b.amount, 0),
+          pending: stripeBalance.pending.reduce((acc, b) => acc + b.amount, 0),
+          currency: stripeBalance.available[0]?.currency || "usd",
+        }
+      } catch (err) {
+        console.error("Failed to fetch Stripe balance:", err)
+      }
+    }
+
     return NextResponse.json({
       status: needsOnboarding ? "needs_attention" : "ok",
       needsOnboarding,
       disabledReason,
       messages,
+      balance,
     })
   } catch (error) {
     console.error("GET /api/venues/[id]/stripe/status:", error)

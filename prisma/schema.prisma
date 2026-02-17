@@ -46,6 +46,24 @@ enum NotificationEventStatus {
   FAILED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  DECLINED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 enum VenueMemberRole {
   staff
   admin
@@ -111,6 +129,8 @@ model Venue {
   deletedAt            DateTime?
   pauseMessage         String?
   reservations         Reservation[]
+  payments             Payment[]
+  refundRequests       RefundRequest[]
   tables               Table[]
   seatBlocks           SeatBlock[]
   deals                Deal[]
@@ -228,8 +248,79 @@ model Reservation {
   user               User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   dealRedemptions    DealRedemption[]
   payments           Payment[]
+  refundRequests     RefundRequest[]
 
   @@map("reservations")
+}
+
+model Payment {
+  id                      String        @id @default(cuid())
+  venueId                 String
+  userId                  String?
+  reservationId           String?
+  status                  PaymentStatus @default(PENDING)
+  amount                  Int           // Amount in cents
+  currency                String        @default("usd")
+  applicationFeeAmount    Int?
+  amountRefunded          Int           @default(0)
+  stripeAccountId         String?
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?       @unique
+  stripeChargeId          String?       @unique
+  stripeApplicationFeeId  String?
+  stripeTransferId        String?
+  bookingPayload          Json?
+  metadata                Json?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  paidAt                  DateTime?
+  failedAt                  DateTime?
+
+  venue          Venue          @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reservation    Reservation?   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  refundRequests RefundRequest[]
+
+  @@index([venueId])
+  @@index([userId])
+  @@index([status])
+  @@index([reservationId])
+  @@index([stripePaymentIntentId])
+  @@map("payments")
+}
+
+model RefundRequest {
+  id                String       @id @default(cuid())
+  paymentId         String
+  reservationId     String?
+  venueId           String?
+  userId            String?
+  amount            Int          // Amount in cents (can be partial)
+  currency          String       @default("usd")
+  reason            String?
+  status            RefundStatus @default(REQUESTED)
+  stripeRefundId    String?      @unique
+  metadata          Json?
+  requestedByUserId String?
+  processedByUserId String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  processedAt       DateTime?
+
+  payment     Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  venue       Venue?       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedBy User?        @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  processedBy User?        @relation("RefundProcessedBy", fields: [processedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([venueId, status])
+  @@index([userId, status])
+  @@index([paymentId])
+  @@index([reservationId])
+  @@index([status])
+  @@index([stripeRefundId])
+  @@map("refund_requests")
 }
 
 model SeatBlock {
@@ -304,6 +395,7 @@ model User {
   rejectedVenues          Venue[]          @relation("RejectedVenues")
   auditLogs               AuditLog[]       @relation("AuditLogActor")
   payments                Payment[]
+  refundRequests          RefundRequest[]
   refundRequestsRequested RefundRequest[]  @relation("RefundRequestedBy")
   refundRequestsProcessed RefundRequest[]  @relation("RefundProcessedBy")
   venueMemberships        VenueMember[]
@@ -562,76 +654,4 @@ model NotificationEvent {
   @@index([status])
   @@index([createdAt])
   @@map("notification_events")
-}
-
-enum PaymentStatus {
-  PENDING
-  PAID
-  FAILED
-  CANCELED
-  REFUNDED
-  PARTIALLY_REFUNDED
-}
-
-enum RefundStatus {
-  REQUESTED
-  APPROVED
-  DECLINED
-  PROCESSING
-  SUCCEEDED
-  FAILED
-}
-
-model Payment {
-  id                    String          @id @default(cuid())
-  reservationId         String
-  userId                String?
-  venueId               String
-  amount                Int // Amount in cents
-  currency              String          @default("usd")
-  status                PaymentStatus   @default(PENDING)
-  stripePaymentIntentId String?         @unique
-  stripeChargeId        String?
-  stripeTransferId      String? // For Connect payouts
-  metadata              Json?
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
-  paidAt                DateTime?
-  failedAt              DateTime?
-  reservation           Reservation     @relation(fields: [reservationId], references: [id], onDelete: Cascade)
-  user                  User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
-  refundRequests        RefundRequest[]
-
-  @@index([reservationId])
-  @@index([userId])
-  @@index([venueId])
-  @@index([status])
-  @@index([stripePaymentIntentId])
-  @@map("payments")
-}
-
-model RefundRequest {
-  id                String       @id @default(cuid())
-  paymentId         String
-  reservationId     String?
-  amount            Int // Amount in cents (can be partial)
-  currency          String       @default("usd")
-  reason            String?
-  status            RefundStatus @default(REQUESTED)
-  stripeRefundId    String?      @unique
-  metadata          Json?
-  requestedByUserId String?
-  processedByUserId String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  processedAt       DateTime?
-  payment           Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  requestedBy       User?        @relation("RefundRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
-  processedBy       User?        @relation("RefundProcessedBy", fields: [processedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([paymentId])
-  @@index([reservationId])
-  @@index([status])
-  @@index([stripeRefundId])
-  @@map("refund_requests")
 }

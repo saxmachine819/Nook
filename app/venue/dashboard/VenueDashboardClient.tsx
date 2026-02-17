@@ -52,7 +52,8 @@ export function VenueDashboardClient() {
   }, [])
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white">
+      <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Venue Dashboard</h1>
@@ -83,7 +84,7 @@ export function VenueDashboardClient() {
       </div>
 
       {loading ? (
-        <Card>
+        <Card className="border-muted/60 bg-white/90 shadow-sm">
           <CardContent className="py-6">
             <p className="text-sm text-muted-foreground">Loading venues…</p>
           </CardContent>
@@ -91,7 +92,7 @@ export function VenueDashboardClient() {
       ) : venues.length > 0 ? (
         <div className="space-y-4">
           {venues.map((v) => (
-            <Card key={v.id}>
+            <Card key={v.id} className="border-muted/60 bg-white/90 shadow-sm">
               <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:gap-4">
                 <div className="flex flex-1 gap-3 sm:gap-4">
                   <div className="h-16 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
@@ -162,7 +163,7 @@ export function VenueDashboardClient() {
           ))}
         </div>
       ) : (
-        <Card>
+        <Card className="border-muted/60 bg-white/90 shadow-sm">
           <CardHeader>
             <CardTitle>Get started</CardTitle>
             <CardDescription>
@@ -179,6 +180,7 @@ export function VenueDashboardClient() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   )
 }

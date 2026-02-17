@@ -37,6 +37,20 @@ export interface ReservationListItem {
     directionsText?: string | null
     seats?: { id: string }[]
   } | null
+  payment?: {
+    id: string
+    status: string
+    amount: number
+    currency: string
+    amountRefunded: number
+    refundRequests: Array<{
+      id: string
+      status: string
+      requestedAmount: number
+      approvedAmount: number | null
+      createdAt: Date | string
+    }>
+  } | null
 }
 
 export interface ReservationDetail extends ReservationListItem {

@@ -29,58 +29,58 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
 
   return (
     <div className="relative">
-      <div className="absolute -top-2 -right-2 z-10 flex items-center gap-2">
+      <div className="absolute -top-4 -right-2 z-10 flex items-center gap-3">
         {venueId && (
           <FavoriteButton
             type="venue"
             itemId={venueId}
             initialFavorited={isFavorited}
             size="md"
-            className="rounded-full bg-background/90 backdrop-blur-sm p-1.5 shadow-sm"
+            className="rounded-full glass p-2.5 shadow-lg transition-transform hover:scale-110 active:scale-90"
           />
         )}
         <button
           type="button"
           onClick={() => router.push(returnTo || "/")}
-          className="rounded-full p-1 text-muted-foreground hover:bg-muted transition-colors"
+          className="rounded-full glass p-2.5 text-muted-foreground hover:bg-black/5 hover:text-foreground transition-all duration-300 active:scale-90 shadow-lg"
           aria-label={returnTo ? "Close and return to reservation" : "Close and return to explore"}
         >
-          <X className="h-5 w-5" />
+          <X size={20} strokeWidth={2.5} />
         </button>
       </div>
-      <div className="flex flex-col gap-4 pr-8 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+      <div className="flex flex-col gap-6 pr-12 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-1">
+          <h1 className="text-4xl font-black tracking-tight text-foreground/90 sm:text-5xl lg:text-6xl">
             {name}
           </h1>
           {address && (
-            <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
+            <p className="text-base font-medium text-muted-foreground/80 sm:text-lg">
               {address}
             </p>
           )}
         </div>
         {deal && (
           <div className="w-full flex-shrink-0 sm:max-w-xs lg:hidden">
-            <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm h-fit">
-              <CardContent className="p-3">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex-shrink-0 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap">
-                      Deal
+            <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/20 h-fit rounded-[2rem]">
+              <CardContent className="p-5">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex-shrink-0 rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap">
+                      Special Deal
                     </span>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold tracking-tight text-foreground leading-tight line-clamp-1">
-                        {deal.title}
-                      </h3>
-                      {eligibilitySummary && (
-                        <p className="text-[10px] font-medium text-primary/90 mt-0.5 line-clamp-1">
-                          {eligibilitySummary}
-                        </p>
-                      )}
-                    </div>
                   </div>
-                  <div className="rounded-lg border border-primary/10 bg-background/60 p-2">
-                    <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-2">
+                  <div className="space-y-1">
+                    <h3 className="text-lg font-bold tracking-tight text-white leading-tight">
+                      {deal.title}
+                    </h3>
+                    {eligibilitySummary && (
+                      <p className="text-xs font-bold text-white/80">
+                        {eligibilitySummary}
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-2xl bg-white/10 p-4">
+                    <p className="text-xs font-medium leading-relaxed text-white/90">
                       {deal.description || dealDescription}
                     </p>
                   </div>

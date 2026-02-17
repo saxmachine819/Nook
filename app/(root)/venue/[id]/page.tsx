@@ -83,12 +83,61 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   if (!canView) {
     redirect("/")
   }
-  
+
+  // Fetch favorite states in batch
+  let favoriteStates = {
+    venue: false,
+    tables: new Set<string>(),
+    seats: new Set<string>(),
+  }
+
+  if (session?.user?.id) {
+    const userId = session.user.id
+    const venueId = venue.id
+    const tableIds = venue.tables.map((t) => t.id)
+    const seatIds = (
+      venue.tables as unknown as Array<{ id: string; seats: { id: string }[] }>
+    ).flatMap((t) => t.seats.map((s) => s.id))
+
+    const [venueFav, tableFavs, seatFavs] = await Promise.all([
+      prisma.favoriteVenue.findUnique({
+        where: {
+          userId_venueId: {
+            userId,
+            venueId,
+          },
+        },
+      }),
+      tableIds.length > 0
+        ? prisma.favoriteTable.findMany({
+          where: {
+            userId,
+            venueId,
+            tableId: { in: tableIds },
+          },
+        })
+        : Promise.resolve([]),
+      seatIds.length > 0
+        ? prisma.favoriteSeat.findMany({
+          where: {
+            userId,
+            venueId,
+            seatId: { in: seatIds },
+          },
+        })
+        : Promise.resolve([]),
+    ])
+
+    favoriteStates.venue = !!venueFav
+    favoriteStates.tables = new Set(tableFavs.map((t) => t.tableId))
+    favoriteStates.seats = new Set(seatFavs.map((s) => s.seatId))
+  }
+
   // Ensure tables and seats arrays exist
   if (!venue.tables) {
     venue.tables = []
   }
-  ;(venue as any).tables = venue.tables.map((table: any) => ({
+  ; (venue as any).tables = venue.tables.map((table: any) => ({
     ...table,
     seats: table.seats || [],
   }))
@@ -101,13 +150,13 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }
     return sum + ((table as any).seatCount || 0)
   }, 0)
-  
+
   const groupTables = venue.tables.filter((t: any) => {
     const mode = t.bookingMode
     return mode === "group" || mode === null || mode === undefined
   })
   const individualTables = venue.tables.filter((t: any) => t.bookingMode === "individual")
-  
+
   let minPrice = venue.hourlySeatPrice || 0
   if (individualTables.length > 0) {
     const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
@@ -118,7 +167,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       minPrice = Math.min(...seatPrices)
     }
   }
-  
+
   let maxPrice = venue.hourlySeatPrice || 0
   if (groupTables.length > 0) {
     const tablePrices = groupTables
@@ -128,7 +177,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       maxPrice = Math.max(...tablePrices)
     }
   }
-  
+
   if (groupTables.length === 0 && individualTables.length > 0) {
     const individualSeats = individualTables.flatMap((t: any) => t.seats ?? [])
     const seatPrices = individualSeats
@@ -138,7 +187,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       maxPrice = Math.max(...seatPrices)
     }
   }
-  
+
   if (individualTables.length === 0 && groupTables.length > 0) {
     const tablePrices = groupTables
       .map(t => (t as any).tablePricePerHour)
@@ -147,7 +196,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       minPrice = Math.min(...tablePrices)
     }
   }
-  
+
   let pricingDescription = "Reserve seats by the hour."
   if (individualTables.length > 0 && groupTables.length === 0) {
     pricingDescription = "Reserve seats individually by the hour."
@@ -164,7 +213,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
   const openStatus = canonicalHours ? getOpenStatus(canonicalHours, new Date()) : null
   const weeklyFormatted = canonicalHours ? formatWeeklyHoursFromCanonical(canonicalHours) : []
-  
+
   // We'll delegate full availability calculations to the client (VenueBookingWidget)
   // For the server render, we just show a basic status.
   const availabilityLabel = openStatus?.isOpen ? "Open" : "Closed"
@@ -182,160 +231,166 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       : null
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        <div className="space-y-4">
-          <VenuePageHeader 
-            name={venue.name} 
-            address={venue.address}
-            returnTo={searchParams?.returnTo}
-            venueId={venue.id}
-            deal={(() => {
-              const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0 
-                ? (venue as any).deals[0] 
-                : null
-              return primaryDeal || null
-            })()}
-          />
-
-          {(venue.tags ?? []).length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {(venue.tags ?? []).map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border bg-background/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="relative overflow-hidden rounded-2xl border bg-muted">
-            <VenueImageCarousel
-              images={venueHeroImages}
-              className="h-[260px] sm:h-[340px] lg:h-[560px]"
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="grid gap-8 lg:grid-cols-[1fr,400px] lg:items-start">
+          <div className="space-y-10">
+            <VenuePageHeader
+              name={venue.name}
+              address={venue.address}
+              returnTo={searchParams?.returnTo}
+              isFavorited={favoriteStates.venue}
+              venueId={venue.id}
+              deal={(() => {
+                const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0
+                  ? (venue as any).deals[0]
+                  : null
+                return primaryDeal || null
+              })()}
             />
-            <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-black/5" />
-            {availabilityLabel && (
-              <span className="absolute top-3 right-3 z-10 rounded-full bg-background/90 backdrop-blur-sm px-3 py-1.5 text-xs font-medium text-primary shadow-sm">
-                {availabilityLabel}
-              </span>
-            )}
-          </div>
-        </div>
 
-        <div className="space-y-4 lg:pt-[140px]">
-          {(venue as any).deals?.[0] && (() => {
-            const primaryDeal = (venue as any).deals[0]
-            const eligibility = primaryDeal.eligibilityJson || {}
-            const eligibilitySummary = formatEligibilitySummary(primaryDeal)
-            const dealDescription = generateDescription(primaryDeal.type, eligibility)
-            return (
-              <div className="hidden lg:block">
-                <Card className="overflow-hidden border border-primary/15 bg-gradient-to-br from-primary/5 to-primary/2 shadow-sm">
-                  <CardContent className="p-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="flex-shrink-0 rounded-full bg-primary/90 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground whitespace-nowrap">
-                          Deal
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-semibold tracking-tight text-foreground leading-tight line-clamp-1">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-xl">
+              <VenueImageCarousel
+                images={venueHeroImages}
+                className="h-[300px] sm:h-[450px] lg:h-[650px]"
+              />
+              <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-black/5" />
+              {availabilityLabel && (
+                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary shadow-xl">
+                  {availabilityLabel}
+                </span>
+              )}
+            </div>
+
+            {(venue.tags ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {(venue.tags ?? []).map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-primary/5 border border-primary/10 px-4 py-1.5 text-xs font-bold text-primary/70 tracking-tight"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              <div className="h-px w-full bg-border/50" />
+
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black tracking-tight text-foreground/80">The Space</h2>
+                {googleMapsHref && (
+                  <Button asChild variant="ghost" className="rounded-2xl font-bold bg-primary/5 hover:bg-primary/10 text-primary">
+                    <a href={googleMapsHref || undefined} target="_blank" rel="noreferrer">
+                      Get Directions
+                    </a>
+                  </Button>
+                )}
+              </div>
+
+              <VenueHoursDisplay
+                openStatus={openStatus}
+                weeklyFormatted={weeklyFormatted}
+                venueTimezone={canonicalHours?.timezone ?? null}
+                weeklyHours={canonicalHours?.weeklyHours ?? []}
+              />
+
+              {venue.rulesText && (
+                <div className="rounded-[2rem] border-none bg-primary/[0.03] p-8 space-y-4">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-primary/40">
+                    House rules
+                  </div>
+                  <p className="whitespace-pre-line text-sm font-medium leading-relaxed text-foreground/70">
+                    {venue.rulesText}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-6 lg:sticky lg:top-8">
+            {(venue as any).deals?.[0] && (() => {
+              const primaryDeal = (venue as any).deals[0]
+              const eligibility = primaryDeal.eligibilityJson || {}
+              const eligibilitySummary = formatEligibilitySummary(primaryDeal)
+              const dealDescription = generateDescription(primaryDeal.type, eligibility)
+              return (
+                <div className="hidden lg:block">
+                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/10 rounded-[2rem]">
+                    <CardContent className="p-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex-shrink-0 rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                            Special Deal
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-xl font-bold tracking-tight text-white leading-tight">
                             {primaryDeal.title}
                           </h3>
                           {eligibilitySummary && (
-                            <p className="text-[10px] font-medium text-primary/90 mt-0.5 line-clamp-1">
+                            <p className="text-xs font-bold text-white/80">
                               {eligibilitySummary}
                             </p>
                           )}
                         </div>
+                        <div className="rounded-2xl bg-white/10 p-4">
+                          <p className="text-xs font-medium leading-relaxed text-white/90">
+                            {primaryDeal.description || dealDescription}
+                          </p>
+                        </div>
                       </div>
-                      <div className="rounded-lg border border-primary/10 bg-background/60 p-2">
-                        <p className="text-[11px] leading-relaxed text-muted-foreground line-clamp-2">
-                          {primaryDeal.description || dealDescription}
-                        </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )
+            })()}
+
+            <Card className="overflow-hidden border-none bg-white shadow-xl rounded-[2.5rem]">
+              <CardHeader className="p-8 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl font-black tracking-tight">Reserve</CardTitle>
+                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                      {pricingDescription}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    {minPrice === maxPrice ? (
+                      <div className="text-3xl font-black tracking-tighter text-primary">
+                        ${minPrice.toFixed(0)}
+                        <span className="text-xs font-bold text-muted-foreground/40 ml-1 uppercase tracking-tighter">
+                          /hr
+                        </span>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )
-          })()}
-          <Card className="overflow-hidden">
-            <CardHeader className="pb-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <CardTitle className="text-base">Reserve</CardTitle>
-                  <p className="text-xs text-muted-foreground">
-                    {pricingDescription}
-                  </p>
+                    ) : (
+                      <div className="text-2xl font-black tracking-tighter text-primary">
+                        ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
+                        <span className="text-xs font-bold text-muted-foreground/40 ml-1 uppercase tracking-tighter">
+                          /hr
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  {minPrice === maxPrice ? (
-                    <div className="text-lg font-semibold tracking-tight whitespace-nowrap">
-                      ${minPrice.toFixed(0)}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">
-                        /hr
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-lg font-semibold tracking-tight whitespace-nowrap">
-                      ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">
-                        /hr
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
+              </CardHeader>
 
-            <CardContent>
-              <VenueBookingWidget
-                venueId={venue.id}
-                tables={individualTablesForBooking as any}
-                canonicalHours={canonicalHours}
-              />
-            </CardContent>
-          </Card>
-
-          <div className="space-y-4">
-            <div className="h-px w-full bg-border" />
-
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-medium tracking-tight">More details</h2>
-              {googleMapsHref && (
-                <Button asChild variant="ghost" size="sm" className="px-2">
-                  <a href={googleMapsHref} target="_blank" rel="noreferrer">
-                    Directions
-                  </a>
-                </Button>
-              )}
-            </div>
-
-            <VenueHoursDisplay
-              openStatus={openStatus}
-              weeklyFormatted={weeklyFormatted}
-              venueTimezone={canonicalHours?.timezone ?? null}
-              weeklyHours={canonicalHours?.weeklyHours ?? []}
-            />
-
-            {venue.rulesText && (
-              <div className="rounded-xl border bg-background p-4">
-                <div className="mb-2 text-xs font-medium text-muted-foreground">
-                  House rules
-                </div>
-                <p className="whitespace-pre-line text-sm text-muted-foreground">
-                  {venue.rulesText}
-                </p>
-              </div>
-            )}
+              <CardContent className="p-8 pt-2">
+                <VenueBookingWidget
+                  venueId={venue.id}
+                  tables={individualTablesForBooking as any}
+                  favoritedTableIds={favoriteStates.tables}
+                  favoritedSeatIds={favoriteStates.seats}
+                  canonicalHours={canonicalHours}
+                />
+              </CardContent>
+            </Card>
           </div>
         </div>
-      </div>
 
-      <div className="h-24" />
+        <div className="h-24" />
+      </div>
     </div>
   )
 }

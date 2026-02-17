@@ -10,7 +10,7 @@ export default async function ReservationDetailPage({
 }: {
   params: { id: string }
 }) {
-  const [session, reservation] = await Promise.all([
+  const [session, reservationData] = await Promise.all([
     auth(),
     prisma.reservation.findUnique({
       where: { id: params.id },
@@ -42,6 +42,13 @@ export default async function ReservationDetailPage({
             // Fetch async: directionsText, seats
           },
         },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
       },
     }),
   ])
@@ -50,8 +57,14 @@ export default async function ReservationDetailPage({
     redirect("/profile?callbackUrl=/reservations/" + params.id)
   }
 
-  if (!reservation) {
+  if (!reservationData) {
     notFound()
+  }
+
+  // Map plural payments to singular payment for the client
+  const reservation = {
+    ...reservationData,
+    payment: reservationData.payments?.[0] || null
   }
 
   // Authorization: owner or admin

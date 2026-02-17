@@ -126,103 +126,30 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
 
     try {
       setIsSubmitting(true)
-
       const startAt = new Date(selectedSlot.start)
-      const endAt = new Date(startAt.getTime() + durationSlots * 15 * 60 * 1000)
+      const startTimeValue = startAt.getHours() * 100 + startAt.getMinutes()
+      const bookingParam = encodeURIComponent(
+        JSON.stringify({
+          date: getLocalDateString(startAt),
+          startTime: startTimeValue,
+          duration: durationSlots / 4,
+        })
+      )
 
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          venueId: venue.id,
-          startAt: startAt.toISOString(),
-          endAt: endAt.toISOString(),
-          seatCount: seats,
-        }),
-      })
-
-      const data = await response.json().catch(() => null)
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          pendingReservationPayloadRef.current = {
-            venueId: venue.id,
-            startAt: startAt.toISOString(),
-            endAt: endAt.toISOString(),
-            seatCount: seats,
-          }
-          setShowSignInModal(true)
-          return
-        }
-        if (data?.code === "PAST_TIME") {
-          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
-        } else {
-          setSubmitError(data?.error || "Failed to create reservation.")
-        }
-        return
-      }
-
-      showToast("Reservation confirmed.", "success")
-
-      // Refresh reservations page if user is currently on it
-      if (pathname === "/reservations") {
-        router.refresh()
-      }
-
-      // Refresh slots to reflect new booking
-      setTimeout(() => {
-        setSelectedSlot(null)
-        setSubmitError(null)
-        // Force refetch by updating date to same value
-        setDate((prev) => prev)
-      }, 400)
+      showToast("Select seats to continue checkout.", "success")
+      router.push(`/venue/${venue.id}?seats=${seats}&booking=${bookingParam}`)
+      onClose()
     } catch (error) {
-      console.error("Error creating reservation:", error)
-      setSubmitError("Something went wrong while creating your reservation.")
+      console.error("Error starting checkout:", error)
+      setSubmitError("Something went wrong while starting checkout.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const retryReservation = useCallback(async () => {
-    const payload = pendingReservationPayloadRef.current
-    if (!payload) return
-    setIsSubmitting(true)
-    setSubmitError(null)
-    try {
-      const response = await fetch("/api/reservations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        if (data?.code === "PAST_TIME") {
-          setSubmitError(data.error || "This date/time is in the past. Please select a current or future time.")
-        } else {
-          setSubmitError(data?.error || "Failed to create reservation.")
-        }
-        pendingReservationPayloadRef.current = null
-        return
-      }
-      pendingReservationPayloadRef.current = null
-      showToast("Reservation confirmed.", "success")
-      if (pathname === "/reservations") router.refresh()
-      setTimeout(() => {
-        setSelectedSlot(null)
-        setSubmitError(null)
-        setDate((prev) => prev)
-      }, 400)
-    } catch (error) {
-      console.error("Error creating reservation:", error)
-      setSubmitError("Something went wrong while creating your reservation.")
-      pendingReservationPayloadRef.current = null
-    } finally {
-      setIsSubmitting(false)
-    }
-  }, [venue.id, pathname, router, showToast])
+    pendingReservationPayloadRef.current = null
+  }, [])
 
   const locationDisplay =
     venue.address ||
@@ -415,4 +342,3 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
     </>
   )
 }
-

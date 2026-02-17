@@ -137,10 +137,10 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
 
   return (
     <>
-      <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
+      <div className={cn("relative h-64 w-full overflow-hidden sm:h-72", className)}>
         <div
           ref={carouselRef}
-          className="flex h-full transition-transform duration-300 ease-out touch-pan-x"
+          className="flex h-full transition-transform duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] touch-pan-x"
           style={{
             transform: `translateX(-${currentIndex * 100}%) translateX(${translateX}px)`,
           }}
@@ -161,9 +161,8 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
               <img
                 src={image}
                 alt={`Venue image ${index + 1}`}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 onError={(e) => {
-                  // Fallback if image fails to load
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"
                 }}
@@ -172,8 +171,11 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
           ))}
         </div>
 
-        {/* Pagination dots - using divs instead of buttons to avoid nested button hydration error */}
-        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5">
+        {/* Gradient Overlay for bottom contrast */}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+
+        {/* Pagination dots */}
+        <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
           {images.map((_, index) => (
             <div
               key={index}
@@ -190,16 +192,17 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
                 }
               }}
               className={cn(
-                "h-1.5 cursor-pointer rounded-full transition-all",
+                "h-1 rounded-full transition-all duration-300",
                 index === currentIndex
-                  ? "w-6 bg-white"
-                  : "w-1.5 bg-white/50"
+                  ? "w-8 bg-white shadow-sm"
+                  : "w-1.5 bg-white/40 hover:bg-white/60"
               )}
               aria-label={`Go to image ${index + 1}`}
             />
           ))}
         </div>
       </div>
+
 
       {/* Full-screen gallery modal - only render if gallery is enabled */}
       {enableGallery && (

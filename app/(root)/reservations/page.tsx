@@ -14,7 +14,7 @@ export default async function ReservationsPage() {
   const userId = session.user.id
   const now = new Date()
 
-  const [upcomingCount, pastCount, cancelledCount, upcomingReservations] = await Promise.all([
+  const [upcomingCount, pastCount, cancelledCount, upcomingReservationsData] = await Promise.all([
     prisma.reservation.count({
       where: {
         userId,
@@ -50,7 +50,7 @@ export default async function ReservationsPage() {
             heroImageUrl: true,
             imageUrls: true,
             hourlySeatPrice: true,
-            // Still exclude heavy rulesText/googleMapsUrl for list
+            googleMapsUrl: true,
           },
         },
         seat: {
@@ -71,10 +71,23 @@ export default async function ReservationsPage() {
             seats: { select: { id: true } },
           },
         },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
       },
       orderBy: { startAt: "asc" },
     }),
   ])
+
+  // Map plural payments to singular payment for the client
+  const upcomingReservations = upcomingReservationsData.map(res => ({
+    ...res,
+    payment: res.payments?.[0] || null
+  }))
 
   return (
     <ReservationsClient

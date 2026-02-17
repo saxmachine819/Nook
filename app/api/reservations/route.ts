@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client"
 import { ReservationListItem } from "@/lib/types/reservations"
 import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
 import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
+import { buildBookingContext, computeBookingPrice, createReservationFromContext } from "@/lib/booking"
 import { enqueueNotification } from "@/lib/notification-queue"
 
 export async function GET(request: Request) {
@@ -60,13 +61,25 @@ export async function GET(request: Request) {
             seats: { select: { id: true } },
           },
         },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
       },
       orderBy: {
         startAt: tab === "upcoming" ? "asc" : "desc",
       },
     })
 
-    return NextResponse.json(reservations)
+    const mappedReservations = reservations.map(res => ({
+      ...res,
+      payment: res.payments?.[0] || null
+    }))
+
+    return NextResponse.json(mappedReservations)
   } catch (error) {
     console.error("Error in GET /api/reservations:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -94,62 +107,6 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { venueId, seatId, seatIds, tableId, seatCount: requestedSeatCount, startAt, endAt } = body as {
-      venueId?: string
-      seatId?: string
-      seatIds?: string[]
-      tableId?: string
-      seatCount?: number
-      startAt?: string
-      endAt?: string
-    }
-
-    // Support both individual seat bookings and group table bookings
-    const finalSeatIds = seatIds || (seatId ? [seatId] : [])
-    const isGroupBooking = tableId !== undefined && tableId !== null
-
-    if (!venueId || (!isGroupBooking && finalSeatIds.length === 0) || !startAt || !endAt) {
-      return NextResponse.json(
-        { error: "Missing required fields: venueId, seatId(s) or tableId, startAt, endAt." },
-        { status: 400 }
-      )
-    }
-
-    if (isGroupBooking && !requestedSeatCount) {
-      return NextResponse.json(
-        { error: "seatCount is required for group table bookings." },
-        { status: 400 }
-      )
-    }
-
-    const parsedStart = new Date(startAt)
-    const parsedEnd = new Date(endAt)
-
-    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
-      return NextResponse.json(
-        { error: "Invalid dates provided." },
-        { status: 400 }
-      )
-    }
-
-    if (parsedEnd <= parsedStart) {
-      return NextResponse.json(
-        { error: "End time must be after start time." },
-        { status: 400 }
-      )
-    }
-
-    // Validate that start time is not in the past
-    const now = new Date()
-    if (parsedStart < now) {
-      return NextResponse.json(
-        {
-          code: "PAST_TIME",
-          error: "This date/time is in the past. Please select a current or future time.",
-        },
-        { status: 400 }
-      )
-    }
 
     // Verify user exists in database and has accepted terms
     const userRecord = await prisma.user.findUnique({
@@ -175,360 +132,48 @@ export async function POST(request: Request) {
       )
     }
 
-    // Fetch venue to check hours and approval status
-    const venue = await prisma.venue.findUnique({
-      where: { id: venueId },
-      include: {
-        venueHours: {
-          orderBy: {
-            dayOfWeek: "asc",
-          },
-        },
-      },
-    })
-
-    if (!venue) {
-      return NextResponse.json(
-        { error: "Venue not found." },
-        { status: 404 }
-      )
+    // Additional guards from main (canonical hours and booking-guard)
+    const { venueId, startAt, endAt } = body
+    if (venueId && startAt && endAt) {
+      try {
+        const canonicalHours = await getCanonicalVenueHours(venueId)
+        if (canonicalHours) {
+          const isWithin = isReservationWithinCanonicalHours(
+            new Date(startAt),
+            new Date(endAt),
+            canonicalHours
+          )
+          if (!isWithin) {
+            return NextResponse.json(
+              { error: "Reservation is outside of venue's operating hours." },
+              { status: 400 }
+            )
+          }
+        }
+        
+        await canBookVenue(venueId, { userId: session.user.id })
+      } catch (err) {
+        if (err instanceof BookingNotAllowedError) {
+          return NextResponse.json({ error: err.message }, { status: 403 })
+        }
+        // Other errors might be venue not found, etc., which buildBookingContext will handle
+      }
     }
 
-    // Only allow booking for APPROVED venues
-    if (venue.onboardingStatus !== "APPROVED") {
-      return NextResponse.json(
-        { error: "This venue is not available for booking." },
-        { status: 403 }
-      )
-    }
-
-    // Enforce venue/owner status (ACTIVE, not deleted/paused; owner not deleted)
+    let context: Awaited<ReturnType<typeof buildBookingContext>>
     try {
-      await canBookVenue(venueId, {
-        userId: session.user.id,
-        timeRange: { startAt: parsedStart, endAt: parsedEnd },
-      })
-    } catch (err) {
-      if (err instanceof BookingNotAllowedError) {
-        return NextResponse.json(
-          { error: err.publicMessage ?? err.message },
-          { status: 403 }
-        )
-      }
-      throw err
-    }
-
-    // Validate reservation window against canonical hours (single shared hours engine)
-    const canonical = await getCanonicalVenueHours(venueId)
-    if (canonical && canonical.weeklyHours.length > 0) {
-      const hoursCheck = isReservationWithinCanonicalHours(parsedStart, parsedEnd, canonical)
-      if (!hoursCheck.isValid) {
-        return NextResponse.json(
-          { error: hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours." },
-          { status: 400 }
-        )
-      }
-    }
-
-    let reservations: any[]
-
-    if (isGroupBooking) {
-      // Group table booking
-      // Reject if tableId is actually a seat ID (prevents ID type mix-up)
-      const seatWithSameId = await prisma.seat.findUnique({
-        where: { id: tableId },
-      })
-      if (seatWithSameId) {
-        return NextResponse.json(
-          {
-            error:
-              "Invalid table ID. Did you mean to book a specific seat? Please select a table from the booking options.",
-          },
-          { status: 400 }
-        )
-      }
-
-      const table = await prisma.table.findUnique({
-        where: { id: tableId },
-        include: {
-          venue: {
-            include: {
-              venueHours: {
-                orderBy: {
-                  dayOfWeek: "asc",
-                },
-              },
-            },
-          },
-          seats: true,
-        },
-      })
-
-      if (!table) {
-        return NextResponse.json(
-          { error: "Table not found." },
-          { status: 404 }
-        )
-      }
-
-      if (table.venueId !== venueId) {
-        return NextResponse.json(
-          { error: "Table does not belong to this venue." },
-          { status: 400 }
-        )
-      }
-
-      if (table.isActive === false) {
-        return NextResponse.json(
-          { error: "This table is no longer available for booking." },
-          { status: 403 }
-        )
-      }
-
-      if (table.bookingMode !== "group") {
-        return NextResponse.json(
-          { error: "This table is not available for group booking." },
-          { status: 400 }
-        )
-      }
-
-      if (table.seats.length < requestedSeatCount!) {
-        return NextResponse.json(
-          { error: `This table only has ${table.seats.length} seat${table.seats.length > 1 ? "s" : ""}.` },
-          { status: 400 }
-        )
-      }
-
-      // Use transaction to prevent race condition
-      const reservation = await prisma.$transaction(async (tx) => {
-        // Check if table is available with row-level locking
-        const overlapping = await tx.reservation.findFirst({
-          where: {
-            tableId: tableId,
-            seatId: null,
-            status: {
-              not: "cancelled",
-            },
-            startAt: {
-              lt: parsedEnd,
-            },
-            endAt: {
-              gt: parsedStart,
-            },
-          },
-        })
-
-        if (overlapping) {
-          throw new Error("TABLE_UNAVAILABLE")
-        }
-
-        // Create reservation atomically
-        return await tx.reservation.create({
-        data: {
-          venueId: venueId,
-          tableId: tableId,
-          seatId: null, // Group bookings have no seatId
-          userId: session.user.id,
-          startAt: parsedStart,
-          endAt: parsedEnd,
-          seatCount: requestedSeatCount!,
-          status: "active",
-        },
-        include: {
-          venue: {
-            include: {
-              tables: {
-                include: {
-                  seats: true,
-                },
-              },
-              owner: { select: { email: true } },
-            },
-          },
-          table: {
-            select: {
-              id: true,
-              name: true,
-              seatCount: true,
-              bookingMode: true,
-              tablePricePerHour: true,
-              directionsText: true,
-              seats: true,
-            },
-          },
-          seat: {
-            include: {
-              table: {
-                select: {
-                  id: true,
-                  name: true,
-                  directionsText: true,
-                },
-              },
-            },
-          },
-        },
-      })
-      })
-
-      reservations = [reservation]
-    } else {
-      // Individual seat booking
-      // Fetch all seats and validate they exist and belong to venue
-      const seats = await prisma.seat.findMany({
-        where: {
-          id: {
-            in: finalSeatIds,
-          },
-        },
-        include: {
-          table: {
-            include: {
-              venue: {
-                include: {
-                  venueHours: {
-                    orderBy: {
-                      dayOfWeek: "asc",
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      })
-
-      if (seats.length !== finalSeatIds.length) {
-        return NextResponse.json(
-          { error: "One or more seats not found." },
-          { status: 404 }
-        )
-      }
-
-      // Validate all seats belong to the same venue and are active
-      for (const seat of seats) {
-        if (seat.table.venueId !== venueId) {
-          return NextResponse.json(
-            { error: "One or more seats do not belong to this venue." },
-            { status: 400 }
-          )
-        }
-        if (seat.isActive === false || seat.table.isActive === false) {
-          return NextResponse.json(
-            { error: "One or more seats are no longer available for booking." },
-            { status: 403 }
-          )
-        }
-      }
-
-      // Use transaction to prevent race condition
-      const firstSeat = seats[0]
-      const reservation = await prisma.$transaction(async (tx) => {
-        // Check per-seat availability with row-level locking
-        const overlapping = await tx.reservation.findFirst({
-          where: {
-            seatId: {
-              in: finalSeatIds,
-            },
-            status: {
-              not: "cancelled",
-            },
-            startAt: {
-              lt: parsedEnd,
-            },
-            endAt: {
-              gt: parsedStart,
-            },
-          },
-        })
-
-        if (overlapping) {
-          throw new Error("SEAT_UNAVAILABLE")
-        }
-
-        // Create reservation atomically
-        return await tx.reservation.create({
-        data: {
-          venueId: venueId,
-          tableId: firstSeat.tableId,
-          seatId: firstSeat.id, // Reference to first seat
-          userId: session.user.id,
-          startAt: parsedStart,
-          endAt: parsedEnd,
-          seatCount: finalSeatIds.length, // Total number of seats booked
-          status: "active",
-        },
-        include: {
-          venue: {
-            include: {
-              tables: {
-                include: {
-                  seats: true,
-                },
-              },
-              owner: { select: { email: true } },
-            },
-          },
-          table: {
-            select: {
-              id: true,
-              name: true,
-              seatCount: true,
-              bookingMode: true,
-              tablePricePerHour: true,
-              directionsText: true,
-              seats: true,
-            },
-          },
-          seat: {
-            include: {
-              table: {
-                select: {
-                  id: true,
-                  name: true,
-                  directionsText: true,
-                },
-              },
-            },
-          },
-        },
-      })
-      })
-
-      reservations = [reservation]
-    }
-
-    // Calculate total price
-    const hours =
-      (parsedEnd.getTime() - parsedStart.getTime()) / (1000 * 60 * 60)
-    
-    let totalPricePerHour = 0
-    let seatCountForAverage = 1
-    
-    if (isGroupBooking) {
-      const table = await prisma.table.findUnique({
-        where: { id: tableId },
-        include: {
-          seats: true,
-        },
-      })
-      totalPricePerHour = table?.tablePricePerHour || 0
-      seatCountForAverage = table?.seats.length || 1
-    } else {
-      // For individual seat bookings, sum all selected seat prices
-      const seats = await prisma.seat.findMany({
-        where: { id: { in: finalSeatIds } },
-      })
-      totalPricePerHour = seats.reduce(
-        (sum, seat) => sum + seat.pricePerHour,
-        0
+      context = await buildBookingContext(body, session.user.id)
+    } catch (err: any) {
+      const status = err?.status ?? 400
+      const code = err?.code
+      return NextResponse.json(
+        { error: err?.message || "Failed to create reservation.", ...(code ? { code } : {}) },
+        { status }
       )
-      seatCountForAverage = finalSeatIds.length
     }
 
-    // Return the reservation (now always a single reservation)
-    // The confirmation modal will show the total price
-    const reservation = reservations[0]
+    const reservation = await createReservationFromContext(context, session.user.id)
+    const { totalPricePerHour, seatCountForAverage } = computeBookingPrice(context)
 
     // Enqueue booking confirmation email (no inline send).
     if (userRecord.email?.trim()) {
@@ -605,21 +250,6 @@ export async function POST(request: Request) {
       stack: error?.stack,
       name: error?.name,
     })
-
-    // Handle race condition errors from transaction
-    if (error?.message === "TABLE_UNAVAILABLE") {
-      return NextResponse.json(
-        { error: "This table is not available for that time." },
-        { status: 409 }
-      )
-    }
-
-    if (error?.message === "SEAT_UNAVAILABLE") {
-      return NextResponse.json(
-        { error: "One or more seats are not available for that time." },
-        { status: 409 }
-      )
-    }
 
     // Check for foreign key constraint errors
     if (error?.code === "P2003") {
