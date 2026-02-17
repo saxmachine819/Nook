@@ -22,7 +22,7 @@ describe('GET /api/venues/[id]/availability', () => {
         Object.keys(delegate).forEach((method) => {
           const fn = (delegate as Record<string, unknown>)[method]
           if (typeof fn === 'function' && typeof (fn as { mockReset?: () => void }).mockReset === 'function') {
-            ;(fn as { mockReset: () => void }).mockReset()
+            ;(fn as any).mockReset()
           }
         })
       }

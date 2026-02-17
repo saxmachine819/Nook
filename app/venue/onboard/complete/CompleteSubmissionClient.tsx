@@ -1,20 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { CheckCircle2 } from "lucide-react"
+import type { VenueSummary } from "./page"
 
 interface CompleteSubmissionClientProps {
   venueId: string
   venueName: string
+  venueSummary: VenueSummary
 }
 
-export function CompleteSubmissionClient({ venueId, venueName }: CompleteSubmissionClientProps) {
-  const router = useRouter()
+export function CompleteSubmissionClient({
+  venueId,
+  venueName,
+  venueSummary,
+}: CompleteSubmissionClientProps) {
   const { showToast, ToastComponent } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -97,12 +101,50 @@ export function CompleteSubmissionClient({ venueId, venueName }: CompleteSubmiss
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Venue: {venueName}</p>
-            <p className="text-sm text-muted-foreground">
-              Once submitted, your venue request will be reviewed by our team.
-            </p>
+          <p className="text-sm text-muted-foreground">
+            Here's what we'll send for review. You can change any of this later from your venue
+            dashboard.
+          </p>
+
+          <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
+            <section>
+              <h3 className="text-sm font-medium">Venue info</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {venueSummary.venueInfo.name} · {venueSummary.venueInfo.addressLine}
+              </p>
+            </section>
+            <section>
+              <h3 className="text-sm font-medium">Photos & rules</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {venueSummary.photosAndRules.photoCount} photo
+                {venueSummary.photosAndRules.photoCount !== 1 ? "s" : ""} ·{" "}
+                {venueSummary.photosAndRules.rulesSummary}
+                {venueSummary.photosAndRules.tagsCount > 0 &&
+                  ` · ${venueSummary.photosAndRules.tagsCount} tag${venueSummary.photosAndRules.tagsCount !== 1 ? "s" : ""}`}
+              </p>
+            </section>
+            <section>
+              <h3 className="text-sm font-medium">Tables & seats</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {venueSummary.tablesAndSeats.tableCount} table
+                {venueSummary.tablesAndSeats.tableCount !== 1 ? "s" : ""} ·{" "}
+                {venueSummary.tablesAndSeats.totalSeats} seat
+                {venueSummary.tablesAndSeats.totalSeats !== 1 ? "s" : ""}
+              </p>
+            </section>
+            <section>
+              <h3 className="text-sm font-medium">QR codes</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {venueSummary.qr.qrAssetCount > 0
+                  ? `${venueSummary.qr.qrAssetCount} QR code${venueSummary.qr.qrAssetCount !== 1 ? "s" : ""} ready`
+                  : "No QR codes assigned yet"}
+              </p>
+            </section>
           </div>
+
+          <p className="text-sm text-muted-foreground">
+            Once submitted, your venue request will be reviewed by our team.
+          </p>
 
           <Button
             onClick={handleSubmit}

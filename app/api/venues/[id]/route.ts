@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { persistVenuePhotos } from "@/lib/persist-venue-photos"
 import { canEditVenue } from "@/lib/venue-auth"
-import { parseGooglePeriodsToVenueHours, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
+import { parseGooglePeriodsToVenueHoursWithTimezone, syncVenueHoursFromGoogle } from "@/lib/venue-hours"
 
 export async function PATCH(
   request: NextRequest,
@@ -48,6 +50,13 @@ export async function PATCH(
     if (!body.address) {
       return NextResponse.json(
         { error: "Missing required fields: address is required" },
+        { status: 400 }
+      )
+    }
+
+    if (body.ownerPhone !== undefined && (typeof body.ownerPhone !== "string" || !body.ownerPhone.trim())) {
+      return NextResponse.json(
+        { error: "Owner phone number is required" },
         { status: 400 }
       )
     }
@@ -106,6 +115,12 @@ export async function PATCH(
       ? (typeof body.longitude === "string" ? parseFloat(body.longitude) : body.longitude)
       : null
 
+    const persisted = await persistVenuePhotos({
+      venueId,
+      imageUrls: body.imageUrls,
+      heroImageUrl: body.heroImageUrl,
+    })
+
     // Update venue and tables/seats in a transaction
     const updatedVenue = await prisma.$transaction(async (tx) => {
       // Update venue fields (name is locked after creation, so don't update it)
@@ -129,13 +144,17 @@ export async function PATCH(
           rulesText: body.rulesText?.trim() || null,
           tags: Array.isArray(body.tags) ? body.tags : [],
           description: body.description?.trim() || null,
+          ...(body.ownerFirstName !== undefined && { ownerFirstName: body.ownerFirstName?.trim() || null }),
+          ...(body.ownerLastName !== undefined && { ownerLastName: body.ownerLastName?.trim() || null }),
+          ...(body.ownerPhone !== undefined && { ownerPhone: body.ownerPhone.trim() }),
           googlePlaceId: body.googlePlaceId?.trim() || null,
           googleMapsUrl: body.googleMapsUrl?.trim() || null,
           openingHoursJson: body.openingHoursJson ?? undefined,
           googlePhotoRefs: body.googlePhotoRefs || null,
-          heroImageUrl: body.heroImageUrl?.trim() || null,
+          placePhotoUrls: Array.isArray(body.placePhotoUrls) ? body.placePhotoUrls : undefined,
+          heroImageUrl: persisted.heroImageUrl,
           ...hoursSourceUpdate,
-          imageUrls: body.imageUrls || null,
+          imageUrls: persisted.imageUrls.length > 0 ? persisted.imageUrls : Prisma.JsonNull,
         },
       })
 
@@ -216,9 +235,10 @@ export async function PATCH(
           if (openingHours && openingHours.periods && Array.isArray(openingHours.periods) && openingHours.periods.length > 0) {
             const current = await tx.venue.findUnique({
               where: { id: venueId },
-              select: { hoursSource: true },
+              select: { hoursSource: true, timezone: true },
             })
-            const hoursData = parseGooglePeriodsToVenueHours(openingHours.periods, venueId, "google")
+            const timezone = current?.timezone || "America/New_York"
+            const hoursData = parseGooglePeriodsToVenueHoursWithTimezone(openingHours.periods, venueId, timezone, "google")
             await syncVenueHoursFromGoogle(tx, venueId, hoursData, current?.hoursSource ?? null)
             if (body.hoursSource === "google") {
               await tx.venue.update({

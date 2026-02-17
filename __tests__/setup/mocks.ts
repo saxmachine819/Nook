@@ -5,6 +5,23 @@ import { vi } from 'vitest'
  * This allows us to mock database operations in tests
  */
 export function createMockPrisma() {
+  const reservationCreateFn = vi.fn((args: any) => {
+    const data = args.data
+    return Promise.resolve({
+      id: 'test-reservation-id',
+      ...data,
+      venue: data.venueId ? {
+        id: data.venueId,
+        name: 'Test Venue',
+        owner: { email: 'owner@example.com' },
+        tables: [],
+        timezone: 'UTC',
+      } : undefined,
+      table: data.tableId ? { id: data.tableId, name: 'Test Table' } : undefined,
+      seat: data.seatId ? { id: data.seatId, table: { id: 'table-1', name: 'Table 1' } } : undefined,
+    })
+  })
+
   return {
     user: {
       findUnique: vi.fn(),
@@ -34,9 +51,10 @@ export function createMockPrisma() {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
-      create: vi.fn(),
+      create: reservationCreateFn,
       update: vi.fn(),
       delete: vi.fn(),
+      count: vi.fn(),
     },
     seatBlock: {
       findUnique: vi.fn(),
@@ -74,13 +92,17 @@ export function createMockPrisma() {
       deleteMany: vi.fn(),
     },
     $transaction: vi.fn((callback) => {
-      // Mock transaction: execute callback with a mock transaction client
       const tx = {
         user: { findUnique: vi.fn(), update: vi.fn() },
         venue: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-        reservation: { findMany: vi.fn(), updateMany: vi.fn() },
+        reservation: {
+          findMany: vi.fn(),
+          findFirst: vi.fn(),
+          updateMany: vi.fn(),
+          create: reservationCreateFn,
+        },
         table: { updateMany: vi.fn() },
-        seat: { updateMany: vi.fn() },
+        seat: { updateMany: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
         auditLog: { create: vi.fn() },
         favoriteVenue: {
           findUnique: vi.fn(),

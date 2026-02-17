@@ -49,7 +49,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -68,7 +68,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -89,7 +89,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({}),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
 
       expect(response.status).toBe(200)
       expect(mockPrisma.qRAsset.createMany).toHaveBeenCalled()
@@ -102,7 +102,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 'invalid' }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -114,7 +114,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10.5 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -126,7 +126,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 5 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -138,7 +138,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 0 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -150,7 +150,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10000 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -171,7 +171,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -189,7 +189,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -210,7 +210,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      await POST(request)
+      await POST(request as any)
 
       // Should check for existing tokens
       expect(mockPrisma.qRAsset.findMany).toHaveBeenCalled()
@@ -230,7 +230,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: JSON.stringify({ count: 10 }),
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       expect(response.status).toBe(500)
@@ -242,7 +242,7 @@ describe('POST /api/admin/qr-assets/batch-create', () => {
         method: 'POST',
         body: 'invalid json',
       })
-      const response = await POST(request)
+      const response = await POST(request as any)
       const data = await response.json()
 
       // Should default to 100 when body parsing fails

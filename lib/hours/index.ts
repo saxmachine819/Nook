@@ -71,24 +71,28 @@ export async function getCanonicalVenueHours(venueId: string): Promise<Canonical
  * This eliminates N+1 queries when fetching hours for search results.
  */
 export async function batchGetCanonicalVenueHours(
-  venueIds: string[]
+  venueIds: string[],
+  preFetchedVenues?: any[]
 ): Promise<Map<string, CanonicalVenueHours>> {
   if (venueIds.length === 0) {
     return new Map()
   }
 
-  const venues = await prisma.venue.findMany({
-    where: { id: { in: venueIds } },
-    select: {
-      id: true,
-      timezone: true,
-      hoursSource: true,
-      venueHours: {
-        orderBy: { dayOfWeek: "asc" },
-        select: { dayOfWeek: true, isClosed: true, openTime: true, closeTime: true, source: true },
+  let venues = preFetchedVenues;
+  if (!venues) {
+    venues = await prisma.venue.findMany({
+      where: { id: { in: venueIds } },
+      select: {
+        id: true,
+        timezone: true,
+        hoursSource: true,
+        venueHours: {
+          orderBy: { dayOfWeek: "asc" },
+          select: { dayOfWeek: true, isClosed: true, openTime: true, closeTime: true, source: true },
+        },
       },
-    },
-  })
+    })
+  }
 
   const result = new Map<string, CanonicalVenueHours>()
 

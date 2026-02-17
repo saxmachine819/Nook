@@ -60,6 +60,9 @@ export function VenueDashboardClient() {
           <p className="text-sm text-muted-foreground">
             {isAdmin ? "Admin: showing all venues" : "Manage your venues"}
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            QR Code Ordering is in the ops console — click <strong>Manage</strong> on a venue to open it.
+          </p>
           {userInfo && (
             <div className="mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <div>

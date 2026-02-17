@@ -3,91 +3,77 @@ import { prisma } from "@/lib/prisma"
 import { redirect, notFound } from "next/navigation"
 import { isAdmin } from "@/lib/venue-auth"
 import { ReservationDetailClient } from "./ReservationDetailClient"
-
-async function getReservation(reservationId: string, userId: string) {
-  const reservation = await prisma.reservation.findUnique({
-    where: { id: reservationId },
-    include: {
-      venue: {
-        select: {
-          id: true,
-          name: true,
-          address: true,
-          heroImageUrl: true,
-          imageUrls: true,
-          hourlySeatPrice: true,
-          googleMapsUrl: true,
-          rulesText: true,
-          tags: true,
-        },
-      },
-      seat: {
-        include: {
-          table: {
-            select: {
-              name: true,
-              directionsText: true,
-            },
-          },
-        },
-      },
-      table: {
-        select: {
-          name: true,
-          seatCount: true,
-          tablePricePerHour: true,
-          directionsText: true,
-          seats: {
-            select: { id: true },
-          },
-        },
-      },
-      user: {
-        select: {
-          id: true,
-          email: true,
-        },
-      },
-      payment: {
-        include: {
-          refundRequests: true,
-        },
-      },
-    },
-  })
-
-  if (!reservation) {
-    return null
-  }
-
-  // Authorization: owner or admin
-  const session = await auth()
-  const isOwner = reservation.userId === userId
-  const userIsAdmin = session?.user ? isAdmin(session.user) : false
-
-  if (!isOwner && !userIsAdmin) {
-    return null
-  }
-
-  return reservation
-}
+import { ReservationDetail } from "@/lib/types/reservations"
 
 export default async function ReservationDetailPage({
   params,
 }: {
   params: { id: string }
 }) {
-  const session = await auth()
+  const [session, reservationData] = await Promise.all([
+    auth(),
+    prisma.reservation.findUnique({
+      where: { id: params.id },
+      include: {
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            heroImageUrl: true,
+            hourlySeatPrice: true,
+            // Fetch these async later: imageUrls, googleMapsUrl, rulesText, tags
+          },
+        },
+        seat: {
+          select: {
+            id: true,
+            label: true,
+            position: true,
+            pricePerHour: true,
+            table: { select: { name: true } },
+          },
+        },
+        table: {
+          select: {
+            name: true,
+            seatCount: true,
+            tablePricePerHour: true,
+            // Fetch async: directionsText, seats
+          },
+        },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
+      },
+    }),
+  ])
 
   if (!session?.user?.id) {
     redirect("/profile?callbackUrl=/reservations/" + params.id)
   }
 
-  const reservation = await getReservation(params.id, session.user.id)
-
-  if (!reservation) {
+  if (!reservationData) {
     notFound()
   }
 
-  return <ReservationDetailClient reservation={reservation} />
+  // Map plural payments to singular payment for the client
+  const reservation = {
+    ...reservationData,
+    payment: reservationData.payments?.[0] || null
+  }
+
+  // Authorization: owner or admin
+  const isOwner = reservation.userId === session.user.id
+  const userIsAdmin = isAdmin(session.user)
+
+  if (!isOwner && !userIsAdmin) {
+    notFound() // Or redirect to unauthorized
+  }
+
+  return <ReservationDetailClient reservation={reservation as unknown as ReservationDetail} />
 }

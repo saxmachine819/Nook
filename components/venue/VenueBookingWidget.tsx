@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
@@ -9,7 +9,9 @@ import { SeatCard } from "@/components/venue/SeatCard"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 import { SignInModal } from "@/components/auth/SignInModal"
 import { cn } from "@/lib/utils"
-import { roundUpToNext15Minutes, getLocalDateString } from "@/lib/availability-utils"
+import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } from "@/lib/availability-utils"
+import { useVenueFavorites } from "@/lib/hooks"
+import type { CanonicalVenueHours } from "@/lib/hours"
 
 interface Table {
   id: string
@@ -30,6 +32,7 @@ interface VenueBookingWidgetProps {
   tables: Table[]
   favoritedTableIds?: Set<string>
   favoritedSeatIds?: Set<string>
+  canonicalHours?: CanonicalVenueHours | null
 }
 
 interface AvailableSeat {
@@ -72,9 +75,21 @@ interface UnavailableGroupTable extends AvailableGroupTable {
 export function VenueBookingWidget({
   venueId,
   tables,
-  favoritedTableIds = new Set(),
-  favoritedSeatIds = new Set(),
+  favoritedTableIds: initialFavoritedTableIds = new Set(),
+  favoritedSeatIds: initialFavoritedSeatIds = new Set(),
+  canonicalHours,
 }: VenueBookingWidgetProps) {
+  const { data: favoritesData } = useVenueFavorites(venueId)
+  
+  const favoritedTableIds = useMemo(() => {
+    if (favoritesData) return new Set(favoritesData.tables)
+    return initialFavoritedTableIds
+  }, [favoritesData, initialFavoritedTableIds])
+
+  const favoritedSeatIds = useMemo(() => {
+    if (favoritesData) return new Set(favoritesData.seats)
+    return initialFavoritedSeatIds
+  }, [favoritesData, initialFavoritedSeatIds])
   const router = useRouter()
   const searchParams = useSearchParams()
   const pathname = usePathname()

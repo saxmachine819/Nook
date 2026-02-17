@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { canEditVenue, isAdmin } from "@/lib/venue-auth"
 import { allocateOneQrAsset } from "@/lib/qr-asset-allocator"
 
+// Supports seat, table, area, and venue-level QR. Venue QR: resourceType=venue, resourceId=null, one active per venue.
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -29,14 +31,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!["seat", "table", "area"].includes(resourceType)) {
+    if (!["seat", "table", "area", "venue"].includes(resourceType)) {
       return NextResponse.json(
-        { error: "resourceType must be 'seat', 'table', or 'area'" },
+        { error: "resourceType must be 'seat', 'table', 'area', or 'venue'" },
         { status: 400 }
       )
     }
 
-    if (resourceType !== "area" && !resourceId) {
+    if (resourceType !== "area" && resourceType !== "venue" && !resourceId) {
       return NextResponse.json(
         { error: `resourceId is required for resourceType '${resourceType}'` },
         { status: 400 }

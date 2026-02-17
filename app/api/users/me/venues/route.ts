@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { isAdmin } from "@/lib/venue-auth"
 import { claimVenueMembershipForUser } from "@/lib/venue-members"
+import { isAdmin } from "@/lib/venue-auth"
 
 function thumbnailForVenue(venue: {
   heroImageUrl: string | null
@@ -31,47 +31,52 @@ function thumbnailForVenue(venue: {
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const wantDebug = searchParams.get("debug") === "1" || process.env.NODE_ENV === "development"
-
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Session may not include email in some flows; fetch from DB so claim and member query work
-    let emailForClaim: string | null = session.user.email ?? null
-    if (!emailForClaim) {
+    const { searchParams } = new URL(request.url)
+    const mode = searchParams.get("mode")
+    const isCountOnly = mode === "count"
+
+    let email = session.user.email
+    if (!email) {
       const dbUser = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: { email: true },
       })
-      emailForClaim = dbUser?.email ?? null
+      email = dbUser?.email ?? null
     }
 
+    const admin = isAdmin({ email })
+
+    // If count only and admin, return global count quickly
+    if (isCountOnly && admin) {
+      const count = await prisma.venue.count({
+        where: { status: { not: "DELETED" } },
+      })
+      return NextResponse.json({ count, isAdmin: true })
+    }
+
+    // Always claim/sync roles for detailed view OR non-admin count
     await claimVenueMembershipForUser({
       id: session.user.id,
-      email: emailForClaim ?? undefined,
+      email: email ?? undefined,
     })
 
-    const admin = isAdmin(session.user)
     let venueIds: string[] | undefined
-    let memberCount = 0
-    let ownedCount = 0
     if (!admin) {
-      const memberWhere = {
-        OR: [
-          { userId: session.user.id },
-          ...(emailForClaim
-            ? [{ email: { equals: emailForClaim, mode: "insensitive" as const } }]
-            : []),
-        ],
-      }
       const [memberRows, ownedVenues] = await Promise.all([
         prisma.venueMember.findMany({
-          where: memberWhere,
+          where: {
+            OR: [
+              { userId: session.user.id },
+              ...(email ? [{ email: { equals: email, mode: "insensitive" as const } }] : []),
+            ],
+          },
           select: { venueId: true },
           distinct: ["venueId"],
         }),
@@ -80,21 +85,21 @@ export async function GET(request: Request) {
           select: { id: true },
         }),
       ])
-      let allMemberVenueIds = memberRows.map((m) => m.venueId)
-      if (emailForClaim) {
-        const byEmailRows = await prisma.venueMember.findMany({
-          where: { email: { equals: emailForClaim, mode: "insensitive" } },
-          select: { venueId: true },
-          distinct: ["venueId"],
-        })
-        allMemberVenueIds = Array.from(new Set([...allMemberVenueIds, ...byEmailRows.map((m) => m.venueId)]))
-      }
-      memberCount = allMemberVenueIds.length
-      ownedCount = ownedVenues.length
-      venueIds = Array.from(
-        new Set([...allMemberVenueIds, ...ownedVenues.map((v) => v.id)])
-      )
+      venueIds = Array.from(new Set([
+        ...memberRows.map((m) => m.venueId),
+        ...ownedVenues.map((v) => v.id),
+      ]))
     }
+
+    if (isCountOnly) {
+      // Non-admin count logic
+      return NextResponse.json({ 
+        count: (admin ? await prisma.venue.count({ where: { status: { not: "DELETED" } } }) : venueIds!.length), 
+        isAdmin: admin 
+      })
+    }
+
+    // Detailed Dashboard View
     const venues =
       !admin && venueIds!.length === 0
         ? []
@@ -103,7 +108,15 @@ export async function GET(request: Request) {
               status: { not: "DELETED" },
               ...(admin ? {} : { id: { in: venueIds! } }),
             },
-            select: { id: true, name: true, address: true, heroImageUrl: true, imageUrls: true, onboardingStatus: true, pausedAt: true },
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              heroImageUrl: true,
+              imageUrls: true,
+              onboardingStatus: true,
+              pausedAt: true,
+            },
           })
 
     const list = venues.map((v) => ({
@@ -115,36 +128,15 @@ export async function GET(request: Request) {
       pausedAt: v.pausedAt,
     }))
 
-    const payload: {
-      venues: typeof list
-      isAdmin: boolean
-      userId: string
-      email: string | null
-      _debug?: {
-        admin: boolean
-        memberCount: number
-        ownedCount: number
-        venueIds: string[]
-        requestedCount: number
-        returnedCount: number
-      }
-    } = {
+    // Sort by name case-insensitive
+    list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+
+    return NextResponse.json({
       venues: list,
       isAdmin: admin,
       userId: session.user.id,
-      email: session.user.email ?? emailForClaim ?? null,
-    }
-    if (wantDebug) {
-      payload._debug = {
-        admin,
-        memberCount,
-        ownedCount,
-        venueIds: venueIds ?? [],
-        requestedCount: venueIds?.length ?? 0,
-        returnedCount: venues.length,
-      }
-    }
-    return NextResponse.json(payload)
+      email: email,
+    })
   } catch (e) {
     console.error("GET /api/users/me/venues:", e)
     return NextResponse.json(

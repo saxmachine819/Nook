@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/components/ui/toast"
 import { SignInModal } from "@/components/auth/SignInModal"
+import { useVenueFavorites } from "./use-venue-favorites"
 
 type FavoriteType = "venue" | "table" | "seat"
 
@@ -114,8 +115,17 @@ export function useFavoriteToggle({
     />
   ) : null
 
+  const { data: clientFavs } = useVenueFavorites(venueId ?? itemId, type === "venue")
+  const clientFavorited = clientFavs?.venue
+  
+  const effectiveFavorited = useMemo(() => {
+    if (type === "venue" && clientFavorited !== undefined) return clientFavorited
+    // Optimization: we could also check tables/seats here if clientFavorited with detailed data was used
+    return isFavorited
+  }, [type, clientFavorited, isFavorited])
+
   return {
-    isFavorited,
+    isFavorited: effectiveFavorited,
     toggleFavorite,
     isToggling,
     SignInModalComponent,

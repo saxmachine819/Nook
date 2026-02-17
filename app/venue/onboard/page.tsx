@@ -11,5 +11,5 @@ export default async function VenueOnboardPage() {
   }
 
   // User is authenticated, render the client component
-  return <VenueOnboardClient />
+  return <VenueOnboardClient initialOwnerName={session.user.name ?? undefined} />
 }

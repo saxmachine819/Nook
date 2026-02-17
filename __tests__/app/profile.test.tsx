@@ -1,11 +1,14 @@
 /**
  * Profile Page Tests
- * 
+ *
  * Note: These tests require jsdom environment to run React component tests.
  * To run these tests, configure vitest to use jsdom for this test file,
  * or run with: vitest --environment=jsdom
  */
 
+// @vitest-environment jsdom
+
+import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import ProfilePage from '@/app/(root)/profile/page'
@@ -34,14 +37,22 @@ vi.mock('next/navigation', () => ({
   useRouter: () => mockUseRouter(),
 }))
 
-// Mock fetch globally
+const mockUseMe = vi.fn()
+const mockUseMyVenuesCount = vi.fn()
+
+vi.mock('@/lib/hooks', () => ({
+  useMe: (enabled: boolean) => mockUseMe(enabled),
+  useMyVenuesCount: (enabled: boolean) => mockUseMyVenuesCount(enabled),
+}))
+
 global.fetch = vi.fn()
 
 describe('ProfilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset fetch mock
     vi.mocked(global.fetch).mockReset()
+    mockUseMe.mockReset()
+    mockUseMyVenuesCount.mockReset()
   })
 
   describe('when user is not authenticated', () => {
@@ -50,6 +61,8 @@ describe('ProfilePage', () => {
         data: null,
         status: 'unauthenticated',
       })
+      mockUseMe.mockReturnValue({ data: null, isLoading: false })
+      mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: false })
 
       render(<ProfilePage />)
 
@@ -72,18 +85,15 @@ describe('ProfilePage', () => {
         data: mockSession,
         status: 'authenticated',
       })
+      mockUseMe.mockReturnValue({ data: { isAdmin: false }, isLoading: false })
+      mockUseMyVenuesCount.mockReturnValue({ data: { count: 0 }, isLoading: false })
     })
 
     it('shows empty state when user has 0 venues', async () => {
-      // Mock fetch to return empty venues array
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ venues: [] }),
-      } as Response)
+      mockUseMyVenuesCount.mockReturnValue({ data: { count: 0 }, isLoading: false })
 
       render(<ProfilePage />)
 
-      // Wait for venues to load
       await waitFor(() => {
         expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
       })
@@ -100,20 +110,7 @@ describe('ProfilePage', () => {
     })
 
     it('shows dashboard button when user has venues', async () => {
-      const mockVenues = [
-        {
-          id: 'venue-1',
-          name: 'Test Venue',
-          address: '123 Test St',
-          thumbnail: null,
-        },
-      ]
-
-      // Mock fetch to return venues
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ venues: mockVenues }),
-      } as Response)
+      mockUseMyVenuesCount.mockReturnValue({ data: { count: 1 }, isLoading: false })
 
       render(<ProfilePage />)
 
@@ -128,8 +125,7 @@ describe('ProfilePage', () => {
     })
 
     it('handles fetch error gracefully', async () => {
-      // Mock fetch to fail
-      vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'))
+      mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: false, isError: true })
 
       render(<ProfilePage />)
 
@@ -140,11 +136,7 @@ describe('ProfilePage', () => {
     })
 
     it('handles non-ok response gracefully', async () => {
-      // Mock fetch to return non-ok response
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({}),
-      } as Response)
+      mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: false, isError: true })
 
       render(<ProfilePage />)
 
@@ -155,25 +147,17 @@ describe('ProfilePage', () => {
     })
 
     it('shows loading state while fetching venues', () => {
-      // Mock fetch to never resolve (simulate loading)
-      vi.mocked(global.fetch).mockImplementationOnce(
-        () =>
-          new Promise(() => {
-            // Never resolves
-          })
-      )
+      mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: true })
 
-      render(<ProfilePage />)
+      const { container } = render(<ProfilePage />)
 
-      expect(screen.getByText('Loading venues…')).toBeInTheDocument()
+      // The component uses Card with animate-pulse when loading
+      expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
+      expect(screen.queryByText('My Venues')).not.toBeInTheDocument()
     })
 
     it('shows admin button when user is admin', async () => {
-      // Mock fetch to return isAdmin: true
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ venues: [], isAdmin: true }),
-      } as Response)
+      mockUseMe.mockReturnValue({ data: { isAdmin: true }, isLoading: false })
 
       render(<ProfilePage />)
 
@@ -189,17 +173,13 @@ describe('ProfilePage', () => {
     })
 
     it('does not show admin button when user is not admin', async () => {
-      // Mock fetch to return isAdmin: false
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ venues: [], isAdmin: false }),
-      } as Response)
+      mockUseMe.mockReturnValue({ data: { isAdmin: false }, isLoading: false })
 
       render(<ProfilePage />)
 
-      // Wait for venues to load
+      // Wait for content to load
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
+        expect(screen.getByText('Profile')).toBeInTheDocument()
       })
 
       // Admin button should not be present
@@ -214,6 +194,8 @@ describe('ProfilePage', () => {
         data: null,
         status: 'loading',
       })
+      mockUseMe.mockReturnValue({ data: null, isLoading: false })
+      mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: false })
 
       render(<ProfilePage />)
 

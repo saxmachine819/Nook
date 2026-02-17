@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MapView } from "@/components/explore/MapView";
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls";
@@ -347,7 +347,7 @@ export function ExploreClient({
                 longitude: p.lng,
                 minPrice: p.minPrice,
                 maxPrice: card?.maxPrice ?? p.minPrice,
-                availabilityLabel: p.status === "OPEN_NOW" ? "Available now" : undefined,
+                availabilityLabel: card?.availabilityLabel ?? (p.status === "OPEN_NOW" ? "Available now" : undefined),
               };
             })}
             userLocation={userLocation}

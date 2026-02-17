@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import React, { Suspense } from "react"
 import { useSession, signIn, signOut } from "next-auth/react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -31,21 +31,20 @@ function initialsFromName(name?: string | null) {
     .join("")
 }
 
-interface Venue {
-  id: string
-  name: string
-  address: string
-  thumbnail: string | null
-}
+import { useMe, useMyVenuesCount } from "@/lib/hooks"
 
 function ProfileContent() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const router = useRouter()
   const callbackUrl = searchParams?.get("callbackUrl")
-  const [venues, setVenues] = useState<Venue[]>([])
-  const [loadingVenues, setLoadingVenues] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+
+  const { data: userData, isLoading: loadingUser } = useMe(status === "authenticated")
+  const { data: venueData, isLoading: loadingVenues } = useMyVenuesCount(status === "authenticated")
+
+  const isAdmin = userData?.isAdmin ?? false
+  const venueCount = venueData?.count ?? 0
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
   const [deleteReason, setDeleteReason] = useState("")
@@ -60,27 +59,6 @@ function ProfileContent() {
     }, 0)
     return () => clearTimeout(t)
   }, [session, callbackUrl, router])
-
-  // Fetch venues when authenticated
-  useEffect(() => {
-    if (!session?.user?.id) {
-      setLoadingVenues(false)
-      return
-    }
-    fetch("/api/users/me/venues")
-      .then((r) => (r.ok ? r.json() : { venues: [], isAdmin: false }))
-      .then((data) => {
-        setVenues(data.venues ?? [])
-        setIsAdmin(data.isAdmin ?? false)
-      })
-      .catch(() => {
-        setVenues([])
-        setIsAdmin(false)
-      })
-      .finally(() => {
-        setLoadingVenues(false)
-      })
-  }, [session?.user?.id])
 
   const handleDeleteAccount = async () => {
     if (deleteConfirmation !== "DELETE") {
@@ -257,9 +235,9 @@ function ProfileContent() {
               <CardDescription className="text-sm font-medium text-muted-foreground/60">
                 {loadingVenues
                   ? "Retrieving your spaces..."
-                  : venues.length === 0
+                  : venueCount === 0
                     ? "Start sharing your venue with our community"
-                    : `You are managing ${venues.length} space${venues.length > 1 ? 's' : ''}`}
+                    : `You are managing ${venueCount} space${venueCount > 1 ? 's' : ''}`}
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6 pt-0">
@@ -267,7 +245,7 @@ function ProfileContent() {
                 <div className="h-20 flex items-center justify-center">
                   <div className="h-6 w-6 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                 </div>
-              ) : venues.length === 0 ? (
+              ) : venueCount === 0 ? (
                 <div className="flex flex-col gap-6">
                   <p className="text-sm font-medium text-foreground/60 leading-relaxed max-w-lg">
                     Whether you manage a boutique café, a hotel lobby, or a creative studio, join Nooc to reach thousands of remote workers looking for their next favorite spot.
@@ -348,7 +326,6 @@ function ProfileContent() {
         </Dialog>
       </div>
     </div>
-
   )
 }
 

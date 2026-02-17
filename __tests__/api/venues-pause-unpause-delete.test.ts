@@ -23,13 +23,13 @@ describe("POST /api/venues/[id]/pause", () => {
     vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue(venue as any)
     const { auth } = await import("@/lib/auth")
     const { canEditVenue } = await import("@/lib/venue-auth")
-    vi.mocked(auth).mockResolvedValue(createMockSession(otherUser))
+    vi.mocked(auth).mockResolvedValue(createMockSession(otherUser) as any)
     vi.mocked(canEditVenue).mockReturnValue(false)
   })
 
   it("returns 401 if not authenticated", async () => {
     const { auth } = await import("@/lib/auth")
-    vi.mocked(auth).mockResolvedValue(null)
+    vi.mocked(auth).mockResolvedValue(null as any)
 
     const req = new Request("http://localhost/api/venues/" + venueId + "/pause", {
       method: "POST",
@@ -79,7 +79,7 @@ describe("POST /api/venues/[id]/unpause", () => {
     vi.mocked(mockPrisma.venue.findUnique).mockResolvedValue(venue as any)
     const { auth } = await import("@/lib/auth")
     const { canEditVenue } = await import("@/lib/venue-auth")
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: "other" })))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: "other" })) as any)
     vi.mocked(canEditVenue).mockReturnValue(false)
   })
 
@@ -112,7 +112,7 @@ describe("POST /api/venues/[id]/delete", () => {
     })
     const { auth } = await import("@/lib/auth")
     const { canEditVenue } = await import("@/lib/venue-auth")
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: "other" })))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: "other" })) as any)
     vi.mocked(canEditVenue).mockReturnValue(false)
   })
 

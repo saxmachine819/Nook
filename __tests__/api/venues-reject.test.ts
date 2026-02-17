@@ -42,7 +42,7 @@ describe('POST /api/venues/[id]/reject', () => {
         method: 'POST',
         body: JSON.stringify({}),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(401)
@@ -61,7 +61,7 @@ describe('POST /api/venues/[id]/reject', () => {
         method: 'POST',
         body: JSON.stringify({}),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(403)
@@ -79,7 +79,7 @@ describe('POST /api/venues/[id]/reject', () => {
         method: 'POST',
         body: JSON.stringify({}),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(404)
@@ -98,7 +98,7 @@ describe('POST /api/venues/[id]/reject', () => {
         method: 'POST',
         body: JSON.stringify({}),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(400)
@@ -126,7 +126,7 @@ describe('POST /api/venues/[id]/reject', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rejectionReason: 'Missing information' }),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)
@@ -165,7 +165,7 @@ describe('POST /api/venues/[id]/reject', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      const response = await POST(request, { params: Promise.resolve({ id: venueId }) })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
       const data = await response.json()
 
       expect(response.status).toBe(200)

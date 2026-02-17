@@ -10,35 +10,50 @@ import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-// Mock auth function
-const mockAuth = vi.fn()
+const { mockAuth, mockIsAdmin, mockPrismaFindMany } = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockIsAdmin: vi.fn(),
+  mockPrismaFindMany: vi.fn(),
+}))
+
 vi.mock('@/lib/auth', () => ({
   auth: () => mockAuth(),
 }))
 
-// Mock isAdmin function
-const mockIsAdmin = vi.fn()
 vi.mock('@/lib/venue-auth', () => ({
   isAdmin: (user: { email?: string | null } | null | undefined) => mockIsAdmin(user),
 }))
 
-// Mock Prisma
-const mockPrisma = {
-  venue: {
-    findMany: vi.fn(),
-  },
-}
 vi.mock('@/lib/prisma', () => ({
-  prisma: mockPrisma,
+  prisma: {
+    venue: {
+      findMany: mockPrismaFindMany,
+    },
+  },
 }))
 
-// Import after mocks are set up
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  usePathname: () => '/admin/approvals',
+}))
+
+vi.mock('@/components/ui/toast', () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+    ToastComponent: null,
+  }),
+}))
+
 import AdminApprovalsPage from '@/app/(root)/admin/approvals/page'
 
 describe('AdminApprovalsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockPrisma.venue.findMany.mockResolvedValue([])
+    mockPrismaFindMany.mockResolvedValue([])
   })
 
   describe('when user is not authenticated', () => {
@@ -97,7 +112,7 @@ describe('AdminApprovalsPage', () => {
         },
       ]
 
-      mockPrisma.venue.findMany.mockResolvedValue(mockVenues)
+      mockPrismaFindMany.mockResolvedValue(mockVenues)
 
       const component = await AdminApprovalsPage()
       render(component)
@@ -116,7 +131,7 @@ describe('AdminApprovalsPage', () => {
       mockAuth.mockResolvedValue({ user: mockUser })
       mockIsAdmin.mockReturnValue(true)
 
-      mockPrisma.venue.findMany.mockResolvedValue([])
+      mockPrismaFindMany.mockResolvedValue([])
 
       const component = await AdminApprovalsPage()
       render(component)

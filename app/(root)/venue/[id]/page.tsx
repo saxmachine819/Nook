@@ -37,12 +37,9 @@ interface VenuePageProps {
 }
 
 export default async function VenuePage({ params, searchParams }: VenuePageProps) {
-  // Get session for favorite state fetching
-  const session = await auth()
-
-  let venue
-  try {
-    venue = await prisma.venue.findUnique({
+  // Fetch venue data in parallel with other essential checks
+  const [venue, session, canonicalHours] = await Promise.all([
+    prisma.venue.findUnique({
       where: { id: params.id },
       include: {
         tables: {
@@ -61,14 +58,13 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             { featured: "desc" },
             { createdAt: "desc" },
           ],
-          take: 1, // Get the primary deal (featured first, then most recent)
+          take: 1,
         },
       } as any,
-    })
-  } catch (error) {
-    console.error("Error fetching venue:", error)
-    throw error
-  }
+    }),
+    auth(),
+    getCanonicalVenueHours(params.id),
+  ])
 
   if (!venue) {
     notFound()
@@ -85,7 +81,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   const canView = venue.onboardingStatus === "APPROVED" || isOwner || userIsAdmin
 
   if (!canView) {
-    // Redirect non-owners to Explore page
     redirect("/")
   }
 
@@ -216,47 +211,18 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     return mode === "individual" || mode === null || mode === undefined
   })
 
-  const now = new Date()
-  const futureReservations = await prisma.reservation.findMany({
-    where: {
-      venueId: venue.id,
-      status: { not: "cancelled" },
-      endAt: { gte: now },
-    },
-    select: {
-      startAt: true,
-      endAt: true,
-      seatCount: true,
-    },
-  })
+  const openStatus = canonicalHours ? getOpenStatus(canonicalHours, new Date()) : null
+  const weeklyFormatted = canonicalHours ? formatWeeklyHoursFromCanonical(canonicalHours) : []
 
-  const canonical = await getCanonicalVenueHours(venue.id)
-  const openStatus = canonical ? getOpenStatus(canonical, new Date()) : null
-  const weeklyFormatted = canonical ? formatWeeklyHoursFromCanonical(canonical) : []
-  const availabilityLabel = computeAvailabilityLabel(
-    capacity,
-    futureReservations.map((r) => ({
-      startAt: r.startAt,
-      endAt: r.endAt,
-      seatCount: r.seatCount,
-    })),
-    openStatus,
-    { timeZone: canonical?.timezone }
-  )
+  // We'll delegate full availability calculations to the client (VenueBookingWidget)
+  // For the server render, we just show a basic status.
+  const availabilityLabel = openStatus?.isOpen ? "Open" : "Closed"
 
   const venueHeroImages: string[] = (() => {
-    const images = new Set<string>()
     const hero = (venue as any).heroImageUrl
-    if (typeof hero === "string" && hero.length > 0) images.add(hero)
-    safeStringArray((venue as any).imageUrls).forEach((u) => images.add(u))
-    for (const t of venue.tables) {
-      safeStringArray((t as any).imageUrls).forEach((u) => images.add(u))
-      for (const s of (t as any).seats ?? []) {
-        safeStringArray((s as any).imageUrls).forEach((u) => images.add(u))
-      }
-      if (images.size >= 8) break
-    }
-    return Array.from(images).slice(0, 8)
+    const rest = safeStringArray((venue as any).imageUrls).filter((u) => u !== hero)
+    const combined = typeof hero === "string" && hero.length > 0 ? [hero, ...rest] : rest
+    return combined.slice(0, 8)
   })()
 
   const googleMapsHref =
@@ -309,7 +275,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               </div>
             )}
 
-
             <div className="space-y-6">
               <div className="h-px w-full bg-border/50" />
 
@@ -324,7 +289,12 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                 )}
               </div>
 
-              <VenueHoursDisplay openStatus={openStatus} weeklyFormatted={weeklyFormatted} />
+              <VenueHoursDisplay
+                openStatus={openStatus}
+                weeklyFormatted={weeklyFormatted}
+                venueTimezone={canonicalHours?.timezone ?? null}
+                weeklyHours={canonicalHours?.weeklyHours ?? []}
+              />
 
               {venue.rulesText && (
                 <div className="rounded-[2rem] border-none bg-primary/[0.03] p-8 space-y-4">
@@ -412,6 +382,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                   tables={individualTablesForBooking as any}
                   favoritedTableIds={favoriteStates.tables}
                   favoritedSeatIds={favoriteStates.seats}
+                  canonicalHours={canonicalHours}
                 />
               </CardContent>
             </Card>
@@ -421,6 +392,5 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
         <div className="h-24" />
       </div>
     </div>
-
   )
 }

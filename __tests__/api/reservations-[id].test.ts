@@ -10,7 +10,7 @@ vi.mock('@/lib/prisma', () => ({
 
 // Mock auth
 vi.mock('@/lib/auth', () => ({
-  auth: vi.fn(),
+  auth: vi.fn() as any,
 }))
 
 // Mock venue-auth
@@ -47,7 +47,7 @@ describe('PATCH /api/reservations/[id]', () => {
     })
 
     const { auth } = await import('@/lib/auth')
-    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()))
+    vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser()) as any)
 
     const { canEditVenue } = await import('@/lib/venue-auth')
     vi.mocked(canEditVenue).mockReturnValue(false)
@@ -56,7 +56,7 @@ describe('PATCH /api/reservations/[id]', () => {
   describe('authentication', () => {
     it('returns 401 if user is not authenticated', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(null)
+      vi.mocked(auth).mockResolvedValue(null as any)
 
       mockRequest = new Request(`http://localhost/api/reservations/${reservationId}`, {
         method: 'PATCH',
@@ -97,7 +97,7 @@ describe('PATCH /api/reservations/[id]', () => {
 
     it('returns 403 if user is not owner or venue owner', async () => {
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: 'different-user' })))
+      vi.mocked(auth).mockResolvedValue(createMockSession(createTestUser({ id: 'different-user' })) as any)
 
       mockRequest = new Request(`http://localhost/api/reservations/${reservationId}`, {
         method: 'PATCH',
@@ -111,7 +111,7 @@ describe('PATCH /api/reservations/[id]', () => {
     it('allows reservation owner to cancel', async () => {
       const user = createTestUser({ id: 'reservation-owner' })
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(user))
+      vi.mocked(auth).mockResolvedValue(createMockSession(user) as any)
 
       vi.mocked(mockPrisma.reservation.findUnique).mockResolvedValue({
         ...createTestReservation({ id: reservationId, userId: 'reservation-owner' }),
@@ -135,7 +135,7 @@ describe('PATCH /api/reservations/[id]', () => {
     it('allows venue owner to cancel', async () => {
       const venueOwner = createTestUser({ id: 'venue-owner' })
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(venueOwner))
+      vi.mocked(auth).mockResolvedValue(createMockSession(venueOwner) as any)
 
       const { canEditVenue } = await import('@/lib/venue-auth')
       vi.mocked(canEditVenue).mockReturnValue(true)
@@ -159,7 +159,7 @@ describe('PATCH /api/reservations/[id]', () => {
     beforeEach(async () => {
       const user = createTestUser({ id: 'reservation-owner' })
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(user))
+      vi.mocked(auth).mockResolvedValue(createMockSession(user) as any)
 
       vi.mocked(mockPrisma.reservation.findUnique).mockResolvedValue({
         ...createTestReservation({ id: reservationId, userId: 'reservation-owner' }),
@@ -242,7 +242,7 @@ describe('PATCH /api/reservations/[id]', () => {
     beforeEach(async () => {
       const venueOwner = createTestUser({ id: 'venue-owner' })
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(venueOwner))
+      vi.mocked(auth).mockResolvedValue(createMockSession(venueOwner) as any)
 
       const { canEditVenue } = await import('@/lib/venue-auth')
       vi.mocked(canEditVenue).mockReturnValue(true)
@@ -256,7 +256,7 @@ describe('PATCH /api/reservations/[id]', () => {
     it('prevents reservation owner from editing (only venue owner can)', async () => {
       const reservationOwner = createTestUser({ id: 'reservation-owner' })
       const { auth } = await import('@/lib/auth')
-      vi.mocked(auth).mockResolvedValue(createMockSession(reservationOwner))
+      vi.mocked(auth).mockResolvedValue(createMockSession(reservationOwner) as any)
 
       const { canEditVenue } = await import('@/lib/venue-auth')
       vi.mocked(canEditVenue).mockReturnValue(false)

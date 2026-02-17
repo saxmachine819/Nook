@@ -9,6 +9,13 @@ import { Plus, Trash2, Search, Upload, X, Image as ImageIcon, Expand, ChevronDow
 import { cn } from "@/lib/utils"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 import { WelcomeOnboardStep } from "./WelcomeOnboardStep"
+import { QRCodeOnboardStep } from "./QRCodeOnboardStep"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 const AVAILABLE_TAGS = [
   "Quiet",
@@ -56,10 +63,19 @@ declare global {
   }
 }
 
-export function VenueOnboardClient() {
+const splitName = (name: string | null | undefined): [string, string] => {
+  const parts = name?.trim().split(/\s+/) ?? []
+  return [parts[0] ?? "", parts.slice(1).join(" ") ?? ""]
+}
+
+interface VenueOnboardClientProps {
+  initialOwnerName?: string | null
+}
+
+export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps = {}) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
-  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3>(0)
+  const [currentStep, setCurrentStep] = useState<0 | 1 | 2 | 3 | 4>(0)
   const [expandedTableId, setExpandedTableId] = useState<string | null>(null) // null + single table => that table expanded
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoadingScript, setIsLoadingScript] = useState(true)
@@ -75,6 +91,9 @@ export function VenueOnboardClient() {
   const [zipCode, setZipCode] = useState("")
   const [latitude, setLatitude] = useState("")
   const [longitude, setLongitude] = useState("")
+  const [ownerFirstName, setOwnerFirstName] = useState(() => splitName(initialOwnerName)[0])
+  const [ownerLastName, setOwnerLastName] = useState(() => splitName(initialOwnerName)[1])
+  const [ownerPhone, setOwnerPhone] = useState("")
   const [tags, setTags] = useState<string[]>([])
   const [rulesText, setRulesText] = useState("")
   const [tables, setTables] = useState<Table[]>([
@@ -116,6 +135,16 @@ export function VenueOnboardClient() {
   const [uploadingVenuePhoto, setUploadingVenuePhoto] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const [galleryInitialIndex, setGalleryInitialIndex] = useState(0)
+
+  // QR Codes step (after Tables & Seats)
+  const [draftVenueId, setDraftVenueId] = useState<string | null>(null)
+  const [venueResources, setVenueResources] = useState<{
+    tables: Array<{ id: string; name: string; bookingMode: string; seatCount: number }>
+    seats: Array<{ id: string; name: string; tableId: string; tableName: string }>
+  } | null>(null)
+  const [qrTokensByKey, setQrTokensByKey] = useState<Record<string, string>>({})
+  const [qrLoadingKey, setQrLoadingKey] = useState<string | null>(null)
+  const [qrModalToken, setQrModalToken] = useState<string | null>(null)
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -238,7 +267,7 @@ export function VenueOnboardClient() {
               setAvailablePhotos(data.photos)
               const defaultCount = Math.min(5, Math.max(3, data.photos.length))
               setSelectedCatalogIndices(Array.from({ length: defaultCount }, (_, i) => i))
-              showToast(`Place details loaded! Found ${data.photos.length} photos.`, "success")
+              // showToast(`Place details loaded! Found ${data.photos.length} photos.`, "success") // May want to bring back
             } else {
               setAvailablePhotos([])
               setSelectedCatalogIndices([])
@@ -525,6 +554,11 @@ export function VenueOnboardClient() {
       return false
     }
 
+    if (!ownerPhone.trim()) {
+      showToast("Phone number is required", "error")
+      return false
+    }
+
     // Validate tables based on booking mode
     const validTables = tables.filter((t) => {
       if (!t.name.trim() || t.seats.length === 0) return false
@@ -622,6 +656,9 @@ export function VenueOnboardClient() {
             selectedCatalogIndices.length > 0
               ? selectedCatalogIndices.map((i) => catalog[i]?.photoUrl).filter(Boolean) as string[]
               : null,
+          ownerFirstName: ownerFirstName.trim() || null,
+          ownerLastName: ownerLastName.trim() || null,
+          ownerPhone: ownerPhone.trim(),
         }),
       })
 
@@ -654,6 +691,10 @@ export function VenueOnboardClient() {
       showToast("Address is required", "error")
       return false
     }
+    if (!ownerPhone.trim()) {
+      showToast("Phone number is required", "error")
+      return false
+    }
     return true
   }
 
@@ -671,15 +712,65 @@ export function VenueOnboardClient() {
       setCurrentStep(3)
       return
     }
-    // Step 3: save draft and redirect to Stripe
-    const venueId = await saveDraft()
-    if (venueId) {
-      router.push(`/venue/onboard/stripe?venueId=${venueId}`)
+    if (currentStep === 3) {
+      // Save draft, fetch resources, then show QR Codes step
+      const venueId = await saveDraft()
+      if (!venueId) return
+      setDraftVenueId(venueId)
+      try {
+        const res = await fetch(`/api/venues/${venueId}/resources`)
+        if (!res.ok) throw new Error("Failed to load resources")
+        const data = await res.json()
+        setVenueResources({ tables: data.tables ?? [], seats: data.seats ?? [] })
+        setCurrentStep(4)
+      } catch (e) {
+        console.error(e)
+        showToast("Saved venue but could not load seats/tables. You can set up QR codes from your dashboard.", "error")
+        router.push(`/venue/onboard/stripe?venueId=${venueId}`)
+      }
+      return
+    }
+    // Step 4 (QR Codes): go to Stripe
+    if (currentStep === 4 && draftVenueId) {
+      router.push(`/venue/onboard/stripe?venueId=${draftVenueId}`)
     }
   }
 
   const handleBack = () => {
-    if (currentStep > 0) setCurrentStep((s) => (s - 1) as 0 | 1 | 2 | 3)
+    if (currentStep > 0) setCurrentStep((s) => (s - 1) as 0 | 1 | 2 | 3 | 4)
+  }
+
+  const generateQr = async (resourceType: "seat" | "table" | "venue", resourceId?: string) => {
+    if (!draftVenueId) return
+    if (resourceType !== "venue" && !resourceId) return
+    const key = resourceType === "venue" ? "venue" : `${resourceType}:${resourceId}`
+    setQrLoadingKey(key)
+    try {
+      const body: { venueId: string; resourceType: string; resourceId?: string } = {
+        venueId: draftVenueId,
+        resourceType,
+      }
+      if (resourceType !== "venue") body.resourceId = resourceId
+      const res = await fetch("/api/qr-assets/allocate-and-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to generate QR code", "error")
+        return
+      }
+      if (data.token) {
+        setQrTokensByKey((prev) => ({ ...prev, [key]: data.token }))
+        setQrModalToken(data.token)
+      }
+    } catch (e) {
+      console.error(e)
+      showToast("Failed to generate QR code", "error")
+    } finally {
+      setQrLoadingKey(null)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -692,7 +783,8 @@ export function VenueOnboardClient() {
     { step: 1 as const, label: "Venue Info" },
     { step: 2 as const, label: "Photos & Rules" },
     { step: 3 as const, label: "Tables & Seats" },
-    { step: 4 as const, label: "Stripe" },
+    { step: 4 as const, label: "QR Codes" },
+    { step: 5 as const, label: "Stripe" },
   ]
 
   return (
@@ -712,7 +804,7 @@ export function VenueOnboardClient() {
               <div key={step} className="flex flex-1 items-center">
                 <button
                   type="button"
-                  onClick={() => isClickable && step <= 3 && setCurrentStep(step as 0 | 1 | 2 | 3)}
+                  onClick={() => isClickable && step <= 4 && setCurrentStep(step as 0 | 1 | 2 | 3 | 4)}
                   className={cn(
                     "flex flex-1 flex-col items-center gap-1 rounded-md px-1 py-2 text-center transition-colors",
                     isClickable && "cursor-pointer hover:bg-muted/60",
@@ -856,6 +948,53 @@ export function VenueOnboardClient() {
                     onChange={(e) => setZipCode(e.target.value)}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder="94102"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <p className="mb-3 text-sm font-medium">Owner Info</p>
+                <p className="mb-3 text-xs text-muted-foreground">Contact details for the venue owner (you)</p>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="ownerFirstName" className="mb-2 block text-sm font-medium">
+                      First Name
+                    </label>
+                    <input
+                      id="ownerFirstName"
+                      type="text"
+                      value={ownerFirstName}
+                      onChange={(e) => setOwnerFirstName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Jane"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ownerLastName" className="mb-2 block text-sm font-medium">
+                      Last Name
+                    </label>
+                    <input
+                      id="ownerLastName"
+                      type="text"
+                      value={ownerLastName}
+                      onChange={(e) => setOwnerLastName(e.target.value)}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder="Doe"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label htmlFor="ownerPhone" className="mb-2 block text-sm font-medium">
+                    Phone Number <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    id="ownerPhone"
+                    type="tel"
+                    required
+                    value={ownerPhone}
+                    onChange={(e) => setOwnerPhone(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder="+1 (555) 000-0000"
                   />
                 </div>
               </div>
@@ -1425,18 +1564,72 @@ export function VenueOnboardClient() {
         </Card>
         )}
 
+        {/* Step 4: QR Codes */}
+        {currentStep === 4 && draftVenueId && venueResources && (
+          <QRCodeOnboardStep
+            venueId={draftVenueId}
+            resources={venueResources}
+            qrTokensByKey={qrTokensByKey}
+            qrLoadingKey={qrLoadingKey}
+            onGenerate={generateQr}
+            onShowModal={setQrModalToken}
+          />
+        )}
+
       </form>
+
+      {/* QR ready modal (onboarding) */}
+      <Dialog
+        open={qrModalToken !== null}
+        onOpenChange={(open) => !open && setQrModalToken(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>QR ready</DialogTitle>
+          </DialogHeader>
+          {qrModalToken && (
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                <img
+                  src={`/api/qr-assets/${qrModalToken}/qr-only.svg`}
+                  alt="QR preview"
+                  className="h-24 w-24"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`/api/qr-assets/${qrModalToken}/qr-only.svg`}
+                    download="nooc-qr-only.svg"
+                  >
+                    Download QR only (SVG)
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={`/api/qr-assets/${qrModalToken}/sticker.svg`}
+                    download="nooc-sticker.svg"
+                  >
+                    Download full sticker (SVG)
+                  </a>
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Sticky Back / Next — above bottom nav (bottom-20) */}
       <div className="fixed bottom-20 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
         <div className="container mx-auto flex items-center justify-between gap-4">
-          {currentStep > 0 ? (
-            <Button type="button" variant="outline" size="lg" onClick={handleBack}>
-              Back
-            </Button>
-          ) : (
-            <div />
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={currentStep > 0 ? handleBack : () => router.push("/venue/dashboard")}
+          >
+            Back
+          </Button>
           <Button
             type="button"
             onClick={handleNext}
@@ -1449,8 +1642,10 @@ export function VenueOnboardClient() {
               : currentStep === 0
                 ? "Continue"
                 : currentStep === 3
-                  ? "Next: Stripe"
-                  : "Next"}
+                  ? "Next"
+                  : currentStep === 4
+                    ? "Next: Stripe"
+                    : "Next"}
           </Button>
         </div>
       </div>
