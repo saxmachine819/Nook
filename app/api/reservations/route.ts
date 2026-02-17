@@ -61,13 +61,25 @@ export async function GET(request: Request) {
             seats: { select: { id: true } },
           },
         },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
       },
       orderBy: {
         startAt: tab === "upcoming" ? "asc" : "desc",
       },
     })
 
-    return NextResponse.json(reservations)
+    const mappedReservations = reservations.map(res => ({
+      ...res,
+      payment: res.payments?.[0] || null
+    }))
+
+    return NextResponse.json(mappedReservations)
   } catch (error) {
     console.error("Error in GET /api/reservations:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

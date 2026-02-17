@@ -54,6 +54,13 @@ export async function GET(
             },
           },
         },
+        payments: {
+          include: {
+            refundRequests: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 1
+        },
       },
     })
 
@@ -61,15 +68,21 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
+    // Map plural payments to singular payment for the client
+    const mappedReservation = {
+      ...reservation,
+      payment: reservation.payments?.[0] || null
+    }
+
     // Authorization: owner or admin
-    const isOwner = reservation.userId === session.user.id
+    const isOwner = mappedReservation.userId === session.user.id
     const userIsAdmin = isAdmin(session.user)
 
     if (!isOwner && !userIsAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    return NextResponse.json(reservation)
+    return NextResponse.json(mappedReservation)
   } catch (error) {
     console.error("Error fetching reservation:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

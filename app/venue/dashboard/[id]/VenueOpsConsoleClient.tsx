@@ -1063,6 +1063,9 @@ export function VenueOpsConsoleClient({
       .then((payload) => {
         if (!isMounted || !payload) return
         setStripeStatus(payload)
+        if (payload.balance) {
+          setStripeBalance(payload.balance)
+        }
       })
       .catch(() => {
         if (!isMounted) return
@@ -1075,24 +1078,6 @@ export function VenueOpsConsoleClient({
       })
       .finally(() => {
         if (isMounted) setStripeLoading(false)
-      })
-    return () => {
-      isMounted = false
-    }
-  }, [venue.id, showStripe])
-
-  useEffect(() => {
-    if (!showStripe) return
-    let isMounted = true
-    fetch(`/api/venues/${venue.id}/stripe/balance`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        if (!isMounted || !payload) return
-        setStripeBalance(payload)
-      })
-      .catch(() => {
-        if (!isMounted) return
-        setStripeBalance(null)
       })
     return () => {
       isMounted = false
