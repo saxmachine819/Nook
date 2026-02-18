@@ -38,6 +38,7 @@ import {
   UserMinus,
   Undo2,
   Loader2,
+  AlertCircle,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -1261,21 +1262,6 @@ export function VenueOpsConsoleClient({
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
-        {showStripe && stripeAlerts.length > 0 && (
-          <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
-            <CardHeader>
-              <CardTitle>Stripe needs attention</CardTitle>
-              <CardDescription className="text-amber-800">
-                Complete onboarding to keep payouts enabled.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {stripeAlerts.map((message, index) => (
-                <div key={`${message}-${index}`}>{message}</div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left Column: Reservations Timeline */}
           <div className="space-y-4">
@@ -1465,18 +1451,52 @@ export function VenueOpsConsoleClient({
                       <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
                       <p className="text-sm text-muted-foreground animate-pulse">Loading Payouts...</p>
                     </div>
-                  ) : !venue.stripeAccountId || stripeStatus?.needsOnboarding ? (
+                  ) : !venue.stripeAccountId ? (
                     <div className="flex flex-col items-center justify-center py-4 text-center space-y-4">
                       <div className="rounded-full bg-primary/5 p-4">
                         <CreditCard className="h-8 w-8 text-primary" />
                       </div>
                       <div className="space-y-1">
-                        <p className="font-semibold">{!venue.stripeAccountId ? "Payments not connected" : "Onboarding incomplete"}</p>
+                        <p className="font-semibold">Stripe not connected</p>
                         <p className="text-sm text-muted-foreground max-w-[240px]">
-                          {!venue.stripeAccountId
-                            ? "Connect your Stripe account to start receiving payouts for your bookings."
-                            : "Please complete your Stripe onboarding to enable payouts."}
+                          Connect your Stripe account to start receiving payouts for your bookings.
                         </p>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={handleStripeConnect}
+                        disabled={isStripeConnecting}
+                      >
+                        {isStripeConnecting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Connecting...
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Connect Stripe
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (stripeAlerts.length > 0 || stripeStatus?.needsOnboarding) ? (
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600" />
+                          <p className="font-semibold text-sm">Stripe needs attention</p>
+                        </div>
+                        <p className="text-xs text-amber-800 mb-3">
+                          Complete onboarding to keep payouts enabled.
+                        </p>
+                        {stripeAlerts.length > 0 && (
+                          <div className="space-y-1 text-xs opacity-80">
+                            {stripeAlerts.map((message, index) => (
+                              <div key={`${message}-${index}`}>{message}</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <Button
                         className="w-full"
@@ -1494,6 +1514,14 @@ export function VenueOpsConsoleClient({
                             {stripeButtonLabel}
                           </>
                         )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={handleStripeDashboard}
+                        disabled={isStripeDashboardOpening}
+                      >
+                        {isStripeDashboardOpening ? "Opening dashboard..." : "Open Stripe dashboard"}
                       </Button>
                     </div>
                   ) : (
@@ -1533,7 +1561,6 @@ export function VenueOpsConsoleClient({
                       <Button
                         className="w-full"
                         onClick={() => setIsPayoutDialogOpen(true)}
-                        disabled={!venue.stripeAccountId || stripeStatus?.needsOnboarding}
                       >
                         Request payout
                       </Button>
@@ -1541,7 +1568,7 @@ export function VenueOpsConsoleClient({
                         variant="outline"
                         className="w-full"
                         onClick={handleStripeDashboard}
-                        disabled={!venue.stripeAccountId || isStripeDashboardOpening}
+                        disabled={isStripeDashboardOpening}
                       >
                         {isStripeDashboardOpening ? "Opening dashboard..." : "Open Stripe dashboard"}
                       </Button>
