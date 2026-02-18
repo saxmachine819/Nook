@@ -114,6 +114,53 @@ export async function POST(request: NextRequest) {
       ? (typeof body.longitude === 'string' ? parseFloat(body.longitude) : body.longitude)
       : null
 
+    // Check for existing venue with same name and address (excluding deleted)
+    const trimmedName = body.name.trim()
+    const trimmedAddress = body.address.trim()
+    const existingVenue = await prisma.venue.findFirst({
+      where: {
+        name: { equals: trimmedName, mode: "insensitive" },
+        address: { equals: trimmedAddress, mode: "insensitive" },
+        status: { not: "DELETED" }, // Exclude deleted venues
+      },
+    })
+
+    if (existingVenue) {
+      return NextResponse.json(
+        { error: "A venue with this name and address already exists." },
+        { status: 409 }
+      )
+    }
+
+    // Handle googlePlaceId reuse: if provided and exists only on deleted venues, clear it from them
+    if (body.googlePlaceId?.trim()) {
+      const trimmedGooglePlaceId = body.googlePlaceId.trim()
+      const existingWithPlaceId = await prisma.venue.findFirst({
+        where: {
+          googlePlaceId: trimmedGooglePlaceId,
+          status: { not: "DELETED" },
+        },
+      })
+
+      if (existingWithPlaceId) {
+        return NextResponse.json(
+          { error: "A venue with this Google Place ID already exists." },
+          { status: 409 }
+        )
+      }
+
+      // Clear googlePlaceId from any deleted venues that have it (allow reuse)
+      await prisma.venue.updateMany({
+        where: {
+          googlePlaceId: trimmedGooglePlaceId,
+          status: "DELETED",
+        },
+        data: {
+          googlePlaceId: null,
+        },
+      })
+    }
+
     // Create venue, persist Google photos to Supabase, then update venue with persisted URLs (all in one transaction)
     const venue = await prisma.$transaction(async (tx) => {
       const created = await tx.venue.create({
