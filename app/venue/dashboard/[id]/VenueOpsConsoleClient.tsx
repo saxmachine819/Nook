@@ -63,6 +63,175 @@ import { SignageOrderWizard } from "@/components/venue/SignageOrderWizard"
 import { type Deal } from "@prisma/client"
 import { useVenueRole } from "./VenueRoleProvider"
 
+type StripeSetupStatus =
+  | { status: "not_started" }
+  | {
+      status: "connected"
+      chargesEnabled: boolean
+      payoutsEnabled: boolean
+      disabledReason?: string | null
+      currentDeadline?: number | null
+      currentlyDue: string[]
+      pastDue: string[]
+      pendingVerification: string[]
+      errors: Array<{ code?: string; reason?: string; requirement?: string }>
+    }
+  | { status: "error"; message: string }
+
+function stripeRequirementToLabel(key: string): string {
+  const k = key.toLowerCase()
+  if (key === "individual.email") return "Email address"
+  if (key === "individual.phone") return "Phone number"
+  if (k.includes("ssn") || k.includes("id_number")) return "SSN/ID information"
+  if (k.includes("dob")) return "Date of birth"
+  if (k.includes("address")) return "Address"
+  if (key === "external_account") return "Bank account"
+  if (key === "company.tax_id") return "Tax ID"
+  if (key === "tos_acceptance.date" || key === "tos_acceptance.ip") return "Accept Stripe terms"
+  return "Additional information required"
+}
+
+function PayoutSetupStatusPanelInner({
+  stripeSetupStatus,
+  onRetry,
+  hideButtons,
+}: {
+  stripeSetupStatus: StripeSetupStatus | null
+  onRetry: () => void
+  hideButtons?: boolean
+}) {
+  const [showAllDue, setShowAllDue] = useState(false)
+  const VISIBLE_DUE = 6
+
+  if (!stripeSetupStatus) return null
+
+  if (stripeSetupStatus.status === "not_started") {
+    return (
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+            Not set up
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">Complete Stripe setup to receive payouts.</p>
+      </div>
+    )
+  }
+
+  if (stripeSetupStatus.status === "error") {
+    return (
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+            Can&apos;t load
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">We couldn&apos;t load your Stripe setup status.</p>
+        {!hideButtons && (
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            Retry
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  const {
+    payoutsEnabled,
+    currentlyDue,
+    pastDue,
+    pendingVerification,
+    disabledReason,
+    currentDeadline,
+    errors,
+  } = stripeSetupStatus
+  const hasDue = currentlyDue.length + pastDue.length > 0
+  const hasDisabledReason = !!disabledReason
+  const isApproved = payoutsEnabled && !hasDue
+  const isActionRequired = hasDue || hasDisabledReason
+  const isUnderReview =
+    !isActionRequired && !isApproved && pendingVerification.length > 0
+
+  if (isApproved) {
+    return (
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+            Approved
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">Payouts are enabled.</p>
+        {pendingVerification.length > 0 && (
+          <p className="text-xs text-muted-foreground">Verification in progress.</p>
+        )}
+      </div>
+    )
+  }
+
+  if (isUnderReview) {
+    return (
+      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+            Under review
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Stripe is verifying your details. No action needed right now.
+        </p>
+      </div>
+    )
+  }
+
+  if (isActionRequired) {
+    const allDue = [...new Set([...currentlyDue, ...pastDue])]
+    const labels = allDue.map(stripeRequirementToLabel)
+    const uniqueLabels = [...new Set(labels)]
+    const visible = showAllDue ? uniqueLabels : uniqueLabels.slice(0, VISIBLE_DUE)
+    const remaining = uniqueLabels.length - VISIBLE_DUE
+
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+            Action required
+          </span>
+        </div>
+        <p className="text-sm font-medium text-amber-900">Missing information</p>
+        <ul className="text-sm text-amber-900 list-disc list-inside space-y-0.5">
+          {visible.map((label, i) => (
+            <li key={i}>{label}</li>
+          ))}
+          {!showAllDue && remaining > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setShowAllDue(true)}
+                className="text-amber-700 underline hover:no-underline"
+              >
+                +{remaining} more
+              </button>
+            </li>
+          )}
+        </ul>
+        {currentDeadline != null && (
+          <p className="text-xs text-amber-800">
+            Deadline:{" "}
+            {new Date(currentDeadline * 1000).toLocaleDateString("en-US", {
+              dateStyle: "medium",
+            })}
+          </p>
+        )}
+        {errors.length > 0 && (
+          <p className="text-xs text-amber-800">Verification issue — please complete the required steps on Stripe.</p>
+        )}
+      </div>
+    )
+  }
+
+  return null
+}
+
 interface VenueOpsConsoleClientProps {
   venue: {
     id: string
@@ -217,6 +386,8 @@ export function VenueOpsConsoleClient({
   const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false)
   const [isStripeDashboardOpening, setIsStripeDashboardOpening] = useState(false)
   const [stripeLoading, setStripeLoading] = useState(true)
+  const [stripeSetupStatus, setStripeSetupStatus] = useState<StripeSetupStatus | null>(null)
+  const [stripeSetupStatusLoading, setStripeSetupStatusLoading] = useState(false)
   const [venueStatus, setVenueStatus] = useState<string>(venue.status ?? "ACTIVE")
   const [venuePauseMessage, setVenuePauseMessage] = useState<string | null>(venue.pauseMessage ?? null)
   const [pauseUnpauseLoading, setPauseUnpauseLoading] = useState(false)
@@ -1084,6 +1255,25 @@ export function VenueOpsConsoleClient({
     }
   }, [venue.id, showStripe])
 
+  const fetchStripeSetupStatus = useCallback(async () => {
+    if (!showStripe) return
+    setStripeSetupStatusLoading(true)
+    try {
+      const response = await fetch(`/api/venues/${venue.id}/stripe/setup-status`)
+      const data = await response.json().catch(() => ({ status: "error", message: "Unable to load Stripe status" }))
+      setStripeSetupStatus(data as StripeSetupStatus)
+    } catch {
+      setStripeSetupStatus({ status: "error", message: "Unable to load Stripe status" })
+    } finally {
+      setStripeSetupStatusLoading(false)
+    }
+  }, [venue.id, showStripe])
+
+  useEffect(() => {
+    if (!showStripe) return
+    fetchStripeSetupStatus()
+  }, [showStripe, fetchStripeSetupStatus])
+
   const handleStripeConnect = useCallback(async () => {
     if (isStripeConnecting) return
     setIsStripeConnecting(true)
@@ -1112,16 +1302,6 @@ export function VenueOpsConsoleClient({
     if (stripeStatus?.needsOnboarding) return "Continue onboarding"
     return "Stripe connected"
   }, [isStripeConnecting, stripeStatus?.needsOnboarding, venue.stripeAccountId])
-
-  const stripeAlerts = useMemo(() => {
-    if (!stripeStatus) return []
-    if (stripeStatus.status === "ok") return []
-    const messages = [...(stripeStatus.messages || [])]
-    if (stripeStatus.disabledReason) {
-      messages.push(`Stripe disabled: ${stripeStatus.disabledReason}`)
-    }
-    return messages
-  }, [stripeStatus])
 
   const formatMoney = useCallback((amount: number, currency: string) => {
     const value = amount / 100
@@ -1261,21 +1441,6 @@ export function VenueOpsConsoleClient({
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-6">
-        {showStripe && stripeAlerts.length > 0 && (
-          <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-900">
-            <CardHeader>
-              <CardTitle>Stripe needs attention</CardTitle>
-              <CardDescription className="text-amber-800">
-                Complete onboarding to keep payouts enabled.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {stripeAlerts.map((message, index) => (
-                <div key={`${message}-${index}`}>{message}</div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Left Column: Reservations Timeline */}
           <div className="space-y-4">
@@ -1460,24 +1625,18 @@ export function VenueOpsConsoleClient({
                   <CardDescription>Available Stripe balance</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {stripeLoading ? (
+                  {stripeLoading || stripeSetupStatusLoading ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
                       <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
                       <p className="text-sm text-muted-foreground animate-pulse">Loading Payouts...</p>
                     </div>
                   ) : !venue.stripeAccountId || stripeStatus?.needsOnboarding ? (
-                    <div className="flex flex-col items-center justify-center py-4 text-center space-y-4">
-                      <div className="rounded-full bg-primary/5 p-4">
-                        <CreditCard className="h-8 w-8 text-primary" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-semibold">{!venue.stripeAccountId ? "Payments not connected" : "Onboarding incomplete"}</p>
-                        <p className="text-sm text-muted-foreground max-w-[240px]">
-                          {!venue.stripeAccountId
-                            ? "Connect your Stripe account to start receiving payouts for your bookings."
-                            : "Please complete your Stripe onboarding to enable payouts."}
-                        </p>
-                      </div>
+                    <>
+                      <PayoutSetupStatusPanelInner
+                        stripeSetupStatus={stripeSetupStatus}
+                        onRetry={fetchStripeSetupStatus}
+                        hideButtons
+                      />
                       <Button
                         className="w-full"
                         onClick={handleStripeConnect}
@@ -1495,9 +1654,13 @@ export function VenueOpsConsoleClient({
                           </>
                         )}
                       </Button>
-                    </div>
+                    </>
                   ) : (
                     <>
+                      <PayoutSetupStatusPanelInner
+                        stripeSetupStatus={stripeSetupStatus}
+                        onRetry={fetchStripeSetupStatus}
+                      />
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="rounded-lg border bg-muted/40 p-3">
                           <div className="text-xs text-muted-foreground">Total balance</div>
