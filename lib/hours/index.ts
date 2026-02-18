@@ -154,7 +154,7 @@ function getPartsInTimezone(at: Date, tz: string): {
  * Return UTC Date for "refDate's calendar day in tz at hour:minute (in tz)".
  * Uses iteration to find UTC ms that formats to the desired local time in tz.
  */
-function dateAtTimeInTimezone(
+export function dateAtTimeInTimezone(
   tz: string,
   refDate: Date,
   hour: number,
@@ -218,9 +218,10 @@ function parseHHMM(s: string | null): number | null {
  * Format minutes since midnight as "9:00 AM" style.
  */
 function formatMinutesToDisplay(minutes: number): string {
-  const h = Math.floor(minutes / 60)
+  const totalHours = Math.floor(minutes / 60)
+  const h = totalHours % 24
   const m = minutes % 60
-  const period = h >= 12 ? "PM" : "AM"
+  const period = (totalHours >= 12 && totalHours < 24) ? "PM" : "AM"
   const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h
   return `${displayH}:${m.toString().padStart(2, "0")} ${period}`
 }
@@ -385,32 +386,52 @@ export function isReservationWithinCanonicalHours(
   canonical: CanonicalVenueHours
 ): { isValid: boolean; error?: string } {
   const tz = canonical.timezone || DEFAULT_TIMEZONE
-  const startParts = getPartsInTimezone(startAt, tz)
-  const endParts = getPartsInTimezone(endAt, tz)
-  const startDateStr = `${startParts.year}-${String(startParts.month).padStart(2, "0")}-${String(startParts.day).padStart(2, "0")}`
-  const endDateStr = `${endParts.year}-${String(endParts.month).padStart(2, "0")}-${String(endParts.day).padStart(2, "0")}`
-  if (startDateStr !== endDateStr) {
+  // Allow up to 24 hours duration, and allow spanning at most two calendar days (crossing midnight)
+  const durationMs = endAt.getTime() - startAt.getTime()
+  if (durationMs > 24 * 60 * 60 * 1000) {
     return {
       isValid: false,
-      error: "Reservations cannot span multiple days. Please select a time within a single day.",
+      error: "Reservations cannot exceed 24 hours.",
     }
   }
-  const intervals = getOpenIntervalsForDate(canonical, startDateStr)
-  if (intervals.length === 0) {
-    return {
-      isValid: false,
-      error: "This venue isn't open at this time. Please check opening hours.",
+
+  // Verify each day's portion falls within open intervals
+  const checkDay = (at: Date) => {
+    const parts = getPartsInTimezone(at, tz)
+    const dateStr = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`
+    const intervals = getOpenIntervalsForDate(canonical, dateStr)
+    const min = parts.hour * 60 + parts.minute
+    const dayOfWeek = (parts.dayOfWeek) % 7
+    return { intervals, min, dateStr, dayOfWeek }
+  }
+
+  const startInfo = checkDay(startAt)
+  const endInfo = checkDay(endAt)
+
+  // If spans two days, we check if it crosses midnight within open hours
+  if (startInfo.dateStr !== endInfo.dateStr) {
+    // Check Day 1: must be open from start until 24:00 (1440 mins)
+    const d1Fits = startInfo.intervals.some(i => startInfo.min >= i.startMin && i.endMin >= 1440)
+    // Check Day 2: must be open from 00:00 (0 mins) until end
+    const d2Fits = endInfo.intervals.some(i => i.startMin <= 0 && endInfo.min <= i.endMin)
+
+    if (!d1Fits || !d2Fits) {
+      return {
+        isValid: false,
+        error: "This venue isn't open during the entire selected period.",
+      }
+    }
+  } else {
+    // Single day check
+    const fits = startInfo.intervals.some((i) => startInfo.min >= i.startMin && endInfo.min <= i.endMin)
+    if (!fits) {
+      return {
+        isValid: false,
+        error: "This venue isn't open at this time. Please check opening hours.",
+      }
     }
   }
-  const startMin = startParts.hour * 60 + startParts.minute
-  const endMin = endParts.hour * 60 + endParts.minute
-  const fits = intervals.some((i) => startMin >= i.startMin && endMin <= i.endMin)
-  if (!fits) {
-    return {
-      isValid: false,
-      error: "This venue isn't open at this time. Please check opening hours.",
-    }
-  }
+
   return { isValid: true }
 }
 

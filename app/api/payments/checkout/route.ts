@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     const sessionResponse = await stripe.checkout.sessions.create(
       {
+        ui_mode: "embedded",
         mode: "payment",
         line_items: [
           {
@@ -106,8 +107,7 @@ export async function POST(request: NextRequest) {
             },
           },
         ],
-        success_url: `${appUrl.replace(/\/$/, "")}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${appUrl.replace(/\/$/, "")}/checkout/cancel?session_id={CHECKOUT_SESSION_ID}`,
+        return_url: `${appUrl.replace(/\/$/, "")}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
         customer_email: userRecord.email ?? undefined,
         metadata: {
           paymentId: payment.id,
@@ -133,7 +133,10 @@ export async function POST(request: NextRequest) {
       data: { stripeCheckoutSessionId: sessionResponse.id },
     })
 
-    return NextResponse.json({ url: sessionResponse.url })
+    return NextResponse.json({ 
+      clientSecret: sessionResponse.client_secret,
+      stripeAccountId: context.venue?.stripeAccountId
+    })
   } catch (error) {
     console.error("POST /api/payments/checkout:", error)
     return NextResponse.json(

@@ -11,7 +11,8 @@ import { SignInModal } from "@/components/auth/SignInModal"
 import { cn } from "@/lib/utils"
 import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } from "@/lib/availability-utils"
 import { useVenueFavorites } from "@/lib/hooks"
-import type { CanonicalVenueHours } from "@/lib/hours"
+import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
+import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
 
 interface Table {
   id: string
@@ -80,7 +81,7 @@ export function VenueBookingWidget({
   canonicalHours,
 }: VenueBookingWidgetProps) {
   const { data: favoritesData } = useVenueFavorites(venueId)
-  
+
   const favoritedTableIds = useMemo(() => {
     if (favoritesData) return new Set(favoritesData.tables)
     return initialFavoritedTableIds
@@ -99,11 +100,11 @@ export function VenueBookingWidget({
 
   // Get initial seat count from URL params if available
   const initialSeatCountFromUrl = searchParams?.get("seats")
-  const parsedInitialSeatCount = initialSeatCountFromUrl 
-    ? parseInt(initialSeatCountFromUrl, 10) 
+  const parsedInitialSeatCount = initialSeatCountFromUrl
+    ? parseInt(initialSeatCountFromUrl, 10)
     : null
-  const validInitialSeatCount = parsedInitialSeatCount && parsedInitialSeatCount > 0 
-    ? parsedInitialSeatCount 
+  const validInitialSeatCount = parsedInitialSeatCount && parsedInitialSeatCount > 0
+    ? parsedInitialSeatCount
     : null
 
   // Get preselected resource from QR code scan
@@ -112,7 +113,7 @@ export function VenueBookingWidget({
 
   // #region agent log
   useEffect(() => {
-    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:mount", message: "URL params for preselection", data: { resourceTypeFromUrl, resourceIdFromUrl, fullUrl: typeof window !== "undefined" ? window.location.href : "" }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2" }) }).catch(() => {})
+    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:mount", message: "URL params for preselection", data: { resourceTypeFromUrl, resourceIdFromUrl, fullUrl: typeof window !== "undefined" ? window.location.href : "" }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2" }) }).catch(() => { })
   }, [resourceTypeFromUrl, resourceIdFromUrl])
   // #endregion
 
@@ -123,6 +124,8 @@ export function VenueBookingWidget({
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null)
+  const [checkoutStripeAccountId, setCheckoutStripeAccountId] = useState<string | null>(null)
   const [preselectedSeatId, setPreselectedSeatId] = useState<string | null>(
     resourceTypeFromUrl === "seat" && resourceIdFromUrl ? resourceIdFromUrl : null
   )
@@ -170,7 +173,12 @@ export function VenueBookingWidget({
     }
 
     try {
-      const startAtLocal = new Date(`${date}T${startTime}`)
+      // Construct start time using venue timezone (interpreting user input as venue local time)
+      const [h, m] = startTime.split(":").map(Number)
+      const refDate = new Date(`${date}T12:00:00Z`) // Neutral ref date for the calendar day
+      const tz = canonicalHours?.timezone || "America/New_York"
+      const startAtLocal = dateAtTimeInTimezone(tz, refDate, h, m)
+
       const endAtLocal = new Date(
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
@@ -261,7 +269,7 @@ export function VenueBookingWidget({
       if (preselectedSeatId) {
         const preselectedSeat = (data.availableSeats || []).find((s: AvailableSeat) => s.id === preselectedSeatId)
         // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectSeat", message: "Preselection seat result", data: { preselectedSeatId, foundSeat: !!preselectedSeat, availableSeatIds: (data.availableSeats || []).map((s: AvailableSeat) => s.id).slice(0, 5) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {})
+        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectSeat", message: "Preselection seat result", data: { preselectedSeatId, foundSeat: !!preselectedSeat, availableSeatIds: (data.availableSeats || []).map((s: AvailableSeat) => s.id).slice(0, 5) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => { })
         // #endregion
         if (preselectedSeat) {
           setSelectedSeatId(preselectedSeatId)
@@ -272,7 +280,7 @@ export function VenueBookingWidget({
         const availableGroupTables = data.availableGroupTables || []
         const preselectedTable = availableGroupTables.find((t: AvailableGroupTable) => t.id === preselectedTableId)
         // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectTable", message: "Preselection table result", data: { preselectedTableId, foundTable: !!preselectedTable, availableGroupTablesCount: availableGroupTables.length, availableTableIds: availableGroupTables.map((t: AvailableGroupTable) => t.id).slice(0, 8), note: !preselectedTable ? "Table not in availableGroupTables (may be individual booking mode)" : null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {})
+        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectTable", message: "Preselection table result", data: { preselectedTableId, foundTable: !!preselectedTable, availableGroupTablesCount: availableGroupTables.length, availableTableIds: availableGroupTables.map((t: AvailableGroupTable) => t.id).slice(0, 8), note: !preselectedTable ? "Table not in availableGroupTables (may be individual booking mode)" : null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => { })
         // #endregion
         if (preselectedTable) {
           setSelectedGroupTableId(preselectedTableId)
@@ -353,7 +361,7 @@ export function VenueBookingWidget({
       setDate(`${yyyy}-${mm}-${dd}`)
       setStartTime(`${hh}:${min}`)
       hasInitialized.current = true
-      
+
       // Auto-trigger availability check after setting date/time
       // Also trigger if we have preselected resource from QR code
       setTimeout(() => {
@@ -368,21 +376,21 @@ export function VenueBookingWidget({
   // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {
     const grouped = new Map<string, { available: AvailableSeat[]; unavailable: UnavailableSeat[] }>()
-    
+
     availableSeats.forEach((seat) => {
       if (!grouped.has(seat.tableId)) {
         grouped.set(seat.tableId, { available: [], unavailable: [] })
       }
       grouped.get(seat.tableId)!.available.push(seat)
     })
-    
+
     unavailableSeats.forEach((seat) => {
       if (!grouped.has(seat.tableId)) {
         grouped.set(seat.tableId, { available: [], unavailable: [] })
       }
       grouped.get(seat.tableId)!.unavailable.push(seat)
     })
-    
+
     return grouped
   }, [availableSeats, unavailableSeats])
 
@@ -390,14 +398,14 @@ export function VenueBookingWidget({
   const getTableInfo = (tableId: string) => {
     const table = tables.find((t) => t.id === tableId)
     if (!table) return null
-    
+
     // Parse imageUrls from JSON if needed
-    const imageUrls = Array.isArray(table.imageUrls) 
-      ? table.imageUrls 
-      : table.imageUrls 
+    const imageUrls = Array.isArray(table.imageUrls)
+      ? table.imageUrls
+      : table.imageUrls
         ? (typeof table.imageUrls === 'string' ? JSON.parse(table.imageUrls) : table.imageUrls)
         : []
-    
+
     return {
       ...table,
       imageUrls: Array.isArray(imageUrls) ? imageUrls : [],
@@ -407,33 +415,33 @@ export function VenueBookingWidget({
   // Calculate total price for selected seat(s) or table
   const totalPrice = useMemo(() => {
     if (!durationHours) return 0
-    
+
     // Group table selection
     if (selectedGroupTableId) {
       const table = availableGroupTables.find((t) => t.id === selectedGroupTableId)
       if (!table) return 0
       return table.pricePerHour * durationHours
     }
-    
+
     // Individual seat selection
     if (seatCount === 1 && selectedSeatId) {
       const seat = availableSeats.find((s) => s.id === selectedSeatId)
       if (!seat) return 0
       return seat.pricePerHour * durationHours
     }
-    
+
     // Multi-seat selection
     if (seatCount > 1 && selectedSeatIds.length > 0) {
       const selectedSeats = availableSeats.filter((s) => selectedSeatIds.includes(s.id))
       const totalPricePerHour = selectedSeats.reduce((sum, seat) => sum + seat.pricePerHour, 0)
       return totalPricePerHour * durationHours
     }
-    
+
     return 0
   }, [selectedSeatId, selectedSeatIds, selectedGroupTableId, durationHours, availableSeats, availableGroupTables, seatCount])
 
   const canCheckAvailability = date && startTime && !isLoadingAvailability;
-  
+
   const hasSingleSeatData = seatCount === 1 && (availableSeats.length > 0 || unavailableSeats.length > 0 || availableGroupTables.length > 0 || unavailableGroupTables.length > 0);
   const hasMultiSeatData = seatCount > 1 && (availableSeatGroups.length > 0 || availableGroupTables.length > 0 || unavailableGroupTables.length > 0);
   const hasAvailabilityData = hasSingleSeatData || hasMultiSeatData;
@@ -474,7 +482,11 @@ export function VenueBookingWidget({
     try {
       setIsSubmitting(true)
 
-      const startAtLocal = new Date(`${date}T${startTime}`)
+      const [h, m] = startTime.split(":").map(Number)
+      const refDate = new Date(`${date}T12:00:00Z`)
+      const tz = canonicalHours?.timezone || "America/New_York"
+      const startAtLocal = dateAtTimeInTimezone(tz, refDate, h, m)
+
       const endAtLocal = new Date(
         startAtLocal.getTime() + durationHours * 60 * 60 * 1000
       )
@@ -507,7 +519,7 @@ export function VenueBookingWidget({
         requestBody.seatCount = selectedTable.seatCount
       } else {
         // Booking individual seats
-        const seatIds = seatCount === 1 
+        const seatIds = seatCount === 1
           ? [selectedSeatId!]
           : selectedSeatIds
         requestBody.seatIds = seatIds
@@ -538,13 +550,13 @@ export function VenueBookingWidget({
         return
       }
 
-      if (!data?.url) {
+      if (!data?.clientSecret) {
         setError("Unable to start checkout. Please try again.")
         return
       }
 
-      showToast("Redirecting to secure checkout...", "success")
-      window.location.assign(data.url)
+      setCheckoutClientSecret(data.clientSecret)
+      setCheckoutStripeAccountId(data.stripeAccountId || null)
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")
@@ -594,7 +606,7 @@ export function VenueBookingWidget({
   const renderSingleSeatSelection = () => {
     const hasAnySeats = availableSeats.length > 0 || unavailableSeats.length > 0
     const hasAnyTables = availableGroupTables.length > 0 || unavailableGroupTables.length > 0
-    
+
     if (!hasAnySeats && !hasAnyTables) {
       return (
         <p className="text-sm text-muted-foreground">
@@ -711,11 +723,11 @@ export function VenueBookingWidget({
                 const isSelected = false // Unavailable tables can't be selected
                 const nextAvailableTime = table.nextAvailableAt
                   ? new Date(table.nextAvailableAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
                   : null
-                
+
                 return (
                   <button
                     key={table.id}
@@ -1050,11 +1062,11 @@ export function VenueBookingWidget({
                 const isSelected = false
                 const nextAvailableTime = table.nextAvailableAt
                   ? new Date(table.nextAvailableAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
                   : null
-                
+
                 return (
                   <button
                     key={table.id}
@@ -1126,99 +1138,99 @@ export function VenueBookingWidget({
             )}
             <div className="space-y-4">
               {availableSeatGroups.map((group, groupIndex) => {
-          const table = getTableInfo(group.tableId)
-          const allSeatIdsInGroup = group.seats.map(s => s.id)
-          const isGroupSelected = selectedSeatIds.length === seatCount && 
-            allSeatIdsInGroup.every(id => selectedSeatIds.includes(id))
+                const table = getTableInfo(group.tableId)
+                const allSeatIdsInGroup = group.seats.map(s => s.id)
+                const isGroupSelected = selectedSeatIds.length === seatCount &&
+                  allSeatIdsInGroup.every(id => selectedSeatIds.includes(id))
 
-          return (
-            <div key={groupIndex} className="space-y-3">
-              {/* Group header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {table && table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
-                    <div
-                      className="h-12 w-12 overflow-hidden rounded-md cursor-zoom-in"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        openImageModal(table.imageUrls as string[], 0)
-                      }}
-                    >
-                      <img
-                        src={table.imageUrls[0]}
-                        alt={table.name || "Table"}
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                      />
+                return (
+                  <div key={groupIndex} className="space-y-3">
+                    {/* Group header */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {table && table.imageUrls && Array.isArray(table.imageUrls) && table.imageUrls.length > 0 && (
+                          <div
+                            className="h-12 w-12 overflow-hidden rounded-md cursor-zoom-in"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              openImageModal(table.imageUrls as string[], 0)
+                            }}
+                          >
+                            <img
+                              src={table.imageUrls[0]}
+                              alt={table.name || "Table"}
+                              className="h-full w-full object-cover"
+                              draggable={false}
+                            />
+                          </div>
+                        )}
+                        <div>
+                          <h4 className="text-sm font-medium">
+                            {table?.name || "Table"} - {seatCount} seats
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            ${group.totalPricePerHour.toFixed(0)}/hour total
+                          </p>
+                        </div>
+                      </div>
+                      {isGroupSelected && (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <svg
+                            className="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div>
-                    <h4 className="text-sm font-medium">
-                      {table?.name || "Table"} - {seatCount} seats
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                      ${group.totalPricePerHour.toFixed(0)}/hour total
-                    </p>
-                  </div>
-                </div>
-                {isGroupSelected && (
-                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <svg
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                )}
-              </div>
 
-              {/* Seat cards in group */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {group.seats.map((seat) => {
-                  const isSeatSelected = selectedSeatIds.includes(seat.id)
+                    {/* Seat cards in group */}
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {group.seats.map((seat) => {
+                        const isSeatSelected = selectedSeatIds.includes(seat.id)
 
-                  return (
-                    <SeatCard
-                      key={seat.id}
-                      seat={{
-                        id: seat.id,
-                        label: seat.label,
-                        position: seat.position,
-                        pricePerHour: seat.pricePerHour,
-                        tags: seat.tags,
-                        imageUrls: seat.imageUrls,
-                      }}
-                      table={{
-                        id: group.tableId,
-                        name: table?.name || null,
-                        imageUrls: (table?.imageUrls as string[]) || [],
-                      }}
-                      isAvailable={true}
-                      isSelected={isSeatSelected}
-                      isCommunal={seat.isCommunal ?? false}
-                      isFavorited={favoritedSeatIds.has(seat.id)}
-                      venueId={venueId}
-                      onSelect={() => {
-                        setSelectedSeatIds(allSeatIdsInGroup)
-                        setSelectedGroupTableId(null)
-                        setSelectedSeatId(null)
-                      }}
-                    />
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
+                        return (
+                          <SeatCard
+                            key={seat.id}
+                            seat={{
+                              id: seat.id,
+                              label: seat.label,
+                              position: seat.position,
+                              pricePerHour: seat.pricePerHour,
+                              tags: seat.tags,
+                              imageUrls: seat.imageUrls,
+                            }}
+                            table={{
+                              id: group.tableId,
+                              name: table?.name || null,
+                              imageUrls: (table?.imageUrls as string[]) || [],
+                            }}
+                            isAvailable={true}
+                            isSelected={isSeatSelected}
+                            isCommunal={seat.isCommunal ?? false}
+                            isFavorited={favoritedSeatIds.has(seat.id)}
+                            venueId={venueId}
+                            onSelect={() => {
+                              setSelectedSeatIds(allSeatIdsInGroup)
+                              setSelectedGroupTableId(null)
+                              setSelectedSeatId(null)
+                            }}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -1239,7 +1251,7 @@ export function VenueBookingWidget({
     <>
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-xl border bg-white/90 p-4 shadow-sm ring-1 ring-black/5"
+        className="space-y-4 rounded-lg border bg-white/90 p-4 shadow-sm ring-1 ring-black/5"
       >
         {/* Time Selection */}
         <div className="space-y-3">
@@ -1385,20 +1397,20 @@ export function VenueBookingWidget({
             {renderSeatSelection()}
 
             {/* Price estimate */}
-            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) || 
+            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
               (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-              <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Estimated total
-                </span>
-                <span className="text-sm font-semibold">
-                  ${totalPrice.toFixed(0)}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">
-                    ({durationHours}h)
+                <div className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Estimated total
                   </span>
-                </span>
-              </div>
-            )}
+                  <span className="text-sm font-semibold">
+                    ${totalPrice.toFixed(0)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      ({durationHours}h)
+                    </span>
+                  </span>
+                </div>
+              )}
           </div>
         )}
 
@@ -1411,24 +1423,24 @@ export function VenueBookingWidget({
         )}
 
         {/* Only show reserve button after a selection is made */}
-        {hasAvailabilityData && 
-         ((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
-          (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-          <>
-            <Button
-              type="submit"
-              className="mt-1 w-full"
-              size="lg"
-              loading={isSubmitting}
-            >
-              {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
-            </Button>
+        {hasAvailabilityData &&
+          ((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
+            (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
+            <div className="mt-6 space-y-2">
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                loading={isSubmitting}
+              >
+                {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
+              </Button>
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              You'll complete payment securely with Stripe before the booking is confirmed.
-            </p>
-          </>
-        )}
+              <p className="text-xs text-muted-foreground">
+                You'll complete payment securely with Stripe before the booking is confirmed.
+              </p>
+            </div>
+          )}
       </form>
 
       {ToastComponent}
@@ -1450,6 +1462,14 @@ export function VenueBookingWidget({
         callbackUrl={pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")}
       />
 
+      <EmbeddedCheckoutModal
+        clientSecret={checkoutClientSecret}
+        stripeAccountId={checkoutStripeAccountId}
+        onClose={() => {
+          setCheckoutClientSecret(null)
+          setCheckoutStripeAccountId(null)
+        }}
+      />
       <ImageGalleryModal
         images={imageModalImages}
         initialIndex={imageModalInitialIndex}
