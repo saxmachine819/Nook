@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } from "@/lib/availability-utils"
 import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
+import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
 
 interface Table {
   id: string
@@ -123,6 +124,8 @@ export function VenueBookingWidget({
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null)
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([])
   const [selectedGroupTableId, setSelectedGroupTableId] = useState<string | null>(null)
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null)
+  const [checkoutStripeAccountId, setCheckoutStripeAccountId] = useState<string | null>(null)
   const [preselectedSeatId, setPreselectedSeatId] = useState<string | null>(
     resourceTypeFromUrl === "seat" && resourceIdFromUrl ? resourceIdFromUrl : null
   )
@@ -547,13 +550,13 @@ export function VenueBookingWidget({
         return
       }
 
-      if (!data?.url) {
+      if (!data?.clientSecret) {
         setError("Unable to start checkout. Please try again.")
         return
       }
 
-      showToast("Redirecting to secure checkout...", "success")
-      window.location.assign(data.url)
+      setCheckoutClientSecret(data.clientSecret)
+      setCheckoutStripeAccountId(data.stripeAccountId || null)
     } catch (err) {
       console.error("Error creating reservation:", err)
       setError("Something went wrong while creating your reservation.")
@@ -1459,6 +1462,14 @@ export function VenueBookingWidget({
         callbackUrl={pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")}
       />
 
+      <EmbeddedCheckoutModal
+        clientSecret={checkoutClientSecret}
+        stripeAccountId={checkoutStripeAccountId}
+        onClose={() => {
+          setCheckoutClientSecret(null)
+          setCheckoutStripeAccountId(null)
+        }}
+      />
       <ImageGalleryModal
         images={imageModalImages}
         initialIndex={imageModalInitialIndex}
