@@ -249,14 +249,14 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               })()}
             />
 
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-xl">
+            <div className="relative overflow-hidden rounded-3xl bg-muted shadow-lg">
               <VenueImageCarousel
                 images={venueHeroImages}
                 className="h-[300px] sm:h-[450px] lg:h-[650px]"
               />
               <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-black/5" />
               {availabilityLabel && (
-                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary shadow-xl">
+                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg">
                   {availabilityLabel}
                 </span>
               )}
@@ -279,7 +279,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               <div className="h-px w-full bg-border/50" />
 
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-black tracking-tight text-foreground/80">The Space</h2>
+                <h2 className="text-xl font-bold tracking-tight text-foreground/80">The Space</h2>
                 {googleMapsHref && (
                   <Button asChild variant="ghost" className="rounded-2xl font-bold bg-primary/5 hover:bg-primary/10 text-primary">
                     <a href={googleMapsHref || undefined} target="_blank" rel="noreferrer">
@@ -297,8 +297,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               />
 
               {venue.rulesText && (
-                <div className="rounded-[2rem] border-none bg-primary/[0.03] p-8 space-y-4">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-primary/40">
+                <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-primary/40">
                     House rules
                   </div>
                   <p className="whitespace-pre-line text-sm font-medium leading-relaxed text-foreground/70">
@@ -317,7 +317,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               const dealDescription = generateDescription(primaryDeal.type, eligibility)
               return (
                 <div className="hidden lg:block">
-                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/10 rounded-[2rem]">
+                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-md shadow-emerald-500/5 rounded-3xl">
                     <CardContent className="p-6">
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
@@ -347,27 +347,27 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )
             })()}
 
-            <Card className="overflow-hidden border-none bg-white shadow-xl rounded-[2.5rem]">
+            <Card className="overflow-hidden border-none bg-white shadow-lg rounded-3xl">
               <CardHeader className="p-8 pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
-                    <CardTitle className="text-2xl font-black tracking-tight">Reserve</CardTitle>
-                    <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                    <CardTitle className="text-2xl font-bold tracking-tight">Reserve</CardTitle>
+                    <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
                       {pricingDescription}
                     </p>
                   </div>
                   <div className="text-right">
                     {minPrice === maxPrice ? (
-                      <div className="text-3xl font-black tracking-tighter text-primary">
+                      <div className="text-3xl font-bold tracking-tighter text-primary">
                         ${minPrice.toFixed(0)}
-                        <span className="text-xs font-bold text-muted-foreground/40 ml-1 uppercase tracking-tighter">
+                        <span className="text-xs font-medium text-muted-foreground/40 ml-1 uppercase tracking-tighter">
                           /hr
                         </span>
                       </div>
                     ) : (
-                      <div className="text-2xl font-black tracking-tighter text-primary">
+                      <div className="text-2xl font-bold tracking-tighter text-primary">
                         ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
-                        <span className="text-xs font-bold text-muted-foreground/40 ml-1 uppercase tracking-tighter">
+                        <span className="text-xs font-medium text-muted-foreground/40 ml-1 uppercase tracking-tighter">
                           /hr
                         </span>
                       </div>

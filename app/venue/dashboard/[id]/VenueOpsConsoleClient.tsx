@@ -213,6 +213,10 @@ export function VenueOpsConsoleClient({
     instantAvailable: number
     currency: string
   } | null>(null)
+  const [dailyRevenue, setDailyRevenue] = useState<number | null>(null)
+  const [weeklyRevenue, setWeeklyRevenue] = useState<number | null>(null)
+  const [dailyRevenueLoading, setDailyRevenueLoading] = useState(false)
+  const [weeklyRevenueLoading, setWeeklyRevenueLoading] = useState(false)
   const [isPayoutDialogOpen, setIsPayoutDialogOpen] = useState(false)
   const [payoutAmount, setPayoutAmount] = useState("")
   const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false)
@@ -1059,6 +1063,12 @@ export function VenueOpsConsoleClient({
   useEffect(() => {
     if (!showStripe) return
     let isMounted = true
+
+    setStripeLoading(true)
+    setDailyRevenueLoading(true)
+    setWeeklyRevenueLoading(true)
+
+    // Fetch account status and balance
     fetch(`/api/venues/${venue.id}/stripe/status`)
       .then((response) => (response.ok ? response.json() : null))
       .then((payload) => {
@@ -1080,6 +1090,27 @@ export function VenueOpsConsoleClient({
       .finally(() => {
         if (isMounted) setStripeLoading(false)
       })
+
+    // Fetch daily revenue separately
+    fetch(`/api/venues/${venue.id}/stripe/revenue?period=daily`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data) setDailyRevenue(data.revenue)
+      })
+      .finally(() => {
+        if (isMounted) setDailyRevenueLoading(false)
+      })
+
+    // Fetch weekly revenue separately
+    fetch(`/api/venues/${venue.id}/stripe/revenue?period=weekly`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data) setWeeklyRevenue(data.revenue)
+      })
+      .finally(() => {
+        if (isMounted) setWeeklyRevenueLoading(false)
+      })
+
     return () => {
       isMounted = false
     }
@@ -1528,29 +1559,35 @@ export function VenueOpsConsoleClient({
                     <>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="rounded-lg border bg-muted/40 p-3">
-                          <div className="text-xs text-muted-foreground">Total balance</div>
+                          <div className="text-xs text-muted-foreground">Daily Revenue</div>
                           <div className="text-lg font-semibold">
-                            {stripeBalance ? (
-                              formatMoney(stripeBalance.available + stripeBalance.pending, stripeBalance.currency)
+                            {dailyRevenueLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-primary/40 mt-1" />
+                            ) : dailyRevenue !== null ? (
+                              formatMoney(dailyRevenue, stripeBalance?.currency || "usd")
                             ) : (
                               "—"
                             )}
                           </div>
                         </div>
                         <div className="rounded-lg border bg-muted/40 p-3">
-                          <div className="text-xs text-muted-foreground">Pending</div>
+                          <div className="text-xs text-muted-foreground">Weekly Revenue</div>
                           <div className="text-lg font-semibold">
-                            {stripeBalance ? (
-                              formatMoney(stripeBalance.pending, stripeBalance.currency)
+                            {weeklyRevenueLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-primary/40 mt-1" />
+                            ) : weeklyRevenue !== null ? (
+                              formatMoney(weeklyRevenue, stripeBalance?.currency || "usd")
                             ) : (
                               "—"
                             )}
                           </div>
                         </div>
                         <div className="rounded-lg border bg-muted/40 p-3">
-                          <div className="text-xs text-muted-foreground">Available</div>
+                          <div className="text-xs text-muted-foreground">Withdrawal Balance</div>
                           <div className="text-lg font-semibold text-emerald-600">
-                            {stripeBalance ? (
+                            {stripeLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-emerald-600/40 mt-1" />
+                            ) : stripeBalance ? (
                               formatMoney(stripeBalance.available, stripeBalance.currency)
                             ) : (
                               "—"
