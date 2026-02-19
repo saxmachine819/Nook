@@ -47,11 +47,18 @@ export async function POST(request: NextRequest) {
         let applicationFeeId: string | null = null
         if (paymentIntentId && stripeAccount) {
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+            expand: ["latest_charge"],
             stripeAccount,
           })
-          const charge = paymentIntent.charges?.data?.[0]
-          chargeId = charge?.id ?? null
-          applicationFeeId = (charge as any)?.application_fee ?? null
+          const charge = paymentIntent.latest_charge
+          if (typeof charge === "string") {
+            chargeId = charge
+          } else if (charge) {
+            chargeId = charge.id
+            const appFee = charge.application_fee
+            applicationFeeId =
+              typeof appFee === "string" ? appFee : appFee?.id ?? null
+          }
         }
 
         await prisma.payment.update({
