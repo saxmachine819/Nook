@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         reservationId,
         venueId: payment.venueId,
         userId: session.user.id,
-        requestedAmount: refundableAmount,
+        amount: refundableAmount,
         reason: reason?.trim() || null,
       },
     })
