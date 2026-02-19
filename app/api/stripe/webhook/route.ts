@@ -39,7 +39,6 @@ export async function POST(request: NextRequest) {
         if (!payment) break
 
         if (payment.status === "PAID" && payment.reservationId) break
-        if (!payment.userId) break
 
         const stripeAccount = event.account || payment.stripeAccountId || undefined
         const paymentIntentId = session.payment_intent as string | null
@@ -47,20 +46,12 @@ export async function POST(request: NextRequest) {
         let chargeId: string | null = null
         let applicationFeeId: string | null = null
         if (paymentIntentId && stripeAccount) {
-          const paymentIntent = await stripe.paymentIntents.retrieve(
-            paymentIntentId,
-            { expand: ["latest_charge"] },
-            { stripeAccount }
-          )
-          const charge = paymentIntent.latest_charge
-          if (typeof charge === "object" && charge) {
-            chargeId = charge.id ?? null
-            const appFee = charge.application_fee
-            applicationFeeId =
-              typeof appFee === "string" ? appFee : appFee?.id ?? null
-          } else if (typeof charge === "string") {
-            chargeId = charge
-          }
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+            stripeAccount,
+          })
+          const charge = paymentIntent.charges?.data?.[0]
+          chargeId = charge?.id ?? null
+          applicationFeeId = (charge as any)?.application_fee ?? null
         }
 
         await prisma.payment.update({
@@ -75,9 +66,8 @@ export async function POST(request: NextRequest) {
 
         try {
           const bookingPayload = payment.bookingPayload as any
-          const userId = payment.userId
-          const context = await buildBookingContext(bookingPayload, userId)
-          const reservation = await createReservationFromContext(context, userId)
+          const context = await buildBookingContext(bookingPayload, payment.userId)
+          const reservation = await createReservationFromContext(context, payment.userId)
           const pricing = computeBookingPrice(context)
 
           await prisma.payment.update({
@@ -90,7 +80,7 @@ export async function POST(request: NextRequest) {
           })
 
           const userRecord = await prisma.user.findUnique({
-            where: { id: userId },
+            where: { id: payment.userId },
             select: { email: true },
           })
 
@@ -100,7 +90,7 @@ export async function POST(request: NextRequest) {
               type: "booking_confirmation",
               dedupeKey: `booking_confirmation:${reservation.id}`,
               toEmail: userRecord.email.trim(),
-              userId,
+              userId: payment.userId,
               venueId: reservation.venueId,
               bookingId: reservation.id,
               payload: {

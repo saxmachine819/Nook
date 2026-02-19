@@ -31,11 +31,11 @@ type RefundRequest = {
     id: string
     startAt: string | Date
     endAt: string | Date
-  } | null
+  }
   user: {
     name: string | null
     email: string | null
-  } | null
+  }
 }
 
 export function RefundRequestsClient({
@@ -186,7 +186,7 @@ export function RefundRequestsClient({
               <CardHeader className="space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">
-                    {refund.user?.name || refund.user?.email || "Guest"}
+                    {refund.user.name || refund.user.email || "Guest"}
                   </CardTitle>
                   <span className={statusBadge(refund.status)}>
                     {refund.status.toLowerCase()}
@@ -199,7 +199,7 @@ export function RefundRequestsClient({
               <CardContent className="space-y-3 text-sm">
                 <div className="grid gap-1 text-xs text-muted-foreground">
                   <div>
-                    Reservation <span className="font-medium text-foreground">{refund.reservation?.id ?? "—"}</span>
+                    Reservation <span className="font-medium text-foreground">{refund.reservation.id}</span>
                   </div>
                   {refund.reason && (
                     <div>
@@ -215,11 +215,9 @@ export function RefundRequestsClient({
                   >
                     Approve
                   </Button>
-                  {refund.reservation ? (
-                    <Button size="sm" variant="outline" asChild>
-                      <a href={`/reservations/${refund.reservation.id}`}>View reservation</a>
-                    </Button>
-                  ) : null}
+                  <Button size="sm" variant="outline" asChild>
+                    <a href={`/reservations/${refund.reservation.id}`}>View reservation</a>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

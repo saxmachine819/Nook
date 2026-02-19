@@ -74,9 +74,10 @@ export async function GET(
       )
 
       for (const tx of response.data) {
-        // type 'charge' or 'payment' are usually the gross income
+        // type 'charge' or 'payment': use net (amount after Stripe fee and application fee)
+        // so this is venue net = gross - service charge - Nooc commission
         if (tx.type === "charge" || tx.type === "payment") {
-          totalRevenue += tx.amount
+          totalRevenue += typeof tx.net === "number" ? tx.net : tx.amount
         }
       }
 

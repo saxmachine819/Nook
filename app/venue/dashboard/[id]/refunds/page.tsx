@@ -46,7 +46,7 @@ export default async function RefundsPage({ params }: { params: { id: string } }
     )
   }
 
-  const rows = await prisma.refundRequest.findMany({
+  const refundRequests = await prisma.refundRequest.findMany({
     where: { venueId: params.id },
     include: {
       reservation: true,
@@ -55,12 +55,6 @@ export default async function RefundsPage({ params }: { params: { id: string } }
     },
     orderBy: { createdAt: "desc" },
   })
-
-  const refundRequests = rows.map((r) => ({
-    ...r,
-    requestedAmount: r.amount,
-    approvedAmount: r.status === "SUCCEEDED" ? r.amount : null,
-  }))
 
   return (
     <RefundRequestsClient

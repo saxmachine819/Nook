@@ -6,6 +6,7 @@ import { stripe } from "@/lib/stripe"
 
 export const runtime = "nodejs"
 
+/** Nook's platform commission: 20% of the booking subtotal */
 const COMMISSION_RATE = 0.2
 
 export async function POST(request: NextRequest) {
@@ -63,9 +64,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Application fee = Nook's 20% commission on the subtotal + the full 3% processing fee.
+    // This means the venue always receives exactly 80% of the subtotal.
+    // Example: $10 subtotal → customer pays $10.30 → Nook keeps $2.30 (20% + $0.30 fee) → venue gets $8.00
+    const nookCommission = Math.round(pricing.subtotalCents * COMMISSION_RATE)
     const applicationFeeAmount = Math.max(
       0,
-      Math.min(pricing.amountCents, Math.round(pricing.amountCents * COMMISSION_RATE))
+      Math.min(pricing.amountCents, nookCommission + pricing.processingFeeCents)
     )
 
     // Create reservation first (with pending status until payment completes)
@@ -119,8 +124,8 @@ export async function POST(request: NextRequest) {
               product_data: {
                 name: `Reservation at ${context.venue?.name ?? "Venue"}`,
                 description: context.isGroupBooking
-                  ? "Group table reservation"
-                  : "Seat reservation",
+                  ? `Group table reservation (includes 3% processing fee)`
+                  : `Seat reservation (includes 3% processing fee)`,
               },
             },
           },

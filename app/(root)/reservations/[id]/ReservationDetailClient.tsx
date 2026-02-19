@@ -145,6 +145,11 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
     return reservation.venue.hourlySeatPrice * hours * reservation.seatCount
   }
 
+  const subtotal = calculatePrice()
+  const totalPaid = reservation.payment?.amount != null ? reservation.payment.amount / 100 : null
+  const serviceCharge = totalPaid != null ? totalPaid - subtotal : subtotal * 0.03
+  const total = totalPaid != null ? totalPaid : subtotal + serviceCharge
+
   const formatDate = (date: Date): string => {
     return new Intl.DateTimeFormat("en-US", {
       weekday: "long",
@@ -320,10 +325,18 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
                             : `${reservation.venue.hourlySeatPrice.toFixed(0)}/hour`}
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Service charge (3%)</span>
+                    <span>${serviceCharge.toFixed(2)}</span>
+                  </div>
                   <div className="border-t pt-2">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estimated total</span>
-                      <span className="text-lg font-semibold">${calculatePrice().toFixed(0)}</span>
+                      <span className="font-medium">Total</span>
+                      <span className="text-lg font-semibold">${total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
