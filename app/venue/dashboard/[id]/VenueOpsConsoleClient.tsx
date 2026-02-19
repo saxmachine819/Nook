@@ -412,7 +412,7 @@ export function VenueOpsConsoleClient({
         : payoutInfoOpen === "weekly"
           ? weeklyInfoRef
           : withdrawalInfoRef
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setPayoutInfoOpen(null)
       }
