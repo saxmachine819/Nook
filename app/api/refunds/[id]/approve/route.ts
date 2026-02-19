@@ -71,7 +71,7 @@ export async function POST(
 
     await prisma.refundRequest.update({
       where: { id: refundId },
-      data: { status: "PROCESSING", approvedAmount: finalAmount },
+      data: { status: "PROCESSING", amount: finalAmount },
     })
 
     const refund = await stripe.refunds.create(
@@ -118,7 +118,7 @@ export async function POST(
       }),
       prisma.refundRequest.update({
         where: { id: refundId },
-        data: { status: "SUCCEEDED", approvedAmount: finalAmount },
+        data: { status: "SUCCEEDED", amount: finalAmount },
       }),
     ])
 
