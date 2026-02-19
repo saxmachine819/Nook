@@ -234,7 +234,7 @@ export function ResultsDrawer({
         "fixed left-0 right-0 flex flex-col rounded-t-[2.5rem] glass shadow-2xl overflow-hidden px-1",
         "bottom-[5.5rem]",
         isDragging && "transition-none",
-        !isDragging && "transition-[height] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
+        !isDragging && "transition-[height] duration-500 ease-smooth-out"
       )}
       style={{
         zIndex: 100,

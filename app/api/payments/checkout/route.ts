@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         startAt: context.parsedStart,
         endAt: context.parsedEnd,
         seatCount: context.isGroupBooking 
-          ? (context.requestedSeatCount ?? context.table?.seats.length ?? 1)
+          ? (context.requestedSeatCount ?? context.table?.seatCount ?? 1)
           : context.finalSeatIds.length,
         status: "pending",
       },

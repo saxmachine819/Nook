@@ -40,7 +40,8 @@ const sentryOptions = {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
-  silent: !process.env.CI,
+  // Silence auth token warning when not set (e.g. in CI without SENTRY_AUTH_TOKEN)
+  silent: !process.env.SENTRY_AUTH_TOKEN,
 };
 
 module.exports = withSentryConfig(nextConfig, sentryOptions);
