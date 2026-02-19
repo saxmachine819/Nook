@@ -31,6 +31,10 @@ export async function POST(
       return NextResponse.json({ error: "Refund request not found." }, { status: 404 })
     }
 
+    if (!refundRequest.venue) {
+      return NextResponse.json({ error: "Venue not found." }, { status: 404 })
+    }
+
     if (!canEditVenue(session.user, refundRequest.venue)) {
       return NextResponse.json({ error: "Permission denied." }, { status: 403 })
     }
