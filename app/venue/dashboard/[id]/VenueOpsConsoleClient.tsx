@@ -154,19 +154,7 @@ function PayoutSetupStatusPanelInner({
     !isActionRequired && !isApproved && pendingVerification.length > 0
 
   if (isApproved) {
-    return (
-      <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-            Approved
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground">Payouts are enabled.</p>
-        {pendingVerification.length > 0 && (
-          <p className="text-xs text-muted-foreground">Verification in progress.</p>
-        )}
-      </div>
-    )
+    return null
   }
 
   if (isUnderReview) {
@@ -238,6 +226,7 @@ interface VenueOpsConsoleClientProps {
     id: string
     name: string
     status?: string
+    onboardingStatus?: string
     pauseMessage?: string | null
     openingHoursJson?: any
     stripeAccountId?: string | null
@@ -1430,7 +1419,7 @@ export function VenueOpsConsoleClient({
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold tracking-tight">{venue.name}</h1>
               <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                Published
+                {venue.onboardingStatus === "APPROVED" ? "Published" : venue.onboardingStatus === "SUBMITTED" ? "Pending Approval" : venue.onboardingStatus === "REJECTED" ? "Rejected" : "Draft"}
               </span>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

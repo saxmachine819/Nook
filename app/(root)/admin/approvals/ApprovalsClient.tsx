@@ -4,7 +4,7 @@ import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, XCircle, Clock, Image, Calendar, Users, DollarSign, FileText, Gift, Loader2, Eye } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, Image, Calendar, Users, DollarSign, FileText, Gift, Loader2, Eye, CreditCard } from "lucide-react"
 import Link from "next/link"
 import { RejectionDialog } from "@/components/admin/RejectionDialog"
 import { useToast } from "@/components/ui/toast"
@@ -17,6 +17,7 @@ interface ReadinessIndicators {
   hasPricing: boolean
   hasRules: boolean
   hasDeals: boolean
+  stripeApproved: boolean
 }
 
 interface Venue {
@@ -242,6 +243,11 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
                       hasValue={readiness.hasDeals}
                       icon={Gift}
                     />
+                    <ReadinessIndicator
+                      label="Stripe Approved?"
+                      hasValue={readiness.stripeApproved}
+                      icon={CreditCard}
+                    />
                   </div>
 
                   {/* Actions */}
@@ -258,7 +264,8 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
                     </Button>
                     <Button
                       onClick={() => handleApprove(venue)}
-                      disabled={isLoading}
+                      disabled={isLoading || !readiness.stripeApproved}
+                      title={!readiness.stripeApproved ? "Connect Stripe and complete onboarding before this venue can be approved." : undefined}
                       className="flex-1 min-w-[120px]"
                     >
                       {isLoading ? (

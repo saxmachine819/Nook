@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { isAdmin } from "@/lib/venue-auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
@@ -233,14 +232,15 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid gap-8 lg:grid-cols-[1fr,400px] lg:items-start">
-          <div className="space-y-10">
+        <div className="grid gap-8 lg:grid-cols-[1fr,400px] lg:grid-rows-[auto_auto] lg:items-start">
+          <div className="lg:row-start-1 lg:col-start-1">
             <VenuePageHeader
               name={venue.name}
               address={venue.address}
               returnTo={searchParams?.returnTo}
               isFavorited={favoriteStates.venue}
               venueId={venue.id}
+              googleMapsHref={googleMapsHref}
               deal={(() => {
                 const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0
                   ? (venue as any).deals[0]
@@ -248,7 +248,9 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                 return primaryDeal || null
               })()}
             />
+          </div>
 
+          <div className="space-y-10 lg:row-start-2 lg:col-start-1">
             <div className="relative overflow-hidden rounded-3xl bg-muted shadow-lg">
               <VenueImageCarousel
                 images={venueHeroImages}
@@ -262,9 +264,9 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
             </div>
 
-            {(venue.tags ?? []).length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {(venue.tags ?? []).map((tag: string) => (
+            <div className="flex flex-row items-start justify-between gap-4 pt-2 flex-wrap">
+              <div className="flex flex-wrap gap-2 min-w-0 flex-1">
+                {(venue.tags ?? []).length > 0 && (venue.tags ?? []).map((tag: string) => (
                   <span
                     key={tag}
                     className="rounded-full bg-primary/5 border border-primary/10 px-4 py-1.5 text-xs font-bold text-primary/70 tracking-tight"
@@ -273,28 +275,18 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                   </span>
                 ))}
               </div>
-            )}
+              <div className="shrink-0">
+                <VenueHoursDisplay
+                  openStatus={openStatus}
+                  weeklyFormatted={weeklyFormatted}
+                  venueTimezone={canonicalHours?.timezone ?? null}
+                  weeklyHours={canonicalHours?.weeklyHours ?? []}
+                />
+              </div>
+            </div>
 
             <div className="space-y-6">
               <div className="h-px w-full bg-border/50" />
-
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold tracking-tight text-foreground/80">The Space</h2>
-                {googleMapsHref && (
-                  <Button asChild variant="ghost" className="rounded-2xl font-bold bg-primary/5 hover:bg-primary/10 text-primary">
-                    <a href={googleMapsHref || undefined} target="_blank" rel="noreferrer">
-                      Get Directions
-                    </a>
-                  </Button>
-                )}
-              </div>
-
-              <VenueHoursDisplay
-                openStatus={openStatus}
-                weeklyFormatted={weeklyFormatted}
-                venueTimezone={canonicalHours?.timezone ?? null}
-                weeklyHours={canonicalHours?.weeklyHours ?? []}
-              />
 
               {venue.rulesText && (
                 <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">
@@ -309,7 +301,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             </div>
           </div>
 
-          <div className="space-y-6 lg:sticky lg:top-8">
+          <div className="space-y-6 lg:sticky lg:top-8 lg:row-start-2 lg:col-start-2">
             {(venue as any).deals?.[0] && (() => {
               const primaryDeal = (venue as any).deals[0]
               const eligibility = primaryDeal.eligibilityJson || {}
@@ -356,16 +348,16 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                       {pricingDescription}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     {minPrice === maxPrice ? (
-                      <div className="text-3xl font-bold tracking-tighter text-primary">
+                      <div className="text-2xl font-bold tracking-tighter text-primary whitespace-nowrap">
                         ${minPrice.toFixed(0)}
                         <span className="text-xs font-medium text-muted-foreground/40 ml-1 uppercase tracking-tighter">
                           /hr
                         </span>
                       </div>
                     ) : (
-                      <div className="text-2xl font-bold tracking-tighter text-primary">
+                      <div className="text-xl font-bold tracking-tighter text-primary whitespace-nowrap">
                         ${minPrice.toFixed(0)}–${maxPrice.toFixed(0)}
                         <span className="text-xs font-medium text-muted-foreground/40 ml-1 uppercase tracking-tighter">
                           /hr

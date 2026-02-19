@@ -1737,16 +1737,17 @@ export function MapboxMap({
         </div>
       )}
       {!isLoading && (
-        <div className="absolute right-4 top-16 z-20">
+        <div className="absolute right-4 top-20 z-20">
           <Button
-            size="sm"
+            type="button"
+            variant="outline"
+            size="icon"
             onClick={handleCenterOnMe}
             disabled={locationState === "requesting"}
-            className="shadow-lg h-10 w-10 p-0"
-            variant="secondary"
+            className="shrink-0 h-14 w-14 rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
             aria-label={userLocation ? "Center on me" : "Enable location"}
           >
-            <Navigation className="h-4 w-4" />
+            <Navigation size={20} strokeWidth={2.5} className="text-primary/70" />
           </Button>
         </div>
       )}

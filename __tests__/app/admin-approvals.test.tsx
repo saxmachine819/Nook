@@ -32,6 +32,14 @@ vi.mock('@/lib/prisma', () => ({
   },
 }))
 
+vi.mock('@/lib/stripe', () => ({
+  stripe: {
+    accounts: {
+      retrieve: vi.fn().mockResolvedValue({ charges_enabled: true }),
+    },
+  },
+}))
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),
@@ -100,6 +108,7 @@ describe('AdminApprovalsPage', () => {
           id: 'venue-1',
           name: 'Test Venue',
           address: '123 Test St',
+          stripeAccountId: null as string | null,
           owner: { id: 'owner-1', email: 'owner@example.com', name: 'Owner' },
           submittedAt: new Date('2024-01-01'),
           tables: [{ seats: [{ pricePerHour: 10 }] }],
@@ -120,6 +129,7 @@ describe('AdminApprovalsPage', () => {
       expect(screen.getByText('Venue Approvals')).toBeInTheDocument()
       expect(screen.getByText('Review and approve venue submissions')).toBeInTheDocument()
       expect(screen.getByText('Test Venue')).toBeInTheDocument()
+      expect(screen.getByText('Stripe Approved?')).toBeInTheDocument()
     })
 
     it('shows empty state when no venues are submitted', async () => {

@@ -7,6 +7,16 @@ vi.mock('@/lib/prisma', () => ({
   prisma: mockPrisma,
 }))
 
+// Mock Stripe
+const mockStripeAccountsRetrieve = vi.fn()
+vi.mock('@/lib/stripe', () => ({
+  stripe: {
+    accounts: {
+      retrieve: (...args: unknown[]) => mockStripeAccountsRetrieve(...args),
+    },
+  },
+}))
+
 // Mock auth
 const mockAuth = vi.fn()
 vi.mock('@/lib/auth', () => ({
@@ -17,6 +27,10 @@ vi.mock('@/lib/auth', () => ({
 const mockIsAdmin = vi.fn()
 vi.mock('@/lib/venue-auth', () => ({
   isAdmin: (user: { email?: string | null } | null | undefined) => mockIsAdmin(user),
+}))
+
+vi.mock('@/lib/notification-queue', () => ({
+  enqueueNotification: vi.fn().mockResolvedValue(undefined),
 }))
 
 // Import route after mocks are set up
@@ -100,20 +114,64 @@ describe('POST /api/venues/[id]/approve', () => {
       expect(response.status).toBe(400)
       expect(data.error).toContain('cannot be approved')
     })
-  })
 
-  describe('successful approval', () => {
-    it('approves venue and sets approvedByUserId', async () => {
+    it('returns 400 if Stripe is not connected', async () => {
       mockAuth.mockResolvedValue({ user: adminUser })
       mockIsAdmin.mockReturnValue(true)
       mockPrisma.venue.findUnique.mockResolvedValue({
         id: venueId,
         onboardingStatus: 'SUBMITTED',
+        stripeAccountId: null,
       })
+
+      const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
+        method: 'POST',
+      })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toContain('Stripe is not connected')
+      expect(mockStripeAccountsRetrieve).not.toHaveBeenCalled()
+    })
+
+    it('returns 400 if Stripe account is not yet approved to accept payments', async () => {
+      mockAuth.mockResolvedValue({ user: adminUser })
+      mockIsAdmin.mockReturnValue(true)
+      mockPrisma.venue.findUnique.mockResolvedValue({
+        id: venueId,
+        onboardingStatus: 'SUBMITTED',
+        stripeAccountId: 'acct_123',
+      })
+      mockStripeAccountsRetrieve.mockResolvedValue({ charges_enabled: false })
+
+      const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
+        method: 'POST',
+      })
+      const response = await POST(request as any, { params: Promise.resolve({ id: venueId }) })
+      const data = await response.json()
+
+      expect(response.status).toBe(400)
+      expect(data.error).toContain('not yet approved to accept payments')
+      expect(mockStripeAccountsRetrieve).toHaveBeenCalledWith('acct_123')
+    })
+  })
+
+  describe('successful approval', () => {
+    it('approves venue when Stripe is connected and charges_enabled', async () => {
+      mockAuth.mockResolvedValue({ user: adminUser })
+      mockIsAdmin.mockReturnValue(true)
+      mockPrisma.venue.findUnique.mockResolvedValue({
+        id: venueId,
+        onboardingStatus: 'SUBMITTED',
+        stripeAccountId: 'acct_123',
+      })
+      mockStripeAccountsRetrieve.mockResolvedValue({ charges_enabled: true })
       mockPrisma.venue.update.mockResolvedValue({
         id: venueId,
         name: 'Test Venue',
         onboardingStatus: 'APPROVED',
+        owner: { email: 'owner@example.com' },
       })
 
       const request = new Request(`http://localhost/api/venues/${venueId}/approve`, {
@@ -124,6 +182,7 @@ describe('POST /api/venues/[id]/approve', () => {
 
       expect(response.status).toBe(200)
       expect(data.venue.onboardingStatus).toBe('APPROVED')
+      expect(mockStripeAccountsRetrieve).toHaveBeenCalledWith('acct_123')
       expect(mockPrisma.venue.update).toHaveBeenCalledWith({
         where: { id: venueId },
         data: expect.objectContaining({

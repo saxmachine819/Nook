@@ -232,7 +232,7 @@ export function ResultsDrawer({
       ref={containerRef}
       className={cn(
         "fixed left-0 right-0 flex flex-col rounded-t-[2.5rem] glass shadow-2xl overflow-hidden px-1",
-        "bottom-[4.5rem]",
+        "bottom-[5.5rem]",
         isDragging && "transition-none",
         !isDragging && "transition-[height] duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]"
       )}
@@ -324,7 +324,29 @@ export function ResultsDrawer({
               const isFavorited = favoritedVenueIds.has(venue.id)
               return (
                 <li key={venue.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: `${venues.indexOf(venue) * 50}ms` }}>
-                  <div className="relative group flex w-full gap-4 rounded-3xl border border-white/40 bg-white/40 p-3.5 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98]">
+                  <div className="relative group rounded-3xl border border-white/40 bg-white/40 p-3.5 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98]">
+                    {/* Heart - absolutely positioned so it always receives clicks and is never overlapped by the tap area */}
+                    <div
+                      className="absolute top-3 right-3 z-20 touch-manipulation"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                      }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <FavoriteButton
+                        type="venue"
+                        itemId={venue.id}
+                        initialFavorited={isFavorited}
+                        size="sm"
+                        className="rounded-full bg-white/50 p-2 shadow-sm transition-all active:scale-95"
+                        onToggle={(favorited) => {
+                          if (onToggleFavorite) {
+                            onToggleFavorite(venue.id, favorited)
+                          }
+                        }}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleVenueTap(venue.id)}
@@ -334,14 +356,14 @@ export function ResultsDrawer({
                           handleVenueTap(venue.id)
                         }
                       }}
-                      className="flex flex-1 gap-4 text-left min-w-0 cursor-pointer"
+                      className="flex w-full gap-4 text-left min-w-0 cursor-pointer pr-10"
                     >
                       {venue.imageUrls && venue.imageUrls.length > 0 && (
                         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl">
                           <img
                             src={venue.imageUrls[0]}
                             alt={venue.name}
-                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            className="h-full w-full object-cover object-center"
                           />
                           <div className="absolute inset-0 bg-black/5" />
                         </div>
@@ -349,8 +371,11 @@ export function ResultsDrawer({
                       <div className="flex-1 min-w-0 py-1 flex flex-col justify-between">
                         <div>
                           <div className="flex justify-between items-start gap-2">
-                            <p className="font-bold text-base tracking-tight text-foreground/90 group-hover:text-primary transition-colors truncate">{venue.name}</p>
-                            <p className="shrink-0 text-sm font-bold text-primary">${venue.minPrice.toFixed(0)}</p>
+                            <p className="font-bold text-base tracking-tight text-foreground/90 group-hover:text-primary transition-colors truncate min-w-0">{venue.name}</p>
+                            <p className="shrink-0 text-sm font-bold text-primary flex items-baseline gap-0.5">
+                              ${venue.minPrice.toFixed(0)}
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter opacity-50">/ hr</span>
+                            </p>
                           </div>
                           {(venue.address || (venue.city && venue.state)) && (
                             <p className="mt-0.5 text-xs font-medium text-muted-foreground/70 truncate flex items-center gap-1">
@@ -359,34 +384,15 @@ export function ResultsDrawer({
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 mt-auto">
-                          {venue.availabilityLabel && (
+                        {venue.availabilityLabel && (
+                          <div className="flex items-center gap-2 mt-auto">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/5 px-2 py-0.5 rounded-full">
                               {venue.availabilityLabel}
                             </span>
-                          )}
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter opacity-50">/ hr</span>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </button>
-                    {/* Heart icon */}
-                    <div
-                      className="flex items-start pt-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <FavoriteButton
-                        type="venue"
-                        itemId={venue.id}
-                        initialFavorited={isFavorited}
-                        size="sm"
-                        className="rounded-full bg-white/50 p-2 shadow-sm transition-all hover:scale-110 active:scale-90"
-                        onToggle={(favorited) => {
-                          if (onToggleFavorite) {
-                            onToggleFavorite(venue.id, favorited)
-                          }
-                        }}
-                      />
-                    </div>
                   </div>
                 </li>
               )

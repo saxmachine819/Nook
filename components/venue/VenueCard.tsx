@@ -249,7 +249,7 @@ export function VenueCard({
         >
           {/* Image Section with Carousel */}
           <div className="relative overflow-hidden">
-            <VenueImageCarousel images={imageUrls} enableGallery={false} className="transition-transform duration-500 group-hover:scale-105" />
+            <VenueImageCarousel images={imageUrls} enableGallery={false} />
 
             {/* Gradient Overlay for badges visibility */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent pointer-events-none" />
@@ -263,7 +263,7 @@ export function VenueCard({
                   itemId={id}
                   initialFavorited={isFavorited}
                   size="sm"
-                  className="rounded-full glass-dark p-2 text-white shadow-lg transition-transform hover:scale-110 active:scale-90"
+                  className="rounded-full glass-dark p-2 text-white shadow-lg transition-transform active:scale-95"
                   onToggle={onToggleFavorite}
                 />
               </div>

@@ -1,11 +1,12 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useState, useCallback } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
-import { ArrowRight, ExternalLink } from "lucide-react"
+import { ArrowRight, ExternalLink, Loader2 } from "lucide-react"
 
 const STRIPE_ONBOARDING_URL = "https://stripe.com/resources/more/merchant-onboarding-explained"
 
@@ -16,11 +17,34 @@ interface StripeConnectClientProps {
 export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
+  const [isConnecting, setIsConnecting] = useState(false)
 
-  const handleConnectStripe = () => {
-    // UI-only stub - NO Stripe API calls
-    showToast("Stripe Connect setup is in progress—continue to submit your venue request.", "success")
-  }
+  const handleConnectStripe = useCallback(async () => {
+    if (isConnecting) return
+    setIsConnecting(true)
+    try {
+      const response = await fetch(`/api/venues/${venueId}/stripe/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          returnPath: `/venue/onboard/terms?venueId=${venueId}&stripe=return`,
+          refreshPath: `/venue/onboard/stripe?venueId=${venueId}&stripe=refresh`,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to start Stripe onboarding.")
+      }
+      if (!payload?.url) {
+        throw new Error("Stripe onboarding link was missing.")
+      }
+      window.location.assign(payload.url)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Stripe onboarding failed."
+      showToast(message, "error")
+      setIsConnecting(false)
+    }
+  }, [venueId, isConnecting, showToast])
 
   const handleNext = () => {
     router.push(`/venue/onboard/terms?venueId=${venueId}`)
@@ -131,10 +155,18 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               onClick={handleConnectStripe}
+              disabled={isConnecting}
               size="lg"
               className="w-full sm:w-auto"
             >
-              Connect to Stripe
+              {isConnecting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                "Connect to Stripe"
+              )}
             </Button>
             <Button
               onClick={handleNext}

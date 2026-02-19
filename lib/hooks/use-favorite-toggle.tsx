@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/components/ui/toast"
 import { SignInModal } from "@/components/auth/SignInModal"
 import { useVenueFavorites } from "./use-venue-favorites"
@@ -24,6 +25,7 @@ export function useFavoriteToggle({
   onToggle,
 }: UseFavoriteToggleOptions) {
   const { data: session, status } = useSession()
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
   const [isFavorited, setIsFavorited] = useState(initialFavorited)
   const [isToggling, setIsToggling] = useState(false)
@@ -42,6 +44,8 @@ export function useFavoriteToggle({
     const previousState = isFavorited
     setIsFavorited(!previousState)
     setIsToggling(true)
+    // Re-enable the button after a short cooldown so the user can click again; request may still be in flight
+    let cooldownId: ReturnType<typeof setTimeout> | null = setTimeout(() => setIsToggling(false), 400)
 
     try {
       let url: string
@@ -89,6 +93,18 @@ export function useFavoriteToggle({
       const favorited = data.favorited ?? !previousState
       setIsFavorited(favorited)
 
+      // Update the venue-favorites cache immediately so sync effect / readers see the new value (avoids stale overwrite on unheart)
+      if (type === "venue") {
+        queryClient.setQueryData(
+          ["venueFavorites", itemId],
+          (prev: { venue: boolean; tables: string[]; seats: string[] } | undefined) =>
+            prev ? { ...prev, venue: favorited } : { venue: favorited, tables: [], seats: [] }
+        )
+        await queryClient.invalidateQueries({ queryKey: ["venueFavorites", itemId] })
+      } else if (venueId) {
+        await queryClient.invalidateQueries({ queryKey: ["venueFavorites", venueId] })
+      }
+
       showToast(favorited ? "Saved" : "Removed", "success")
 
       if (onToggle) {
@@ -98,9 +114,10 @@ export function useFavoriteToggle({
       console.error("Error toggling favorite:", error)
       showToast(error instanceof Error ? error.message : "Failed to toggle favorite", "error")
     } finally {
+      if (cooldownId != null) clearTimeout(cooldownId)
       setIsToggling(false)
     }
-  }, [type, itemId, venueId, isFavorited, session, status, showToast, onToggle])
+  }, [type, itemId, venueId, isFavorited, session, status, showToast, onToggle, queryClient])
 
   const handleSignInSuccess = useCallback(() => {
     setShowSignInModal(false)
@@ -117,15 +134,28 @@ export function useFavoriteToggle({
 
   const { data: clientFavs } = useVenueFavorites(venueId ?? itemId, type === "venue")
   const clientFavorited = clientFavs?.venue
-  
-  const effectiveFavorited = useMemo(() => {
-    if (type === "venue" && clientFavorited !== undefined) return clientFavorited
-    // Optimization: we could also check tables/seats here if clientFavorited with detailed data was used
-    return isFavorited
-  }, [type, clientFavorited, isFavorited])
+  const hasSyncedFromServerRef = useRef(false)
+  const lastSyncedKeyRef = useRef<string | null>(null)
+  const venueKey = type === "venue" ? itemId : venueId ?? itemId
 
+  // Reset sync ref when switching to a different venue/item so we sync again for the new item
+  if (lastSyncedKeyRef.current !== venueKey) {
+    lastSyncedKeyRef.current = venueKey
+    hasSyncedFromServerRef.current = false
+  }
+
+  // Sync from server only when query first loads for this item (so we show server state on mount). Don't sync on every refetch or we'd overwrite optimistic updates.
+  useEffect(() => {
+    if (type !== "venue" || clientFavorited === undefined) return
+    if (!hasSyncedFromServerRef.current) {
+      hasSyncedFromServerRef.current = true
+      setIsFavorited(clientFavorited)
+    }
+  }, [type, clientFavorited])
+
+  // Use local state for display so optimistic update is instant; server state syncs via effect above
   return {
-    isFavorited: effectiveFavorited,
+    isFavorited,
     toggleFavorite,
     isToggling,
     SignInModalComponent,

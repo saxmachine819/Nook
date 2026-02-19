@@ -218,37 +218,35 @@ export function VenueHoursDisplay({
     return null
   }
 
+  const Chevron = (
+    <span className="group-open:rotate-180 transition-transform duration-300 flex-shrink-0">
+      <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  )
+
   return (
-    <div className="rounded-[2rem] bg-primary/[0.03] p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-black uppercase tracking-widest text-primary/40">Hours</div>
-        {canDetermine && (
-          <span
-            className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all duration-500 shadow-sm ${isOpen
-                ? "bg-emerald-500 text-white shadow-emerald-500/20"
-                : "bg-muted text-muted-foreground/60"
-              }`}
-          >
-            {isOpen ? "Open now" : "Closed now"}
-          </span>
-        )}
-      </div>
-
-      {todaysHours && (
-        <p className="text-xl font-black tracking-tight text-foreground/80">{todaysHours}</p>
-      )}
-
-      {weeklyFormatted.length > 0 && (
-        <details className="group">
-          <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-primary/60 hover:text-primary transition-colors flex items-center gap-2 list-none">
-            <span className="group-open:rotate-180 transition-transform duration-300">
-              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            View weekly schedule
+    <div className="rounded-[2rem] bg-primary/[0.03] px-4 py-2 space-y-1 relative">
+      {weeklyFormatted.length > 0 ? (
+        <details className="group relative">
+          <summary className="flex items-center justify-between gap-2 list-none cursor-pointer text-[10px] font-black uppercase tracking-widest text-primary/40 hover:text-primary/60 transition-colors py-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {Chevron}
+              <span>Hours</span>
+            </div>
+            {canDetermine && (
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest transition-all duration-500 shadow-sm flex-shrink-0 ${isOpen
+                    ? "bg-emerald-500 text-white shadow-emerald-500/20"
+                    : "bg-muted text-muted-foreground/60"
+                  }`}
+              >
+                {isOpen ? "Open now" : "Closed now"}
+              </span>
+            )}
           </summary>
-          <div className="mt-6 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(100vw,24rem)] rounded-2xl bg-background border border-border/50 shadow-lg py-3 px-4 space-y-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
             {weeklyFormatted.map((dayHours, index) => (
               <div key={index} className="flex justify-between items-center text-xs font-bold text-foreground/60 border-b border-primary/5 pb-2 last:border-0 last:pb-0">
                 {dayHours.split(': ').map((part, i) => (
@@ -260,13 +258,27 @@ export function VenueHoursDisplay({
             ))}
           </div>
         </details>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-primary/40">Hours</div>
+          {canDetermine && (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-widest transition-all duration-500 shadow-sm flex-shrink-0 ${isOpen
+                  ? "bg-emerald-500 text-white shadow-emerald-500/20"
+                  : "bg-muted text-muted-foreground/60"
+                }`}
+            >
+              {isOpen ? "Open now" : "Closed now"}
+            </span>
+          )}
+        </div>
       )}
       {showUserTimezone && userWeeklyFormatted.length > 0 && (
-        <details className="group mt-2">
-          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+        <details className="group mt-1">
+          <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground py-0">
             Hours in your timezone ({userTimezoneLabel})
           </summary>
-          <div className="mt-2 space-y-1">
+          <div className="mt-1 space-y-1">
             {userWeeklyFormatted.map((dayHours, index) => (
               <div key={index} className="text-xs text-muted-foreground">
                 {dayHours}

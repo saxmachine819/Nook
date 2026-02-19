@@ -64,14 +64,22 @@ export async function POST(
       )
     }
 
-    const refreshUrl = new URL(
-      `/venue/dashboard/${venue.id}?stripe=refresh`,
-      origin
-    ).toString()
-    const returnUrl = new URL(
-      `/venue/dashboard/${venue.id}?stripe=return`,
-      origin
-    ).toString()
+    let returnPath = `/venue/dashboard/${venue.id}?stripe=return`
+    let refreshPath = `/venue/dashboard/${venue.id}?stripe=refresh`
+    try {
+      const body = await request.json().catch(() => ({}))
+      if (typeof body?.returnPath === "string" && body.returnPath.startsWith("/")) {
+        returnPath = body.returnPath
+      }
+      if (typeof body?.refreshPath === "string" && body.refreshPath.startsWith("/")) {
+        refreshPath = body.refreshPath
+      }
+    } catch {
+      // keep defaults
+    }
+
+    const refreshUrl = new URL(refreshPath, origin).toString()
+    const returnUrl = new URL(returnPath, origin).toString()
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,

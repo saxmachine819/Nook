@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
+import { stripe } from "@/lib/stripe"
 import { ApprovalsClient } from "./ApprovalsClient"
 
 interface ReadinessIndicators {
@@ -14,6 +15,7 @@ interface ReadinessIndicators {
   hasPricing: boolean
   hasRules: boolean
   hasDeals: boolean
+  stripeApproved: boolean
 }
 
 function computeReadinessIndicators(venue: any): ReadinessIndicators {
@@ -43,6 +45,7 @@ function computeReadinessIndicators(venue: any): ReadinessIndicators {
     hasPricing,
     hasRules,
     hasDeals,
+    stripeApproved: false, // set per-venue in getSubmittedVenues after Stripe lookup
   }
 }
 
@@ -77,15 +80,30 @@ async function getSubmittedVenues() {
       },
     })
 
-    return venues.map((venue) => ({
-      id: venue.id,
-      name: venue.name,
-      address: venue.address,
-      ownerEmail: venue.owner?.email || null,
-      ownerName: venue.owner?.name || null,
-      submittedAt: venue.submittedAt ? new Date(venue.submittedAt) : null,
-      readiness: computeReadinessIndicators(venue),
-    }))
+    const venuesWithStripe = await Promise.all(
+      venues.map(async (venue) => {
+        const readiness = computeReadinessIndicators(venue)
+        let stripeApproved = false
+        if (venue.stripeAccountId) {
+          try {
+            const account = await stripe.accounts.retrieve(venue.stripeAccountId)
+            stripeApproved = account.charges_enabled === true
+          } catch {
+            stripeApproved = false
+          }
+        }
+        return {
+          id: venue.id,
+          name: venue.name,
+          address: venue.address,
+          ownerEmail: venue.owner?.email || null,
+          ownerName: venue.owner?.name || null,
+          submittedAt: venue.submittedAt ? new Date(venue.submittedAt) : null,
+          readiness: { ...readiness, stripeApproved },
+        }
+      })
+    )
+    return venuesWithStripe
   } catch (error) {
     console.error("Error fetching submitted venues:", error)
     return []

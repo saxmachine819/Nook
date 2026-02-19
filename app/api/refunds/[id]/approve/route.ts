@@ -80,9 +80,18 @@ export async function POST(
       }
     )
 
-    if (refundRequest.payment.stripeApplicationFeeId) {
+    // Get application fee amount (from column or metadata fallback for old payments)
+    const applicationFeeAmount =
+      refundRequest.payment.applicationFeeAmount ??
+      (typeof refundRequest.payment.metadata === "object" &&
+        refundRequest.payment.metadata !== null &&
+        "applicationFeeAmount" in refundRequest.payment.metadata
+        ? Number((refundRequest.payment.metadata as { applicationFeeAmount?: number }).applicationFeeAmount) || 0
+        : 0)
+
+    if (refundRequest.payment.stripeApplicationFeeId && applicationFeeAmount > 0) {
       const feeRefundAmount = Math.min(
-        refundRequest.payment.applicationFeeAmount,
+        applicationFeeAmount,
         Math.round(finalAmount * COMMISSION_RATE)
       )
       if (feeRefundAmount > 0) {

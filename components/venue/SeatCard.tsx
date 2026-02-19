@@ -48,13 +48,20 @@ export function SeatCard({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={onSelect}
-        disabled={!isAvailable}
+      <div
+        role="button"
+        tabIndex={isAvailable ? 0 : -1}
+        onClick={isAvailable ? onSelect : undefined}
+        onKeyDown={(e) => {
+          if (isAvailable && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault()
+            onSelect()
+          }
+        }}
         className={cn(
           "relative w-full rounded-2xl border-none p-4 text-left transition-all duration-300",
           "focus:outline-none focus:ring-2 focus:ring-primary/20",
+          isAvailable && "cursor-pointer",
           isSelected
             ? "bg-white shadow-lg ring-2 ring-primary scale-[1.02] z-10"
             : isAvailable
@@ -75,7 +82,7 @@ export function SeatCard({
             <img
               src={thumbnailUrl}
               alt={displayLabel}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+              className="h-full w-full object-cover object-center"
               draggable={false}
             />
           </div>
@@ -160,7 +167,7 @@ export function SeatCard({
                 venueId={venueId}
                 initialFavorited={isFavorited}
                 size="sm"
-                className="rounded-full glass p-1.5 shadow-sm border border-black/5 transition-transform hover:scale-110"
+                className="rounded-full glass p-1.5 shadow-sm border border-black/5 transition-transform active:scale-95"
               />
             </div>
           )}
@@ -182,7 +189,7 @@ export function SeatCard({
             </div>
           )}
         </div>
-      </button>
+      </div>
 
 
       <ImageGalleryModal

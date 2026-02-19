@@ -22,7 +22,6 @@ import {
   ExternalLink,
   X,
   ChevronRight,
-  Navigation,
   Receipt,
 } from "lucide-react"
 import { cn, isBlobSupported } from "@/lib/utils"
@@ -367,7 +366,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
                 {/* Other Upcoming List */}
                 {otherUpcoming.length > 0 && (
                   <div className="space-y-4">
-                    <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 px-2">Next in line</h2>
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 px-2">Upcoming</h2>
                     <div className="space-y-3">
                       {otherUpcoming.map((reservation) => (
                         <UpcomingListItem
@@ -498,7 +497,7 @@ function HeroReservationCard({
     <Card className="overflow-hidden border-none shadow-xl rounded-[2.5rem] bg-white group">
       {imageUrl && (
         <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-muted">
-          <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" />
+          <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover object-center" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           <div className="absolute bottom-6 left-6 right-6">
             <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 mb-2">
@@ -512,45 +511,42 @@ function HeroReservationCard({
         </div>
       )}
       <CardContent className="p-8">
-        <div className="space-y-6">
-          <div className="flex flex-col gap-1">
-            {reservation.venue.address && (
-              <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground/60">
-                <MapPin className="h-4 w-4" />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            {reservation.venue.address ? (
+              <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground/60 min-w-0 flex-1">
+                <MapPin className="h-4 w-4 shrink-0" />
                 <span className="truncate">{reservation.venue.address}</span>
               </div>
+            ) : (
+              <span className="text-sm text-muted-foreground/60" />
             )}
-            <div className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full w-fit mt-2">
+            <span className="text-xl font-black tracking-tighter text-primary shrink-0">${calculatePrice(reservation).toFixed(0)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full w-fit min-w-0">
               {getSeatInfo(reservation)}
             </div>
-          </div>
-
-          <div className="flex items-center justify-between p-6 bg-primary/[0.02] rounded-[2rem]">
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Total Estimate</p>
-              <p className="text-3xl font-black tracking-tighter text-primary">${calculatePrice(reservation).toFixed(0)}</p>
-            </div>
-            <Button onClick={onViewDetails} className="rounded-2xl font-black px-8 h-12 shadow-md shadow-primary/10">
+            <Button onClick={(e) => { e.stopPropagation(); onViewDetails() }} className="rounded-2xl font-black px-6 h-10 shadow-md shadow-primary/10 shrink-0">
               Details
             </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <Button variant="outline" size="lg" onClick={onAddToCalendar} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onAddToCalendar() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
               <Calendar size={18} className="mr-2 opacity-50" />
-              Sync
+              Add to Cal
             </Button>
-            <Button variant="outline" size="lg" onClick={onGetDirections} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
-              <Navigation size={18} className="mr-2 opacity-50" />
+            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onGetDirections() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
               Map
             </Button>
             {isPast && onViewReceipt ? (
-              <Button variant="outline" size="lg" onClick={onViewReceipt} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onViewReceipt() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
                 <Receipt size={18} className="mr-2 opacity-50" />
                 Receipt
               </Button>
             ) : (
-              <Button variant="outline" size="lg" onClick={onCancel} className="rounded-2xl border-none bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-all duration-300">
+              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onCancel() }} className="rounded-2xl border-none bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-all duration-300">
                 <X size={18} className="mr-2 opacity-50" />
                 Cancel
               </Button>

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -37,9 +36,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
   const { showToast, ToastComponent } = useToast()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  const [refundModalOpen, setRefundModalOpen] = useState(false)
-  const [refundReason, setRefundReason] = useState("")
-  const [requestingRefund, setRequestingRefund] = useState(false)
 
   const { data: fullReservation, isLoading: isHydrating } = useReservationDetail(serverReservation.id)
 
@@ -52,18 +48,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
     table: fullReservation?.table ?? serverReservation.table,
     payment: fullReservation?.payment ?? serverReservation.payment,
   }), [serverReservation, fullReservation])
-
-  const payment = reservation.payment
-  const latestRefund = payment?.refundRequests
-    ? [...payment.refundRequests].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    )[0]
-    : null
-
-  const isRefunded = payment ? payment.amountRefunded >= payment.amount : false
-  const hasPendingRefund =
-    latestRefund && ["REQUESTED", "APPROVED", "PROCESSING"].includes(latestRefund.status)
-  const canRequestRefund = !!payment && !hasPendingRefund && !isRefunded
 
   const handleCancel = async () => {
     setCancelling(true)
@@ -85,33 +69,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
     } finally {
       setCancelling(false)
       setShowCancelConfirm(false)
-    }
-  }
-
-  const handleRequestRefund = async () => {
-    if (!payment) return
-    setRequestingRefund(true)
-    try {
-      const response = await fetch("/api/refunds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reservationId: reservation.id,
-          reason: refundReason,
-        }),
-      })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        throw new Error(payload?.error || "Failed to request refund.")
-      }
-      showToast("Refund requested. We'll notify you when it's reviewed.", "success")
-      setRefundModalOpen(false)
-      setRefundReason("")
-      router.refresh()
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Refund request failed.", "error")
-    } finally {
-      setRequestingRefund(false)
     }
   }
 
@@ -339,19 +296,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
                 </div>
               )}
 
-              {/* Status */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Status</h3>
-                <span
-                  className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${isCancelled
-                      ? "bg-red-50 text-red-700"
-                      : "bg-emerald-50 text-emerald-700"
-                    }`}
-                >
-                  {isCancelled ? "Cancelled" : "Active"}
-                </span>
-              </div>
-
               {/* Price Breakdown */}
               <div className="rounded-md border bg-muted/30 p-4">
                 <h3 className="mb-3 text-sm font-medium">Price breakdown</h3>
@@ -406,24 +350,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
               {/* Actions */}
               {!isCancelled && (
                 <div className="flex flex-col gap-2 pt-4">
-                  {payment && (
-                    <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>Payment</span>
-                        <span className="font-medium text-foreground">
-                          {payment.status.replace(/_/g, " ").toLowerCase()}
-                        </span>
-                      </div>
-                      {latestRefund && (
-                        <div className="mt-1 flex items-center justify-between">
-                          <span>Refund</span>
-                          <span className="font-medium text-foreground">
-                            {latestRefund.status.replace(/_/g, " ").toLowerCase()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <Button
                     asChild
                     variant="outline"
@@ -457,21 +383,11 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
                       Cancel reservation
                     </Button>
                   )}
-                  {payment && (
-                    <Button
-                      onClick={() => setRefundModalOpen(true)}
-                      variant="outline"
-                      className="w-full"
-                      disabled={!canRequestRefund}
-                    >
-                      Request refund
-                    </Button>
-                  )}
-                  {latestRefund && (
-                    <p className="text-xs text-muted-foreground">
-                      Refund status: {latestRefund.status}
-                    </p>
-                  )}
+                  <Button variant="outline" className="w-full" asChild>
+                    <a href="mailto:support@nooc.io" target="_blank" rel="noopener noreferrer">
+                      Support
+                    </a>
+                  </Button>
                 </div>
               )}
             </div>
@@ -500,31 +416,6 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
         </DialogContent>
       </Dialog>
 
-      <Dialog open={refundModalOpen} onOpenChange={setRefundModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Request a refund</DialogTitle>
-            <DialogDescription>
-              Tell us why you&apos;re requesting a refund. The venue will review your request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Textarea
-              value={refundReason}
-              onChange={(event) => setRefundReason(event.target.value)}
-              placeholder="Optional reason"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRefundModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleRequestRefund} disabled={requestingRefund}>
-              {requestingRefund ? "Sending..." : "Submit request"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -161,7 +161,7 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
               <img
                 src={image}
                 alt={`Venue image ${index + 1}`}
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                className="h-full w-full object-cover object-center"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"

@@ -13,10 +13,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing session_id." }, { status: 400 })
     }
 
-    // First find the payment to get the connected account ID
+    // First find the payment to get the connected account ID and reservation ID
     const payment = await prisma.payment.findUnique({
       where: { stripeCheckoutSessionId: sessionId },
-      select: { stripeAccountId: true }
+      select: { stripeAccountId: true, reservationId: true }
     })
 
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       status: session.status,
       customer_email: session.customer_details?.email,
+      reservationId: payment?.reservationId ?? null,
     })
   } catch (error) {
     console.error("GET /api/payments/session-status:", error)

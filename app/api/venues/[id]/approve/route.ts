@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { enqueueNotification } from "@/lib/notification-queue"
 import { prisma } from "@/lib/prisma"
+import { stripe } from "@/lib/stripe"
 import { isAdmin } from "@/lib/venue-auth"
 
 export async function POST(
@@ -33,7 +34,7 @@ export async function POST(
     // Verify venue exists and is in SUBMITTED status
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
-      select: { id: true, onboardingStatus: true },
+      select: { id: true, onboardingStatus: true, stripeAccountId: true },
     })
 
     if (!venue) {
@@ -46,6 +47,21 @@ export async function POST(
     if (venue.onboardingStatus !== "SUBMITTED") {
       return NextResponse.json(
         { error: `Venue cannot be approved. Current status: ${venue.onboardingStatus}` },
+        { status: 400 }
+      )
+    }
+
+    if (!venue.stripeAccountId) {
+      return NextResponse.json(
+        { error: "Venue cannot be approved. Stripe is not connected." },
+        { status: 400 }
+      )
+    }
+
+    const account = await stripe.accounts.retrieve(venue.stripeAccountId)
+    if (!account.charges_enabled) {
+      return NextResponse.json(
+        { error: "Venue cannot be approved. Stripe account is not yet approved to accept payments." },
         { status: 400 }
       )
     }

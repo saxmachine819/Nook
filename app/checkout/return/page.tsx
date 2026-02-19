@@ -27,7 +27,13 @@ export default function CheckoutReturnPage() {
 
         if (data.status === "complete") {
           setStatus("complete")
-          router.replace(`/checkout/success?session_id=${sessionId}`)
+          // Redirect directly to reservation detail page if we have the reservation ID
+          if (data.reservationId) {
+            router.replace(`/reservations/${data.reservationId}`)
+          } else {
+            // Fallback to success page if reservation ID is missing
+            router.replace(`/checkout/success?session_id=${sessionId}`)
+          }
         } else if (data.status === "open") {
           setStatus("open")
         } else {

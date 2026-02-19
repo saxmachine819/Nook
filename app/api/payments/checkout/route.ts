@@ -68,10 +68,28 @@ export async function POST(request: NextRequest) {
       Math.min(pricing.amountCents, Math.round(pricing.amountCents * COMMISSION_RATE))
     )
 
+    // Create reservation first (with pending status until payment completes)
+    const firstSeat = context.seats[0]
+    const reservation = await prisma.reservation.create({
+      data: {
+        venueId: context.venueId,
+        tableId: context.isGroupBooking ? context.tableId : (firstSeat?.tableId ?? null),
+        seatId: context.isGroupBooking ? null : (firstSeat?.id ?? null),
+        userId: session.user.id,
+        startAt: context.parsedStart,
+        endAt: context.parsedEnd,
+        seatCount: context.isGroupBooking 
+          ? (context.requestedSeatCount ?? context.table?.seats.length ?? 1)
+          : context.finalSeatIds.length,
+        status: "pending",
+      },
+    })
+
     const payment = await prisma.payment.create({
       data: {
         venueId: context.venueId,
         userId: session.user.id,
+        reservationId: reservation.id,
         amount: pricing.amountCents,
         currency: "usd",
         applicationFeeAmount,
@@ -139,8 +157,11 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("POST /api/payments/checkout:", error)
+    const errorMessage = error instanceof Error ? error.message : "Failed to start checkout."
+    const errorDetails = error instanceof Error ? error.stack : String(error)
+    console.error("Error details:", errorDetails)
     return NextResponse.json(
-      { error: "Failed to start checkout." },
+      { error: errorMessage, details: process.env.NODE_ENV === "development" ? errorDetails : undefined },
       { status: 500 }
     )
   }

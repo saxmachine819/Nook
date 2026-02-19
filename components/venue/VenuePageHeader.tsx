@@ -1,7 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { X } from "lucide-react"
+import Link from "next/link"
+import { X, Navigation } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
 import { FavoriteButton } from "./FavoriteButton"
@@ -12,6 +13,7 @@ interface VenuePageHeaderProps {
   returnTo?: string
   isFavorited?: boolean
   venueId?: string
+  googleMapsHref?: string | null
   deal?: {
     title: string
     description?: string | null
@@ -20,7 +22,7 @@ interface VenuePageHeaderProps {
   } | null
 }
 
-export function VenuePageHeader({ name, address, returnTo, isFavorited = false, venueId, deal }: VenuePageHeaderProps) {
+export function VenuePageHeader({ name, address, returnTo, isFavorited = false, venueId, googleMapsHref, deal }: VenuePageHeaderProps) {
   const router = useRouter()
 
   const eligibility = deal?.eligibilityJson || {}
@@ -29,27 +31,8 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
 
   return (
     <div className="relative">
-      <div className="absolute -top-4 -right-2 z-10 flex items-center gap-3">
-        {venueId && (
-          <FavoriteButton
-            type="venue"
-            itemId={venueId}
-            initialFavorited={isFavorited}
-            size="md"
-            className="rounded-full glass p-2.5 shadow-lg transition-transform hover:scale-110 active:scale-90"
-          />
-        )}
-        <button
-          type="button"
-          onClick={() => router.push(returnTo || "/")}
-          className="rounded-full glass p-2.5 text-muted-foreground hover:bg-black/5 hover:text-foreground transition-all duration-300 active:scale-90 shadow-lg"
-          aria-label={returnTo ? "Close and return to reservation" : "Close and return to explore"}
-        >
-          <X size={20} strokeWidth={2.5} />
-        </button>
-      </div>
-      <div className="flex flex-col gap-6 pr-12 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1 space-y-1">
+      <div className="flex flex-row flex-wrap gap-4 items-center justify-between">
+        <div className="min-w-0 flex-1 space-y-1 pr-2">
           <h1 className="text-4xl font-black tracking-tight text-foreground/90 sm:text-5xl lg:text-6xl">
             {name}
           </h1>
@@ -58,6 +41,36 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
               {address}
             </p>
           )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {googleMapsHref && (
+            <Link
+              href={googleMapsHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full glass p-2.5 text-muted-foreground hover:bg-black/5 hover:text-foreground transition-all duration-300 active:scale-90 shadow-lg"
+              aria-label="Get directions"
+            >
+              <Navigation size={20} strokeWidth={2.5} />
+            </Link>
+          )}
+          {venueId && (
+            <FavoriteButton
+              type="venue"
+              itemId={venueId}
+              initialFavorited={isFavorited}
+              size="md"
+              className="rounded-full glass p-2.5 shadow-lg transition-transform active:scale-95"
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => router.push(returnTo || "/")}
+            className="rounded-full glass p-2.5 text-muted-foreground hover:bg-black/5 hover:text-foreground transition-all duration-300 active:scale-90 shadow-lg"
+            aria-label={returnTo ? "Close and return to reservation" : "Close and return to explore"}
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
         </div>
         {deal && (
           <div className="w-full flex-shrink-0 sm:max-w-xs lg:hidden">

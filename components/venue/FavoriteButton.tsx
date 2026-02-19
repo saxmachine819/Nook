@@ -49,14 +49,20 @@ export function FavoriteButton({
     toggleFavorite()
   }
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation()
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
+        onPointerDown={handlePointerDown}
         disabled={isToggling}
+        style={{ touchAction: "manipulation" }}
         className={cn(
-          "transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-full p-1",
+          "transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-full p-1",
           isFavorited
             ? "text-primary fill-primary"
             : "text-muted-foreground hover:text-primary",
