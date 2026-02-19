@@ -39,6 +39,7 @@ import {
   Undo2,
   Loader2,
   AlertCircle,
+  Info,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -67,16 +68,16 @@ import { useVenueRole } from "./VenueRoleProvider"
 type StripeSetupStatus =
   | { status: "not_started" }
   | {
-      status: "connected"
-      chargesEnabled: boolean
-      payoutsEnabled: boolean
-      disabledReason?: string | null
-      currentDeadline?: number | null
-      currentlyDue: string[]
-      pastDue: string[]
-      pendingVerification: string[]
-      errors: Array<{ code?: string; reason?: string; requirement?: string }>
-    }
+    status: "connected"
+    chargesEnabled: boolean
+    payoutsEnabled: boolean
+    disabledReason?: string | null
+    currentDeadline?: number | null
+    currentlyDue: string[]
+    pastDue: string[]
+    pendingVerification: string[]
+    errors: Array<{ code?: string; reason?: string; requirement?: string }>
+  }
   | { status: "error"; message: string }
 
 function stripeRequirementToLabel(key: string): string {
@@ -1707,7 +1708,7 @@ export function VenueOpsConsoleClient({
                             )}
                           </div>
                         </div>
-                        <div className="rounded-lg border bg-muted/40 p-3">
+                        <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
                           <div className="text-xs text-muted-foreground">Withdrawal Balance</div>
                           <div className="text-lg font-semibold text-emerald-600">
                             {stripeLoading ? (
@@ -1717,6 +1718,12 @@ export function VenueOpsConsoleClient({
                             ) : (
                               "—"
                             )}
+                          </div>
+                          <div className="flex items-start gap-1 pt-0.5">
+                            <Info className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" />
+                            <p className="text-[10px] leading-snug text-muted-foreground/70">
+                              Payments take ~5–7 business days to clear and show here
+                            </p>
                           </div>
                         </div>
                       </div>

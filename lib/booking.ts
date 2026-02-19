@@ -21,16 +21,21 @@ export type BookingContext = {
   parsedStart: Date
   parsedEnd: Date
   venue: Awaited<ReturnType<typeof prisma.venue.findUnique>>
-  table: Awaited<ReturnType<typeof prisma.table.findUnique>> | null
-  seats: Awaited<ReturnType<typeof prisma.seat.findMany>>
+  table: any | null
+  seats: any[]
 }
 
 export type BookingPrice = {
-  amountCents: number
+  subtotalCents: number        // raw booking price (seats × hours)
+  processingFeeCents: number   // 3% surcharge passed to customer
+  amountCents: number          // total charged (subtotal + fee)
   totalPricePerHour: number
   seatCountForAverage: number
   hours: number
 }
+
+/** 3% processing fee added on top of the booking subtotal, charged to the customer. */
+export const PROCESSING_FEE_RATE = 0.03
 
 const MS_PER_HOUR = 1000 * 60 * 60
 
@@ -105,8 +110,8 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     }
   }
 
-  let table: Awaited<ReturnType<typeof prisma.table.findUnique>> | null = null
-  let seats: Awaited<ReturnType<typeof prisma.seat.findMany>> = []
+  let table: any = null
+  let seats: any[] = []
 
   if (isGroupBooking) {
     const seatWithSameId = await prisma.seat.findUnique({ where: { id: tableId! } })
@@ -175,7 +180,7 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
           },
         },
       },
-    })
+    }) as any[]
 
     if (seats.length !== finalSeatIds.length) {
       throw new Error("One or more seats not found.")
@@ -235,10 +240,11 @@ export function computeBookingPrice(context: BookingContext): BookingPrice {
     seatCountForAverage = context.finalSeatIds.length || 1
   }
 
-  const totalAmount = totalPricePerHour * hours
-  const amountCents = Math.max(0, Math.round(totalAmount * 100))
+  const subtotalCents = Math.max(0, Math.round(totalPricePerHour * hours * 100))
+  const processingFeeCents = Math.round(subtotalCents * PROCESSING_FEE_RATE)
+  const amountCents = subtotalCents + processingFeeCents
 
-  return { amountCents, totalPricePerHour, seatCountForAverage, hours }
+  return { subtotalCents, processingFeeCents, amountCents, totalPricePerHour, seatCountForAverage, hours }
 }
 
 export async function createReservationFromContext(context: BookingContext, userId: string) {
