@@ -12,6 +12,13 @@ export type BookingPayload = {
   endAt?: string
 }
 
+type TableWithSeats = Awaited<ReturnType<typeof prisma.table.findUnique>> & {
+  seats?: Awaited<ReturnType<typeof prisma.seat.findMany>>
+}
+type SeatWithTable = Awaited<ReturnType<typeof prisma.seat.findMany>>[number] & {
+  table?: Awaited<ReturnType<typeof prisma.table.findUnique>> & { isActive?: boolean }
+}
+
 export type BookingContext = {
   venueId: string
   isGroupBooking: boolean
@@ -21,8 +28,8 @@ export type BookingContext = {
   parsedStart: Date
   parsedEnd: Date
   venue: Awaited<ReturnType<typeof prisma.venue.findUnique>>
-  table: Awaited<ReturnType<typeof prisma.table.findUnique>> | null
-  seats: Awaited<ReturnType<typeof prisma.seat.findMany>>
+  table: TableWithSeats | null
+  seats: SeatWithTable[]
 }
 
 export type BookingPrice = {
@@ -105,8 +112,8 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     }
   }
 
-  let table: Awaited<ReturnType<typeof prisma.table.findUnique>> | null = null
-  let seats: Awaited<ReturnType<typeof prisma.seat.findMany>> = []
+  let table: TableWithSeats | null = null
+  let seats: SeatWithTable[] = []
 
   if (isGroupBooking) {
     const seatWithSameId = await prisma.seat.findUnique({ where: { id: tableId! } })
@@ -146,8 +153,9 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
       throw new Error("This table is not available for group booking.")
     }
 
-    if (table.seats.length < seatCount!) {
-      throw new Error(`This table only has ${table.seats.length} seat${table.seats.length > 1 ? "s" : ""}.`)
+    const tableSeats = table.seats ?? []
+    if (tableSeats.length < seatCount!) {
+      throw new Error(`This table only has ${tableSeats.length} seat${tableSeats.length > 1 ? "s" : ""}.`)
     }
 
     const overlapping = await prisma.reservation.findFirst({
@@ -182,10 +190,11 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     }
 
     for (const seat of seats) {
-      if (seat.table.venueId !== venueId) {
+      const seatTable = seat.table
+      if (!seatTable || seatTable.venueId !== venueId) {
         throw new Error("One or more seats do not belong to this venue.")
       }
-      if (seat.isActive === false || seat.table.isActive === false) {
+      if (seat.isActive === false || seatTable.isActive === false) {
         const error = new Error("One or more seats are no longer available for booking.")
         ;(error as any).status = 403
         throw error
@@ -229,7 +238,7 @@ export function computeBookingPrice(context: BookingContext): BookingPrice {
 
   if (context.isGroupBooking) {
     totalPricePerHour = context.table?.tablePricePerHour || 0
-    seatCountForAverage = context.table?.seats?.length || 1
+    seatCountForAverage = (context.table as TableWithSeats | null)?.seats?.length || 1
   } else {
     totalPricePerHour = context.seats.reduce((sum, seat) => sum + seat.pricePerHour, 0)
     seatCountForAverage = context.finalSeatIds.length || 1
@@ -251,7 +260,7 @@ export async function createReservationFromContext(context: BookingContext, user
         userId,
         startAt: context.parsedStart,
         endAt: context.parsedEnd,
-        seatCount: context.requestedSeatCount ?? context.table?.seats.length ?? 1,
+        seatCount: context.requestedSeatCount ?? (context.table as TableWithSeats | null)?.seats?.length ?? 1,
         status: "active",
       },
       include: {
