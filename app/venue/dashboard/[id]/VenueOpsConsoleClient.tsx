@@ -1658,6 +1658,19 @@ export function VenueOpsConsoleClient({
                         onRetry={fetchStripeSetupStatus}
                         hideButtons
                       />
+                      {venue.onboardingStatus !== "APPROVED" && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                          <p className="text-sm text-amber-900">
+                            Your venue can&apos;t be approved until Payouts setup has been completed! If you need assistance, reach out to{" "}
+                            <a
+                              href="mailto:support@nooc.io"
+                              className="font-medium underline hover:no-underline"
+                            >
+                              support@nooc.io
+                            </a>
+                          </p>
+                        </div>
+                      )}
                       <Button
                         className="w-full"
                         onClick={handleStripeConnect}
@@ -1682,6 +1695,24 @@ export function VenueOpsConsoleClient({
                         stripeSetupStatus={stripeSetupStatus}
                         onRetry={fetchStripeSetupStatus}
                       />
+                      {venue.onboardingStatus !== "APPROVED" &&
+                        stripeSetupStatus &&
+                        stripeSetupStatus.status === "connected" &&
+                        (!stripeSetupStatus.payoutsEnabled ||
+                          stripeSetupStatus.currentlyDue.length > 0 ||
+                          stripeSetupStatus.pastDue.length > 0) && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                            <p className="text-sm text-amber-900">
+                              Your venue can&apos;t be approved until Payouts setup has been completed! If you need assistance, reach out to{" "}
+                              <a
+                                href="mailto:support@nooc.io"
+                                className="font-medium underline hover:no-underline"
+                              >
+                                support@nooc.io
+                              </a>
+                            </p>
+                          </div>
+                        )}
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div className="rounded-lg border bg-muted/40 p-3">
                           <div className="text-xs text-muted-foreground">Daily Revenue</div>
