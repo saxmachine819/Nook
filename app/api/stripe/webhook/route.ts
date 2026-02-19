@@ -46,10 +46,11 @@ export async function POST(request: NextRequest) {
         let chargeId: string | null = null
         let applicationFeeId: string | null = null
         if (paymentIntentId && stripeAccount) {
-          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
-            expand: ["latest_charge"],
-            stripeAccount,
-          })
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            paymentIntentId,
+            { expand: ["latest_charge"] },
+            { stripeAccount }
+          )
           const charge = paymentIntent.latest_charge
           if (typeof charge === "string") {
             chargeId = charge
