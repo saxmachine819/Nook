@@ -8,9 +8,10 @@ interface VenueImageCarouselProps {
   images: string[]
   className?: string
   enableGallery?: boolean // If false, clicking images won't open full-screen gallery
+  objectFit?: "cover" | "contain" // contain = show full image, no crop
 }
 
-export function VenueImageCarousel({ images, className, enableGallery = true }: VenueImageCarouselProps) {
+export function VenueImageCarousel({ images, className, enableGallery = true, objectFit = "cover" }: VenueImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
@@ -50,11 +51,16 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
   // If single image, no carousel needed
   if (images.length === 1) {
     return (
-      <div className={cn("relative h-[217px] w-full overflow-hidden sm:h-64", className)}>
+      <div
+        className={cn(
+          "relative w-full overflow-hidden",
+          objectFit === "contain" ? className : cn("h-[217px] sm:h-64", className)
+        )}
+      >
         <img
           src={images[0]}
           alt="Venue"
-          className="h-full w-full object-cover"
+          className={cn("h-full w-full", objectFit === "contain" ? "object-contain object-center" : "object-cover")}
           onError={(e) => {
             // Fallback if image fails to load
             const target = e.target as HTMLImageElement
@@ -137,7 +143,12 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
 
   return (
     <>
-      <div className={cn("relative h-64 w-full overflow-hidden sm:h-72", className)}>
+      <div
+        className={cn(
+          "relative w-full overflow-hidden",
+          objectFit === "contain" ? className : cn("h-64 sm:h-72", className)
+        )}
+      >
         <div
           ref={carouselRef}
           className="flex h-full transition-transform duration-700 ease-smooth-out touch-pan-x"
@@ -161,7 +172,7 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
               <img
                 src={image}
                 alt={`Venue image ${index + 1}`}
-                className="h-full w-full object-cover object-center"
+                className={cn("h-full w-full object-center", objectFit === "contain" ? "object-contain" : "object-cover")}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"
@@ -174,25 +185,50 @@ export function VenueImageCarousel({ images, className, enableGallery = true }: 
         {/* Gradient Overlay for bottom contrast */}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
 
-        {/* Pagination dots */}
-        <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+        {/* Prev/Next arrows - non-mobile only (mobile stays swipe-only) */}
+        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none md:pointer-events-auto">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setCurrentIndex((i) => (i > 0 ? i - 1 : images.length - 1))
+            }}
+            className="hidden rounded-full glass p-2.5 text-primary shadow-lg transition-opacity hover:opacity-90 active:scale-95 md:flex md:items-center md:justify-center"
+            aria-label="Previous image"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none md:pointer-events-auto">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setCurrentIndex((i) => (i < images.length - 1 ? i + 1 : 0))
+            }}
+            className="hidden rounded-full glass p-2.5 text-primary shadow-lg transition-opacity hover:opacity-90 active:scale-95 md:flex md:items-center md:justify-center"
+            aria-label="Next image"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Pagination dots - hidden on mobile (swipe only), visible from md up for click-through */}
+        <div className="absolute bottom-4 left-1/2 hidden -translate-x-1/2 gap-2 md:flex">
           {images.map((_, index) => (
-            <div
+            <button
               key={index}
-              role="button"
-              tabIndex={0}
+              type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 setCurrentIndex(index)
               }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setCurrentIndex(index)
-                }
-              }}
               className={cn(
-                "h-1 rounded-full transition-all duration-300",
+                "h-1.5 rounded-full transition-all duration-300",
                 index === currentIndex
                   ? "w-8 bg-white shadow-sm"
                   : "w-1.5 bg-white/40 hover:bg-white/60"

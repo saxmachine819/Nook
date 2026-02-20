@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
@@ -13,6 +14,9 @@ import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } 
 import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
 import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
+
+/** Set to true to show CTA overlay on hero; false for in-card sticky CTA. */
+const CTA_OVER_HERO = false
 
 interface Table {
   id: string
@@ -97,6 +101,20 @@ export function VenueBookingWidget({
   const { showToast, ToastComponent } = useToast()
   const [confirmationOpen, setConfirmationOpen] = useState(false)
   const [confirmedReservation, setConfirmedReservation] = useState<any>(null)
+  const [isLg, setIsLg] = useState(false)
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)")
+    const onResize = () => setIsLg(mql.matches)
+    setIsLg(mql.matches)
+    mql.addEventListener("change", onResize)
+    return () => mql.removeEventListener("change", onResize)
+  }, [])
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById("venue-hero-cta-portal"))
+  }, [])
 
   // Get initial seat count from URL params if available
   const initialSeatCountFromUrl = searchParams?.get("seats")
@@ -1247,9 +1265,53 @@ export function VenueBookingWidget({
     }
   }
 
+  const showCta =
+    hasAvailabilityData &&
+    ((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
+      (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId)))
+  const useOverlay = CTA_OVER_HERO && isLg && showCta && portalTarget
+  const overlayContent =
+    showCta &&
+    ((
+      <div className="pointer-events-auto z-10 w-full max-w-sm rounded-2xl border bg-white p-6 shadow-xl shrink-0">
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Subtotal ({durationHours}h)</span>
+              <span>${totalPrice.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                Processing fee
+                <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
+              </span>
+              <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t pt-1.5">
+              <span className="text-xs font-semibold">Total</span>
+              <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+            </div>
+          </div>
+          <Button
+            type="submit"
+            form="venue-booking-form"
+            className="w-full"
+            size="lg"
+            loading={isSubmitting}
+          >
+            {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            You'll complete payment securely before the booking is confirmed.
+          </p>
+        </div>
+      </div>
+    ) as React.ReactNode)
+
   return (
     <>
       <form
+        id="venue-booking-form"
         onSubmit={handleSubmit}
         className="space-y-4 rounded-lg border bg-white/90 p-4 shadow-sm ring-1 ring-black/5"
       >
@@ -1395,28 +1457,6 @@ export function VenueBookingWidget({
             </h3>
 
             {renderSeatSelection()}
-
-            {/* Price estimate */}
-            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
-              (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-                <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Subtotal ({durationHours}h)</span>
-                    <span>${totalPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      Processing fee
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
-                    </span>
-                    <span>+${(totalPrice * 0.03).toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-1.5">
-                    <span className="text-xs font-semibold">Total</span>
-                    <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
           </div>
         )}
 
@@ -1428,11 +1468,27 @@ export function VenueBookingWidget({
           </p>
         )}
 
-        {/* Only show reserve button after a selection is made */}
-        {hasAvailabilityData &&
-          ((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
-            (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-            <div className="mt-6 space-y-2">
+        {/* Only show reserve button after a selection is made. On lg with CTA_OVER_HERO, CTA is portaled to hero instead. */}
+        {showCta && !useOverlay && (
+          <div className="mt-8 space-y-4 lg:sticky lg:bottom-1 lg:z-10 lg:bg-white lg:pt-1 lg:-mx-8 lg:px-8 lg:pb-3 lg:rounded-b-3xl lg:border-t lg:border-border/50">
+            <div className="space-y-4 lg:scale-[0.9] lg:origin-bottom">
+              <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Subtotal ({durationHours}h)</span>
+                  <span>${totalPrice.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    Processing fee
+                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
+                  </span>
+                  <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-1.5">
+                  <span className="text-xs font-semibold">Total</span>
+                  <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+                </div>
+              </div>
               <Button
                 type="submit"
                 className="w-full"
@@ -1441,13 +1497,12 @@ export function VenueBookingWidget({
               >
                 {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
               </Button>
-
-              <p className="text-xs text-muted-foreground">
-                You'll complete payment securely with Stripe before the booking is confirmed.
-              </p>
             </div>
-          )}
+          </div>
+        )}
       </form>
+
+      {useOverlay && portalTarget && overlayContent && createPortal(overlayContent, portalTarget)}
 
       {ToastComponent}
 
