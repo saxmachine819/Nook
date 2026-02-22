@@ -74,6 +74,122 @@ export async function POST(request: NextRequest) {
           },
         })
 
+        // Confirm existing reservation path (payment created at checkout with reservationId)
+        if (payment.reservationId) {
+          const existingReservation = await prisma.reservation.findUnique({
+            where: { id: payment.reservationId },
+            include: {
+              venue: {
+                select: {
+                  name: true,
+                  timezone: true,
+                  ownerId: true,
+                  owner: { select: { email: true } },
+                },
+              },
+            },
+          })
+
+          if (!existingReservation || existingReservation.status === "cancelled") {
+            try {
+              if (paymentIntentId && stripeAccount) {
+                await stripe.refunds.create(
+                  { payment_intent: paymentIntentId },
+                  { stripeAccount }
+                )
+              }
+              if (applicationFeeId) {
+                await stripe.applicationFees.createRefund(applicationFeeId)
+              }
+              await prisma.payment.update({
+                where: { id: payment.id },
+                data: { status: "REFUNDED" },
+              })
+            } catch (refundErr) {
+              console.error("Failed to refund after missing/cancelled reservation:", refundErr)
+            }
+            break
+          }
+
+          if (existingReservation.status === "pending" || existingReservation.status === "active") {
+            if (existingReservation.status === "pending") {
+              await prisma.reservation.update({
+                where: { id: existingReservation.id },
+                data: { status: "active" },
+              })
+            }
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: { status: "PAID" },
+            })
+            const userRecord = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { email: true },
+            })
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+            if (userRecord?.email?.trim()) {
+              await enqueueNotification({
+                type: "booking_confirmation",
+                dedupeKey: `booking_confirmation:${existingReservation.id}`,
+                toEmail: userRecord.email.trim(),
+                userId,
+                venueId: existingReservation.venueId,
+                bookingId: existingReservation.id,
+                payload: {
+                  bookingId: existingReservation.id,
+                  venueId: existingReservation.venueId,
+                  venueName: existingReservation.venue?.name ?? "",
+                  timeZone: existingReservation.venue?.timezone ?? undefined,
+                  tableId: existingReservation.tableId ?? null,
+                  seatId: existingReservation.seatId ?? null,
+                  startAt: existingReservation.startAt.toISOString(),
+                  endAt: existingReservation.endAt.toISOString(),
+                  ...(baseUrl ? { confirmationUrl: `${baseUrl}/reservations/${existingReservation.id}` } : {}),
+                },
+              })
+            }
+            if (existingReservation.venue?.owner?.email?.trim()) {
+              await enqueueNotification({
+                type: "venue_booking_created",
+                dedupeKey: `venue_booking_created:${existingReservation.id}`,
+                toEmail: existingReservation.venue.owner.email.trim(),
+                userId: existingReservation.venue.ownerId ?? undefined,
+                venueId: existingReservation.venueId,
+                bookingId: existingReservation.id,
+                payload: {
+                  venueName: existingReservation.venue?.name ?? "",
+                  timeZone: existingReservation.venue?.timezone ?? undefined,
+                  guestEmail: userRecord?.email ?? "",
+                  startAt: existingReservation.startAt.toISOString(),
+                  endAt: existingReservation.endAt.toISOString(),
+                },
+              })
+            }
+            break
+          }
+
+          // Reservation exists but status is neither pending nor active; refund to be safe
+          try {
+            if (paymentIntentId && stripeAccount) {
+              await stripe.refunds.create(
+                { payment_intent: paymentIntentId },
+                { stripeAccount }
+              )
+            }
+            if (applicationFeeId) {
+              await stripe.applicationFees.createRefund(applicationFeeId)
+            }
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: { status: "REFUNDED" },
+            })
+          } catch (refundErr) {
+            console.error("Failed to refund after unexpected reservation status:", refundErr)
+          }
+          break
+        }
+
+        // Existing path: create from context (payment.reservationId is null)
         try {
           const bookingPayload = payment.bookingPayload as any
           const context = await buildBookingContext(bookingPayload, userId)
