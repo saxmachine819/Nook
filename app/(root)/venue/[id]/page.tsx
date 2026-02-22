@@ -229,8 +229,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
   return (
     <div className="min-h-screen bg-background lg:flex lg:flex-col">
-      <div className="container mx-auto px-4 py-8 max-w-7xl flex-1 min-h-0 flex flex-col lg:py-6">
-        <div className="grid gap-8 flex-1 min-h-0 lg:grid-cols-[1fr,400px] lg:grid-rows-[auto_550px_auto] lg:items-stretch">
+      <div className="container mx-auto px-4 py-8 max-w-7xl xl:max-w-screen-2xl 2xl:max-w-[1800px] flex-1 min-h-0 flex flex-col lg:py-6">
+        <div className="grid gap-8 flex-1 min-h-0 lg:grid-cols-[1fr,400px] xl:grid-cols-[1fr,440px] 2xl:grid-cols-[1fr,480px] lg:grid-rows-[auto_550px_auto] xl:grid-rows-[auto_600px_auto] 2xl:grid-rows-[auto_650px_auto] lg:items-stretch">
           <div className="lg:row-start-1 lg:col-start-1 shrink-0">
             <VenuePageHeader
               name={venue.name}
@@ -250,7 +250,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
           {/* Hero: row 2, same height as Reserve so bottoms align */}
           <div className="lg:row-start-2 lg:col-start-1 lg:min-h-0 lg:overflow-hidden lg:rounded-[2.5rem]">
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-lg h-[300px] sm:h-[450px] lg:h-[550px]">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-lg h-[300px] sm:h-[450px] lg:h-[550px] xl:h-[600px] 2xl:h-[650px]">
               <VenueImageCarousel
                 images={venueHeroImages}
                 className="h-full w-full"

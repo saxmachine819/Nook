@@ -81,7 +81,23 @@ export function WelcomeOnboardStep() {
           <h3 className="mb-3 text-sm font-medium">Good to know</h3>
           <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
             {GOOD_TO_KNOW.map((item, i) => (
-              <li key={i}>{item}</li>
+              <li key={i}>
+                {item.includes("support@nooc.io") ? (
+                  <>
+                    Need help?{" "}
+                    <a
+                      href="mailto:support@nooc.io"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline hover:no-underline"
+                    >
+                      support@nooc.io
+                    </a>
+                  </>
+                ) : (
+                  item
+                )}
+              </li>
             ))}
           </ul>
         </CardContent>

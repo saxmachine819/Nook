@@ -31,6 +31,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (!body.googlePlaceId || typeof body.googlePlaceId !== "string" || !body.googlePlaceId.trim()) {
+      return NextResponse.json(
+        { error: "Venue must be selected from Google. Search for your venue and select it from the suggestions." },
+        { status: 400 }
+      )
+    }
+
     if (!body.ownerPhone || typeof body.ownerPhone !== "string" || !body.ownerPhone.trim()) {
       return NextResponse.json(
         { error: "Owner phone number is required" },
