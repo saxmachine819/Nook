@@ -29,6 +29,14 @@ export function EmbeddedCheckoutModal({
     () => getStripe(stripeAccountId || undefined),
     [stripeAccountId]
   )
+  const [stripeReady, setStripeReady] = React.useState<boolean | null>(null)
+  React.useEffect(() => {
+    let cancelled = false
+    stripePromise.then((stripe) => {
+      if (!cancelled) setStripeReady(stripe !== null)
+    })
+    return () => { cancelled = true }
+  }, [stripePromise])
 
   return (
     <Dialog open={!!clientSecret} onOpenChange={(open) => !open && onClose()}>
@@ -38,7 +46,21 @@ export function EmbeddedCheckoutModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-4 min-h-[400px]">
-          {clientSecret ? (
+          {!clientSecret ? (
+            <div className="flex flex-col items-center justify-center h-full space-y-4 py-20">
+              <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
+              <p className="text-sm text-muted-foreground animate-pulse font-medium">Preparing secure checkout...</p>
+            </div>
+          ) : stripeReady === false ? (
+            <div className="flex flex-col items-center justify-center h-full space-y-4 py-20 text-center">
+              <p className="text-sm font-medium text-muted-foreground">
+                Checkout is not configured for this environment. Please add{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>{" "}
+                to your deployment settings.
+              </p>
+              <p className="text-xs text-muted-foreground">You can close this and try again in production.</p>
+            </div>
+          ) : stripeReady === true ? (
             <EmbeddedCheckoutProvider
               stripe={stripePromise}
               options={{ clientSecret }}
@@ -48,7 +70,7 @@ export function EmbeddedCheckoutModal({
           ) : (
             <div className="flex flex-col items-center justify-center h-full space-y-4 py-20">
               <Loader2 className="h-10 w-10 animate-spin text-primary/40" />
-              <p className="text-sm text-muted-foreground animate-pulse font-medium">Preparing secure checkout...</p>
+              <p className="text-sm text-muted-foreground animate-pulse font-medium">Loading checkout...</p>
             </div>
           )}
         </div>
