@@ -44,9 +44,9 @@ interface MapboxMapProps {
   isInitialLoading?: boolean
 }
 
-// NYC coordinates (default center) - narrower initial zoom for better performance
-const NYC_CENTER = { lat: 40.7128, lng: -74.006 }
-const DEFAULT_ZOOM = 13 // Narrower default zoom for faster initial load
+// Default map view: NYC to Boston area (wider to load all venues)
+const NYC_CENTER = { lat: 41.5, lng: -72.5 } // Center between NYC and Boston
+const DEFAULT_ZOOM = 6 // Wider zoom to show NYC-Boston corridor
 
 export function MapboxMap({
   venues,
@@ -1087,13 +1087,14 @@ export function MapboxMap({
   }, [venues])
 
   // Helper function to force map repaint after data update
-  // Uses micro-zoom to trigger viewport change (imperceptible to user, triggers layer re-evaluation)
+  // Called synchronously immediately after setData() to ensure instant repaint
   const forceMapRepaint = (map: mapboxgl.Map) => {
+    // Production-only issue: markers don't appear after text search
+    // This is a rendering trigger, exact mechanism TBD
     if (!map || !map.loaded()) return
 
-    const currentZoom = map.getZoom()
-    map.setZoom(currentZoom - 0.001)
-    // Don't restore - the -0.001 difference is imperceptible and avoids interfering with user zoom actions
+    // Trigger repaint by firing moveend event
+    map.fire('moveend')
   }
   
   // Store shouldFitBounds in a ref so we can access latest value in intervals/callbacks
