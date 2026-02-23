@@ -2,7 +2,6 @@ import {
   Body,
   Container,
   Head,
-  Heading,
   Hr,
   Html,
   Link,
@@ -10,6 +9,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { EmailBrandHeader } from "./components/EmailBrandHeader"
 import { emailStyles } from "./shared-styles"
 
 export interface WelcomeEmailProps {
@@ -31,9 +31,7 @@ export default function WelcomeEmail(props: WelcomeEmailProps) {
       <Head />
       <Body style={s.main}>
         <Container style={s.container}>
-          <Section style={s.header}>
-            <Heading style={s.brand}>Nooc</Heading>
-          </Section>
+          <EmailBrandHeader />
           <Section style={s.section}>
             <Text style={s.text}>
               Hi <span style={s.highlight}>{userName}</span>, welcome to Nooc. Reserve a seat by the

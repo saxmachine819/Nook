@@ -1,0 +1,15 @@
+---
+description: Do not modify checkout route handlers
+globs: "**/checkout/**/route.ts"
+alwaysApply: false
+---
+
+# Checkout route.ts — Do Not Edit
+
+**Never modify, refactor, or touch any code in `route.ts` files under a `checkout` path.**
+
+- Do not edit these files when implementing features, fixing bugs, or refactoring.
+- Do not suggest changes, add comments, or update dependencies in these files.
+- If a task would require changing a checkout route, stop and tell the user that checkout route files are off-limits.
+
+This applies to any file matching `**/checkout/**/route.ts` (e.g. `app/api/payments/checkout/route.ts`).

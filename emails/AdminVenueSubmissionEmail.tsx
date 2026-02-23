@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { EmailBrandHeader } from "./components/EmailBrandHeader"
 import { emailStyles } from "./shared-styles"
 
 export interface AdminVenueSubmissionEmailProps {
@@ -32,9 +33,7 @@ export default function AdminVenueSubmissionEmail(props: AdminVenueSubmissionEma
       <Head />
       <Body style={s.main}>
         <Container style={s.container}>
-          <Section style={s.header}>
-            <Heading style={s.brand}>Nooc</Heading>
-          </Section>
+          <EmailBrandHeader />
           <Section style={s.section}>
             <Heading as="h2" style={{ ...s.text, marginTop: 0, fontSize: "20px" }}>
               New venue approval request

@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components"
 import * as React from "react"
+import { EmailBrandHeader } from "./components/EmailBrandHeader"
 import { emailStyles } from "./shared-styles"
 
 export interface CustomerFollowUpEmailProps {
@@ -34,9 +35,7 @@ export default function CustomerFollowUpEmail(props: CustomerFollowUpEmailProps)
       <Head />
       <Body style={s.main}>
         <Container style={s.container}>
-          <Section style={s.header}>
-            <Heading style={s.brand}>Nooc</Heading>
-          </Section>
+          <EmailBrandHeader />
           <Section style={s.section}>
             <Heading as="h2" style={{ ...s.text, marginTop: 0, fontSize: "18px", fontWeight: "600" }}>
               Thanks for using Nooc today

@@ -2,7 +2,6 @@ import {
   Body,
   Container,
   Head,
-  Heading,
   Hr,
   Html,
   Link,
@@ -11,6 +10,7 @@ import {
 } from "@react-email/components"
 import * as React from "react"
 import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
+import { EmailBrandHeader } from "./components/EmailBrandHeader"
 import { emailStyles } from "./shared-styles"
 
 export interface BookingConfirmationEmailProps {
@@ -38,9 +38,7 @@ export default function BookingConfirmationEmail(props: BookingConfirmationEmail
       <Head />
       <Body style={s.main}>
         <Container style={s.container}>
-          <Section style={s.header}>
-            <Heading style={s.brand}>Nooc</Heading>
-          </Section>
+          <EmailBrandHeader />
           <Section style={s.section}>
             <Text style={s.text}>
               Your booking at <span style={s.highlight}>{displayVenueName}</span> is confirmed.
