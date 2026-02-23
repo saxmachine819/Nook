@@ -95,16 +95,16 @@ describe('ProfilePage', () => {
       render(<ProfilePage />)
 
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
+        expect(screen.getByText('Venues Dashboard')).toBeInTheDocument()
       })
 
       expect(
         screen.getByText(
-          'If you manage a café or hotel lobby with workspace seating, you can request to be added to Nooc.'
+          'Whether you manage a boutique café, a hotel lobby, or a creative studio, join Nooc to reach thousands of remote workers looking for their next favorite spot.'
         )
       ).toBeInTheDocument()
 
-      const addButton = screen.getByText('Add your venue')
+      const addButton = screen.getByText('Add your workspace')
       expect(addButton).toBeInTheDocument()
       expect(addButton.closest('a')).toHaveAttribute('href', '/venue/onboard')
     })
@@ -116,10 +116,10 @@ describe('ProfilePage', () => {
 
       // Wait for venues to load
       await waitFor(() => {
-        expect(screen.getByText('Open Venue Dashboard')).toBeInTheDocument()
+        expect(screen.getByText('Open Management Dashboard')).toBeInTheDocument()
       })
 
-      const dashboardButton = screen.getByText('Open Venue Dashboard')
+      const dashboardButton = screen.getByText('Open Management Dashboard')
       expect(dashboardButton).toBeInTheDocument()
       expect(dashboardButton.closest('a')).toHaveAttribute('href', '/venue/dashboard')
     })
@@ -131,7 +131,7 @@ describe('ProfilePage', () => {
 
       // Should show empty state after error
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
+        expect(screen.getByText('Venues Dashboard')).toBeInTheDocument()
       })
     })
 
@@ -142,18 +142,18 @@ describe('ProfilePage', () => {
 
       // Should show empty state after error
       await waitFor(() => {
-        expect(screen.getByText('List your venue on Nooc')).toBeInTheDocument()
+        expect(screen.getByText('Venues Dashboard')).toBeInTheDocument()
       })
     })
 
     it('shows loading state while fetching venues', () => {
       mockUseMyVenuesCount.mockReturnValue({ data: null, isLoading: true })
 
-      const { container } = render(<ProfilePage />)
+      render(<ProfilePage />)
 
-      // The component uses Card with animate-pulse when loading
-      expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
-      expect(screen.queryByText('My Venues')).not.toBeInTheDocument()
+      // Loading shows "Retrieving your spaces..." and no dashboard/empty CTA yet
+      expect(screen.getByText('Retrieving your spaces...')).toBeInTheDocument()
+      expect(screen.queryByText('Add your workspace')).not.toBeInTheDocument()
     })
 
     it('shows admin button when user is admin', async () => {
@@ -163,13 +163,13 @@ describe('ProfilePage', () => {
 
       // Wait for admin button to appear
       await waitFor(() => {
-        expect(screen.getByText('Go to Admin Panel')).toBeInTheDocument()
+        expect(screen.getByText('Manage Platform')).toBeInTheDocument()
       })
 
-      const adminButton = screen.getByText('Go to Admin Panel')
+      const adminButton = screen.getByText('Manage Platform')
       expect(adminButton).toBeInTheDocument()
       expect(adminButton.closest('a')).toHaveAttribute('href', '/admin')
-      expect(screen.getByText('Admin')).toBeInTheDocument()
+      expect(screen.getByText('Admin Portal')).toBeInTheDocument()
     })
 
     it('does not show admin button when user is not admin', async () => {
@@ -179,12 +179,12 @@ describe('ProfilePage', () => {
 
       // Wait for content to load
       await waitFor(() => {
-        expect(screen.getByText('Profile')).toBeInTheDocument()
+        expect(screen.getByText('Account Settings')).toBeInTheDocument()
       })
 
       // Admin button should not be present
-      expect(screen.queryByText('Go to Admin Panel')).not.toBeInTheDocument()
-      expect(screen.queryByText('Admin')).not.toBeInTheDocument()
+      expect(screen.queryByText('Manage Platform')).not.toBeInTheDocument()
+      expect(screen.queryByText('Admin Portal')).not.toBeInTheDocument()
     })
   })
 
