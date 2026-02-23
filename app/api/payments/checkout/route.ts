@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         startAt: context.parsedStart,
         endAt: context.parsedEnd,
-        pendingExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        pendingExpiresAt: new Date(Date.now() + 3 * 60 * 1000),
         seatCount: context.isGroupBooking
           ? (context.requestedSeatCount ?? context.table?.seatCount ?? 1)
           : context.finalSeatIds.length,

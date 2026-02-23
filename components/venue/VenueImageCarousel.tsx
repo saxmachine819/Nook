@@ -217,8 +217,8 @@ export function VenueImageCarousel({ images, className, enableGallery = true, ob
           </button>
         </div>
 
-        {/* Pagination dots - hidden on mobile (swipe only), visible from md up for click-through */}
-        <div className="absolute bottom-4 left-1/2 hidden -translate-x-1/2 gap-2 md:flex">
+        {/* Pagination dots - show on all screen sizes for current slide indicator */}
+        <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
           {images.map((_, index) => (
             <button
               key={index}
