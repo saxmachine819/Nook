@@ -66,8 +66,8 @@ describe('ProfilePage', () => {
 
       render(<ProfilePage />)
 
-      expect(screen.getByText('Sign in')).toBeInTheDocument()
-      expect(screen.getByText('Sign in with Google')).toBeInTheDocument()
+      expect(screen.getByText('Your Space')).toBeInTheDocument()
+      expect(screen.getByText('Continue with Google')).toBeInTheDocument()
     })
   })
 
