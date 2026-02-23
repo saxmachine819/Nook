@@ -554,6 +554,11 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
       return false
     }
 
+    if (!googlePlaceId) {
+      showToast("Please search and select your venue from Google first", "error")
+      return false
+    }
+
     if (!ownerPhone.trim()) {
       showToast("Phone number is required", "error")
       return false
@@ -683,6 +688,10 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
   }
 
   const validateStep1 = (): boolean => {
+    if (!googlePlaceId) {
+      showToast("Please search and select your venue from Google first", "error")
+      return false
+    }
     if (!name.trim()) {
       showToast("Venue name is required", "error")
       return false
@@ -846,13 +855,13 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
         <Card>
           <CardHeader>
             <CardTitle>Venue Information</CardTitle>
-            <CardDescription>Search for your venue or enter details manually</CardDescription>
+            <CardDescription>For now, all new locations must exist on Google first. Search for your venue to pull in address, hours, and photos.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
                 <label htmlFor="place-search" className="mb-2 block text-sm font-medium">
-                  Find on Google <span className="text-muted-foreground">(optional)</span>
+                  Find on Google <span className="text-destructive">*</span>
                 </label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -868,7 +877,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
                           ? "Loading..."
                           : isLoadingPlaceDetails
                             ? "Loading place details..."
-                            : "Search for your venue or address"
+                            : "Search for your venue on Google"
                     }
                     className="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                   />

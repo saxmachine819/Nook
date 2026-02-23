@@ -10,6 +10,7 @@ import VenueBookingCanceledEmail from "@/emails/VenueBookingCanceledEmail"
 import BookingEndReminderEmail from "@/emails/BookingEndReminderEmail"
 import BookingReminder60MinEmail from "@/emails/BookingReminder60MinEmail"
 import VenueApprovedEmail from "@/emails/VenueApprovedEmail"
+import AdminVenueSubmissionEmail from "@/emails/AdminVenueSubmissionEmail"
 import CustomerFollowUpEmail from "@/emails/CustomerFollowUpEmail"
 
 const BATCH_SIZE = 25
@@ -105,6 +106,15 @@ const REGISTRY: Record<string, Handler> = {
       React.createElement(VenueApprovedEmail, {
         venueName: p.venueName as string | undefined,
         dashboardUrl: p.dashboardUrl as string | undefined,
+      }),
+  },
+  admin_venue_submission: {
+    subject: (p) =>
+      `New venue approval request — ${(p.venueName as string) ?? "A new venue"}`,
+    render: (p) =>
+      React.createElement(AdminVenueSubmissionEmail, {
+        venueName: p.venueName as string | undefined,
+        approvalsUrl: p.approvalsUrl as string | undefined,
       }),
   },
   customer_follow_up: {

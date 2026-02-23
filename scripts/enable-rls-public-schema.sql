@@ -38,3 +38,19 @@ BEGIN
     ALTER TABLE public.refund_requests ENABLE ROW LEVEL SECURITY;
   END IF;
 END $$;
+
+-- Signage tables (only enable if they exist - these may not exist in all environments)
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'signage_templates') THEN
+    ALTER TABLE public.signage_templates ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'signage_orders') THEN
+    ALTER TABLE public.signage_orders ENABLE ROW LEVEL SECURITY;
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'signage_order_items') THEN
+    ALTER TABLE public.signage_order_items ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;

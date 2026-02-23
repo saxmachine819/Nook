@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield, Trash2 } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield, Trash2, HelpCircle } from "lucide-react"
 
 function initialsFromName(name?: string | null) {
   const trimmed = (name || "").trim()
@@ -208,6 +208,16 @@ function ProfileContent() {
                 >
                   <Trash2 className="mr-2 h-4 w-4 opacity-30" />
                   Delete account
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full h-12 rounded-2xl font-bold text-muted-foreground/60 hover:text-primary hover:bg-primary/5 transition-all"
+                  asChild
+                >
+                  <a href="mailto:support@nooc.io" target="_blank" rel="noopener noreferrer">
+                    <HelpCircle className="mr-2 h-4 w-4 opacity-50" />
+                    Contact support
+                  </a>
                 </Button>
               </CardContent>
             </Card>

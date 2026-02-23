@@ -347,6 +347,12 @@ export function VenueBookingWidget({
           setDurationHours(bookingData.duration)
         }
         if (bookingData.seatId) setSelectedSeatId(bookingData.seatId)
+        if (bookingData.tableId) setSelectedGroupTableId(bookingData.tableId)
+        const seatsParam = searchParams?.get("seats")
+        if (seatsParam) {
+          const parsed = parseInt(seatsParam, 10)
+          if (parsed > 0) setSeatCount(parsed)
+        }
 
         const newUrl = new URL(window.location.href)
         newUrl.searchParams.delete("booking")
@@ -457,6 +463,27 @@ export function VenueBookingWidget({
 
     return 0
   }, [selectedSeatId, selectedSeatIds, selectedGroupTableId, durationHours, availableSeats, availableGroupTables, seatCount])
+
+  // Callback URL for sign-in so user returns to this exact booking (date, time, seats, seat/table)
+  const signInCallbackUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set("seats", String(seatCount))
+    const booking: Record<string, unknown> = {
+      date,
+      duration: durationHours,
+    }
+    if (startTime) {
+      const [h, m] = startTime.split(":").map((part) => parseInt(part, 10))
+      if (!Number.isNaN(h) && !Number.isNaN(m)) {
+        booking.startTime = h * 100 + m
+      }
+    }
+    if (selectedSeatId) booking.seatId = selectedSeatId
+    if (selectedGroupTableId) booking.tableId = selectedGroupTableId
+    params.set("booking", encodeURIComponent(JSON.stringify(booking)))
+    const q = params.toString()
+    return pathname + (q ? `?${q}` : "")
+  }, [pathname, date, startTime, durationHours, seatCount, selectedSeatId, selectedGroupTableId])
 
   const canCheckAvailability = date && startTime && !isLoadingAvailability;
 
@@ -1520,7 +1547,7 @@ export function VenueBookingWidget({
         }}
         onSignInSuccess={retryReservation}
         description="Sign in to complete your reservation."
-        callbackUrl={pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : "")}
+        callbackUrl={signInCallbackUrl}
       />
 
       <EmbeddedCheckoutModal

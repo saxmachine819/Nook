@@ -433,6 +433,17 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
             )}
           </div>
         )}
+
+        <footer className="pt-8">
+          <a
+            href="mailto:support@nooc.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors"
+          >
+            Contact support
+          </a>
+        </footer>
       </div>
 
       {/* Cancel Confirmation Dialog */}
