@@ -44,9 +44,9 @@ interface MapboxMapProps {
   isInitialLoading?: boolean
 }
 
-// Default map view: NYC to Boston area (wider to load all venues)
-const NYC_CENTER = { lat: 41.5, lng: -72.5 } // Center between NYC and Boston
-const DEFAULT_ZOOM = 6 // Wider zoom to show NYC-Boston corridor
+// Default map view (from Explore map moveend: center + zoom)
+const NYC_CENTER = { lat: 40.725, lng: -73.9727 }
+const DEFAULT_ZOOM = 10.85
 
 export function MapboxMap({
   venues,
