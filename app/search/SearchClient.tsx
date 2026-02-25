@@ -108,8 +108,9 @@ export function SearchClient() {
 
   const formatDistance = (km: number | null) => {
     if (km == null) return null
-    if (km < 1) return `${Math.round(km * 1000)}m away`
-    return `${km.toFixed(1)}km away`
+    const miles = km * 0.621371
+    if (miles < 0.1) return "0.1 mi away"
+    return `${miles.toFixed(1)} mi away`
   }
 
   const getVenueUrl = useCallback(
@@ -123,7 +124,7 @@ export function SearchClient() {
           duration: durationHours,
         })
       )
-      return `/venue/${venueId}?seats=${seats}&booking=${bookingPayload}`
+      return `/venue/${venueId}?seats=${seats}&booking=${bookingPayload}&returnTo=${encodeURIComponent("/search")}`
     },
     [date, startTime, durationHours, seats]
   )
@@ -143,7 +144,7 @@ export function SearchClient() {
             Find a Nooc
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            Reserve a calm workspace by the hour
+            Reserve a workspace by the hour
           </p>
         </div>
       </div>
@@ -332,16 +333,11 @@ export function SearchClient() {
                               {venue.city ? `, ${venue.city}` : ""}
                             </p>
                           )}
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                              {venue.availableSeats} seat{venue.availableSeats !== 1 ? "s" : ""} free
-                            </span>
-                            {venue.distanceKm != null && (
-                              <span className="text-[10px] font-medium text-muted-foreground">
-                                {formatDistance(venue.distanceKm)}
-                              </span>
-                            )}
-                          </div>
+                          {venue.distanceKm != null && (
+                            <p className="mt-2 text-[10px] font-medium text-muted-foreground">
+                              {formatDistance(venue.distanceKm)}
+                            </p>
+                          )}
                         </CardContent>
                       </div>
                     </Card>

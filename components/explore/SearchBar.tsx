@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import Link from "next/link"
 import { Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -8,9 +9,11 @@ interface SearchBarProps {
   onSearch: (query: string) => void
   placeholder?: string
   className?: string
+  /** When set, the search icon becomes a link to this href (e.g. /search). */
+  searchIconHref?: string
 }
 
-export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbies, neighborhoods...", className }: SearchBarProps) {
+export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbies, neighborhoods...", className, searchIconHref }: SearchBarProps) {
   const [query, setQuery] = useState("")
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -39,9 +42,19 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
   return (
     <div className={cn("relative w-full group", className)}>
       <div className="relative flex items-center">
-        {/* Search icon */}
+        {/* Search icon - link to /search when searchIconHref is set */}
         <div className="absolute left-4 z-10 text-primary/60 transition-colors group-focus-within:text-primary">
-          <Search size={18} strokeWidth={2.5} />
+          {searchIconHref ? (
+            <Link
+              href={searchIconHref}
+              className="flex items-center justify-center rounded-md p-1 -m-1 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+              aria-label="Go to search"
+            >
+              <Search size={18} strokeWidth={2.5} />
+            </Link>
+          ) : (
+            <Search size={18} strokeWidth={2.5} />
+          )}
         </div>
 
         {/* Input */}

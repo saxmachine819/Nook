@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { isSearchLandingEnabled } from "@/lib/site-settings";
 import { ExploreClient } from "./ExploreClient";
 
 interface ExplorePageProps {
@@ -24,13 +23,9 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const session = await auth();
   const params = await searchParams;
 
-  // Feature flag: redirect to search landing page if enabled
-  // Allow ?view=map to bypass the flag (used by "View on map" links)
+  // Homepage (nooc.io /) goes to search; only show explore when ?view=map (e.g. "View on map" from search)
   if (params?.view !== "map") {
-    const searchEnabled = await isSearchLandingEnabled();
-    if (searchEnabled) {
-      redirect("/search");
-    }
+    redirect("/search");
   }
 
   let favoritedVenueIds = new Set<string>();

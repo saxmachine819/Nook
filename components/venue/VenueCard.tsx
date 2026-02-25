@@ -44,6 +44,8 @@ interface VenueCardProps {
     summary: string
   } | null
   initialSeatCount?: number
+  /** When set, venue page X button will navigate back here (e.g. /search or /?view=map). */
+  returnTo?: string
 }
 
 interface Slot {
@@ -77,6 +79,7 @@ export function VenueCard({
   onToggleFavorite,
   dealBadge,
   initialSeatCount,
+  returnTo,
 }: VenueCardProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -189,7 +192,8 @@ export function VenueCard({
       )
 
       showToast("Select seats to continue checkout.", "success")
-      router.push(`/venue/${id}?seats=${seats}&booking=${bookingParam}`)
+      const checkoutUrl = `/venue/${id}?seats=${seats}&booking=${bookingParam}`
+      router.push(returnTo ? `${checkoutUrl}&returnTo=${encodeURIComponent(returnTo)}` : checkoutUrl)
     } catch (error) {
       console.error("Error starting checkout:", error)
       setSubmitError("Something went wrong while starting checkout.")
@@ -205,9 +209,10 @@ export function VenueCard({
   // Redirect to venue detail page when expanded (for seat-level booking)
   useEffect(() => {
     if (isExpanded) {
-      router.push(`/venue/${id}`)
+      const url = returnTo ? `/venue/${id}?returnTo=${encodeURIComponent(returnTo)}` : `/venue/${id}`
+      router.push(url)
     }
-  }, [isExpanded, id, router])
+  }, [isExpanded, id, returnTo, router])
 
   if (isExpanded) {
     // Show loading state while redirecting
@@ -231,9 +236,10 @@ export function VenueCard({
       <button
         type="button"
         onClick={() => {
-          const url = initialSeatCount && initialSeatCount > 0
+          let url = initialSeatCount && initialSeatCount > 0
             ? `/venue/${id}?seats=${initialSeatCount}`
             : `/venue/${id}`
+          if (returnTo) url += `${url.includes("?") ? "&" : "?"}returnTo=${encodeURIComponent(returnTo)}`
           startTransition(() => {
             router.push(url)
           })

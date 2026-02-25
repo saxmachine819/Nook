@@ -16,6 +16,8 @@ interface TopOverlayControlsProps {
   onClearFilters: () => void
   activeFilterCount: number
   className?: string
+  /** When set, the search bar magnifying glass links to this URL (e.g. /search). */
+  searchIconHref?: string
 }
 
 export function TopOverlayControls({
@@ -28,6 +30,7 @@ export function TopOverlayControls({
   onClearFilters,
   activeFilterCount,
   className,
+  searchIconHref,
 }: TopOverlayControlsProps) {
   return (
     <>
@@ -39,7 +42,7 @@ export function TopOverlayControls({
       >
         <div className="flex gap-4">
           <div className="flex-1 min-w-0">
-            <SearchBar onSearch={onSearch} />
+            <SearchBar onSearch={onSearch} searchIconHref={searchIconHref} />
           </div>
           <Button
             type="button"

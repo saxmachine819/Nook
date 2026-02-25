@@ -276,6 +276,7 @@ export function VenuePreviewSheet({
               onToggleFavorite={onToggleFavorite}
               dealBadge={venue.dealBadge}
               initialSeatCount={initialSeatCount}
+              returnTo="/?view=map"
             />
           )}
         </div>

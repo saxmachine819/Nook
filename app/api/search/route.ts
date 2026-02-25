@@ -156,7 +156,8 @@ export async function GET(request: Request) {
       }
 
       if (availableCount >= seats) {
-        availableVenues.push({ venue, availableSeats: availableCount, capacity })
+        const availableSeats = Math.min(availableCount, capacity)
+        availableVenues.push({ venue, availableSeats, capacity })
       }
     }
 
@@ -229,7 +230,7 @@ export async function GET(request: Request) {
       }
     })
 
-    // Sort by distance if available, otherwise by name
+    // Results are sorted by distance when lat/lng are provided.
     if (lat != null && lng != null) {
       results.sort((a, b) => {
         if (a.distanceKm == null && b.distanceKm == null) return 0
