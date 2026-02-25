@@ -2,7 +2,6 @@ import {
   Body,
   Container,
   Head,
-  Heading,
   Hr,
   Html,
   Section,
@@ -10,6 +9,7 @@ import {
 } from "@react-email/components"
 import * as React from "react"
 import { formatDateTimeInTimezone } from "@/lib/email-date-utils"
+import { EmailBrandHeader } from "./components/EmailBrandHeader"
 import { emailStyles } from "./shared-styles"
 
 export interface VenueBookingCanceledEmailProps {
@@ -37,9 +37,7 @@ export default function VenueBookingCanceledEmail(props: VenueBookingCanceledEma
       <Head />
       <Body style={s.main}>
         <Container style={s.container}>
-          <Section style={s.header}>
-            <Heading style={s.brand}>Nooc</Heading>
-          </Section>
+          <EmailBrandHeader />
           <Section style={s.section}>
             <Text style={s.text}>
               A booking at <span style={s.highlight}>{displayVenueName}</span> has been canceled.

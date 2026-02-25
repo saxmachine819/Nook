@@ -38,14 +38,17 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
   const router = useRouter()
   const { showToast, ToastComponent } = useToast()
   const [venues, setVenues] = useState<Venue[]>(initialVenues)
-  const [loadingVenueId, setLoadingVenueId] = useState<string | null>(null)
+  const [loadingState, setLoadingState] = useState<{
+    venueId: string
+    action: "approve" | "reject" | "sendToDraft"
+  } | null>(null)
   const [rejectionDialog, setRejectionDialog] = useState<{
     open: boolean
     venue: Venue | null
   }>({ open: false, venue: null })
 
   const handleApprove = async (venue: Venue) => {
-    setLoadingVenueId(venue.id)
+    setLoadingState({ venueId: venue.id, action: "approve" })
     try {
       const response = await fetch(`/api/venues/${venue.id}/approve`, {
         method: "POST",
@@ -68,12 +71,12 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
       console.error("Error approving venue:", error)
       showToast("Failed to approve venue", "error")
     } finally {
-      setLoadingVenueId(null)
+      setLoadingState(null)
     }
   }
 
   const handleReject = async (venue: Venue, reason: string) => {
-    setLoadingVenueId(venue.id)
+    setLoadingState({ venueId: venue.id, action: "reject" })
     try {
       const response = await fetch(`/api/venues/${venue.id}/reject`, {
         method: "POST",
@@ -100,12 +103,12 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
       console.error("Error rejecting venue:", error)
       showToast("Failed to reject venue", "error")
     } finally {
-      setLoadingVenueId(null)
+      setLoadingState(null)
     }
   }
 
   const handleSendToDraft = async (venue: Venue) => {
-    setLoadingVenueId(venue.id)
+    setLoadingState({ venueId: venue.id, action: "sendToDraft" })
     try {
       const response = await fetch(`/api/venues/${venue.id}/send-to-draft`, {
         method: "POST",
@@ -128,7 +131,7 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
       console.error("Error sending venue to draft:", error)
       showToast("Failed to send venue to draft", "error")
     } finally {
-      setLoadingVenueId(null)
+      setLoadingState(null)
     }
   }
 
@@ -187,7 +190,10 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
     <>
       <div className="space-y-4">
         {venues.map((venue) => {
-          const isLoading = loadingVenueId === venue.id
+          const isLoading = loadingState?.venueId === venue.id
+          const isApproving = loadingState?.venueId === venue.id && loadingState?.action === "approve"
+          const isRejecting = loadingState?.venueId === venue.id && loadingState?.action === "reject"
+          const isSendingToDraft = loadingState?.venueId === venue.id && loadingState?.action === "sendToDraft"
           const { readiness } = venue
 
           return (
@@ -268,7 +274,7 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
                       title={!readiness.stripeApproved ? "Connect Stripe and complete onboarding before this venue can be approved." : undefined}
                       className="flex-1 min-w-[120px]"
                     >
-                      {isLoading ? (
+                      {isApproving ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                           Approving...
@@ -285,7 +291,14 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
                       variant="destructive"
                       className="flex-1 min-w-[120px]"
                     >
-                      Reject
+                      {isRejecting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Rejecting...
+                        </>
+                      ) : (
+                        "Reject"
+                      )}
                     </Button>
                     <Button
                       onClick={() => handleSendToDraft(venue)}
@@ -293,7 +306,14 @@ export function ApprovalsClient({ initialVenues }: ApprovalsClientProps) {
                       variant="outline"
                       className="flex-1 min-w-[120px]"
                     >
-                      Send to Draft
+                      {isSendingToDraft ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Send to Draft"
+                      )}
                     </Button>
                   </div>
                 </div>

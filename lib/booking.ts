@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma"
-import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
-import { canBookVenue, BookingNotAllowedError } from "@/lib/booking-guard"
+import { prisma } from '@/lib/prisma'
+import { getCanonicalVenueHours, isReservationWithinCanonicalHours } from '@/lib/hours'
+import { canBookVenue, BookingNotAllowedError } from '@/lib/booking-guard'
 
 export type BookingPayload = {
   venueId?: string
@@ -51,28 +51,30 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
   const isGroupBooking = tableId !== undefined && tableId !== null
 
   if (!venueId || (!isGroupBooking && finalSeatIds.length === 0) || !startAt || !endAt) {
-    throw new Error("Missing required fields: venueId, seatId(s) or tableId, startAt, endAt.")
+    throw new Error('Missing required fields: venueId, seatId(s) or tableId, startAt, endAt.')
   }
 
   if (isGroupBooking && !seatCount) {
-    throw new Error("seatCount is required for group table bookings.")
+    throw new Error('seatCount is required for group table bookings.')
   }
 
   const parsedStart = new Date(startAt)
   const parsedEnd = new Date(endAt)
 
   if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
-    throw new Error("Invalid dates provided.")
+    throw new Error('Invalid dates provided.')
   }
 
   if (parsedEnd <= parsedStart) {
-    throw new Error("End time must be after start time.")
+    throw new Error('End time must be after start time.')
   }
 
   const now = new Date()
   if (parsedStart < now) {
-    const error = new Error("This date/time is in the past. Please select a current or future time.")
-    ;(error as any).code = "PAST_TIME"
+    const error = new Error(
+      'This date/time is in the past. Please select a current or future time.'
+    )
+    ;(error as any).code = 'PAST_TIME'
     throw error
   }
 
@@ -80,17 +82,17 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     where: { id: venueId },
     include: {
       venueHours: {
-        orderBy: { dayOfWeek: "asc" },
+        orderBy: { dayOfWeek: 'asc' },
       },
     },
   })
 
   if (!venue) {
-    throw new Error("Venue not found.")
+    throw new Error('Venue not found.')
   }
 
-  if (venue.onboardingStatus !== "APPROVED") {
-    throw new Error("This venue is not available for booking.")
+  if (venue.onboardingStatus !== 'APPROVED') {
+    throw new Error('This venue is not available for booking.')
   }
 
   try {
@@ -111,7 +113,9 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
   if (canonical && canonical.weeklyHours.length > 0) {
     const hoursCheck = isReservationWithinCanonicalHours(parsedStart, parsedEnd, canonical)
     if (!hoursCheck.isValid) {
-      throw new Error(hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours.")
+      throw new Error(
+        hoursCheck.error ?? "This venue isn't open at this time. Please check opening hours."
+      )
     }
   }
 
@@ -122,7 +126,7 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     const seatWithSameId = await prisma.seat.findUnique({ where: { id: tableId! } })
     if (seatWithSameId) {
       throw new Error(
-        "Invalid table ID. Did you mean to book a specific seat? Please select a table from the booking options."
+        'Invalid table ID. Did you mean to book a specific seat? Please select a table from the booking options.'
       )
     }
 
@@ -131,7 +135,7 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
       include: {
         venue: {
           include: {
-            venueHours: { orderBy: { dayOfWeek: "asc" } },
+            venueHours: { orderBy: { dayOfWeek: 'asc' } },
           },
         },
         seats: true,
@@ -139,80 +143,110 @@ export async function buildBookingContext(payload: BookingPayload, userId: strin
     })
 
     if (!table) {
-      throw new Error("Table not found.")
+      throw new Error('Table not found.')
     }
 
     if (table.venueId !== venueId) {
-      throw new Error("Table does not belong to this venue.")
+      throw new Error('Table does not belong to this venue.')
     }
 
     if (table.isActive === false) {
-      const error = new Error("This table is no longer available for booking.")
+      const error = new Error('This table is no longer available for booking.')
       ;(error as any).status = 403
       throw error
     }
 
-    if (table.bookingMode !== "group") {
-      throw new Error("This table is not available for group booking.")
+    if (table.bookingMode !== 'group') {
+      throw new Error('This table is not available for group booking.')
     }
 
     if (table.seats.length < seatCount!) {
-      throw new Error(`This table only has ${table.seats.length} seat${table.seats.length > 1 ? "s" : ""}.`)
+      throw new Error(
+        `This table only has ${table.seats.length} seat${table.seats.length > 1 ? 's' : ''}.`
+      )
     }
+
+    const PENDING_GRACE_MINUTES = 5
+    const graceCutoff = new Date(Date.now() - PENDING_GRACE_MINUTES * 60 * 1000)
 
     const overlapping = await prisma.reservation.findFirst({
       where: {
         tableId: tableId!,
         seatId: null,
-        status: { not: "cancelled" },
+        OR: [
+          { status: { notIn: ['cancelled', 'pending'] } },
+          {
+            status: 'pending',
+            OR: [
+              { pendingExpiresAt: { gt: new Date() } },
+              {
+                AND: [{ pendingExpiresAt: null }, { createdAt: { gt: graceCutoff } }],
+              },
+            ],
+          },
+        ],
         startAt: { lt: parsedEnd },
         endAt: { gt: parsedStart },
       },
     })
 
     if (overlapping) {
-      const error = new Error("This table is not available for that time.")
+      const error = new Error('This table is not available for that time.')
       ;(error as any).status = 409
       throw error
     }
   } else {
-    seats = await prisma.seat.findMany({
+    seats = (await prisma.seat.findMany({
       where: { id: { in: finalSeatIds } },
       include: {
         table: {
           include: {
-            venue: { include: { venueHours: { orderBy: { dayOfWeek: "asc" } } } },
+            venue: { include: { venueHours: { orderBy: { dayOfWeek: 'asc' } } } },
           },
         },
       },
-    }) as any[]
+    })) as any[]
 
     if (seats.length !== finalSeatIds.length) {
-      throw new Error("One or more seats not found.")
+      throw new Error('One or more seats not found.')
     }
 
     for (const seat of seats) {
       if (seat.table.venueId !== venueId) {
-        throw new Error("One or more seats do not belong to this venue.")
+        throw new Error('One or more seats do not belong to this venue.')
       }
       if (seat.isActive === false || seat.table.isActive === false) {
-        const error = new Error("One or more seats are no longer available for booking.")
+        const error = new Error('One or more seats are no longer available for booking.')
         ;(error as any).status = 403
         throw error
       }
     }
 
+    const PENDING_GRACE_MINUTES = 5
+    const graceCutoff = new Date(Date.now() - PENDING_GRACE_MINUTES * 60 * 1000)
+
     const overlapping = await prisma.reservation.findFirst({
       where: {
         seatId: { in: finalSeatIds },
-        status: { not: "cancelled" },
+        OR: [
+          { status: { notIn: ['cancelled', 'pending'] } },
+          {
+            status: 'pending',
+            OR: [
+              { pendingExpiresAt: { gt: new Date() } },
+              {
+                AND: [{ pendingExpiresAt: null }, { createdAt: { gt: graceCutoff } }],
+              },
+            ],
+          },
+        ],
         startAt: { lt: parsedEnd },
         endAt: { gt: parsedStart },
       },
     })
 
     if (overlapping) {
-      const error = new Error("One or more seats are not available for that time.")
+      const error = new Error('One or more seats are not available for that time.')
       ;(error as any).status = 409
       throw error
     }
@@ -264,7 +298,7 @@ export async function createReservationFromContext(context: BookingContext, user
         startAt: context.parsedStart,
         endAt: context.parsedEnd,
         seatCount: context.requestedSeatCount ?? context.table?.seats.length ?? 1,
-        status: "active",
+        status: 'active',
       },
       include: {
         venue: {
@@ -304,7 +338,7 @@ export async function createReservationFromContext(context: BookingContext, user
       startAt: context.parsedStart,
       endAt: context.parsedEnd,
       seatCount: context.finalSeatIds.length,
-      status: "active",
+      status: 'active',
     },
     include: {
       venue: {

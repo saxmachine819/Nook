@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { enqueueNotification } from "@/lib/notification-queue"
 
 export async function POST(
   request: NextRequest,
@@ -50,12 +51,39 @@ export async function POST(
     // Update venue status to "SUBMITTED" and set submittedAt
     const updatedVenue = await prisma.venue.update({
       where: { id: venueId },
-      data: { 
+      data: {
         onboardingStatus: "SUBMITTED",
         submittedAt: new Date(),
       },
       select: { id: true, name: true, onboardingStatus: true },
     })
+
+    // Notify each site admin (ADMIN_EMAILS) with a link to the approvals page
+    const adminEmailsRaw = process.env.ADMIN_EMAILS
+    if (adminEmailsRaw?.trim()) {
+      const adminEmails = adminEmailsRaw
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
+      const approvalsUrl = baseUrl ? `${baseUrl}/admin/approvals` : ""
+      for (const adminEmail of adminEmails) {
+        try {
+          await enqueueNotification({
+            type: "admin_venue_submission",
+            dedupeKey: `admin_venue_submission:${venueId}:${adminEmail}`,
+            toEmail: adminEmail,
+            venueId,
+            payload: {
+              venueName: updatedVenue.name,
+              approvalsUrl,
+            },
+          })
+        } catch (err) {
+          console.error("Failed to enqueue admin_venue_submission for", adminEmail, err)
+        }
+      }
+    }
 
     return NextResponse.json({ venue: updatedVenue }, { status: 200 })
   } catch (error: any) {

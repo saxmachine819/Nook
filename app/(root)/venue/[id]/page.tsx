@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
-import { VenueHoursDisplay } from "@/components/venue/VenueHoursDisplay"
+import { VenueHeroHoursBadge } from "@/components/venue/VenueHeroHoursBadge"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 import {
   getCanonicalVenueHours,
@@ -215,8 +215,6 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
 
   // We'll delegate full availability calculations to the client (VenueBookingWidget)
   // For the server render, we just show a basic status.
-  const availabilityLabel = openStatus?.isOpen ? "Open" : "Closed"
-
   const venueHeroImages: string[] = (() => {
     const hero = (venue as any).heroImageUrl
     const rest = safeStringArray((venue as any).imageUrls).filter((u) => u !== hero)
@@ -230,10 +228,10 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
       : null
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="grid gap-8 lg:grid-cols-[1fr,400px] lg:grid-rows-[auto_auto] lg:items-start">
-          <div className="lg:row-start-1 lg:col-start-1">
+    <div className="min-h-screen bg-background lg:flex lg:flex-col">
+      <div className="container mx-auto px-4 py-8 max-w-7xl xl:max-w-screen-2xl 2xl:max-w-[1800px] flex-1 min-h-0 flex flex-col lg:py-6">
+        <div className="grid gap-8 flex-1 min-h-0 lg:grid-cols-[1fr,400px] xl:grid-cols-[1fr,440px] 2xl:grid-cols-[1fr,480px] lg:grid-rows-[auto_550px_auto] xl:grid-rows-[auto_600px_auto] 2xl:grid-rows-[auto_650px_auto] lg:items-stretch">
+          <div className="lg:row-start-1 lg:col-start-1 shrink-0">
             <VenuePageHeader
               name={venue.name}
               address={venue.address}
@@ -250,58 +248,40 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             />
           </div>
 
-          <div className="space-y-10 lg:row-start-2 lg:col-start-1">
-            <div className="relative overflow-hidden rounded-3xl bg-muted shadow-lg">
+          {/* Hero: row 2, same height as Reserve so bottoms align */}
+          <div className="lg:row-start-2 lg:col-start-1 lg:min-h-0 lg:overflow-hidden lg:rounded-[2.5rem]">
+            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-lg h-[300px] sm:h-[450px] lg:h-[550px] xl:h-[600px] 2xl:h-[650px]">
               <VenueImageCarousel
                 images={venueHeroImages}
-                className="h-[300px] sm:h-[450px] lg:h-[650px]"
+                className="h-full w-full"
+                objectFit="contain"
               />
               <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-black/5" />
-              {availabilityLabel && (
-                <span className="absolute top-6 left-6 z-10 rounded-full glass px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg">
-                  {availabilityLabel}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-row items-start justify-between gap-4 pt-2 flex-wrap">
-              <div className="flex flex-wrap gap-2 min-w-0 flex-1">
-                {(venue.tags ?? []).length > 0 && (venue.tags ?? []).map((tag: string) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-primary/5 border border-primary/10 px-4 py-1.5 text-xs font-bold text-primary/70 tracking-tight"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <div className="shrink-0">
-                <VenueHoursDisplay
-                  openStatus={openStatus}
-                  weeklyFormatted={weeklyFormatted}
-                  venueTimezone={canonicalHours?.timezone ?? null}
-                  weeklyHours={canonicalHours?.weeklyHours ?? []}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="h-px w-full bg-border/50" />
-
-              {venue.rulesText && (
-                <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-primary/40">
-                    House rules
-                  </div>
-                  <p className="whitespace-pre-line text-sm font-medium leading-relaxed text-foreground/70">
-                    {venue.rulesText}
-                  </p>
+              <VenueHeroHoursBadge
+                openStatus={openStatus}
+                weeklyFormatted={weeklyFormatted}
+              />
+              {(venue.tags ?? []).length > 0 && (
+                <div className="absolute top-6 right-6 z-10 flex flex-wrap gap-2 justify-end max-w-[60%]">
+                  {(venue.tags ?? []).map((tag: string) => (
+                    <span
+                      key={tag}
+                      className="rounded-full glass px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg"
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               )}
+              <div
+                id="venue-hero-cta-portal"
+                className="absolute inset-0 hidden items-end justify-start pointer-events-none lg:flex p-6"
+                aria-hidden="true"
+              />
             </div>
           </div>
 
-          <div className="space-y-6 lg:sticky lg:top-8 lg:row-start-2 lg:col-start-2">
+          <div className="space-y-6 lg:row-start-2 lg:col-start-2 lg:min-h-0 lg:overflow-hidden lg:rounded-3xl lg:flex lg:flex-col">
             {(venue as any).deals?.[0] && (() => {
               const primaryDeal = (venue as any).deals[0]
               const eligibility = primaryDeal.eligibilityJson || {}
@@ -339,7 +319,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )
             })()}
 
-            <Card className="overflow-hidden border-none bg-white shadow-lg rounded-3xl">
+            <Card className="overflow-hidden border-none bg-white shadow-lg rounded-3xl lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
               <CardHeader className="p-8 pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
@@ -368,7 +348,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                 </div>
               </CardHeader>
 
-              <CardContent className="p-8 pt-2">
+              <CardContent className="p-8 pt-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto lg:pb-0">
                 <VenueBookingWidget
                   venueId={venue.id}
                   tables={individualTablesForBooking as any}
@@ -379,9 +359,24 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               </CardContent>
             </Card>
           </div>
+
+          {/* Rules: row 3, below hero and Reserve */}
+          <div className="space-y-6 pt-2 lg:row-start-3 lg:col-start-1">
+              <div className="h-px w-full bg-border/50" />
+              {venue.rulesText && (
+                <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-primary/40">
+                    House rules
+                  </div>
+                  <p className="whitespace-pre-line text-sm font-medium leading-relaxed text-foreground/70">
+                    {venue.rulesText}
+                  </p>
+                </div>
+              )}
+          </div>
         </div>
 
-        <div className="h-24" />
+        <div className="h-24 lg:hidden" />
       </div>
     </div>
   )

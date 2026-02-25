@@ -22,6 +22,20 @@ export const emailStyles = {
     paddingBottom: "16px",
   } as React.CSSProperties,
 
+  /** Row for icon + brand text in EmailBrandHeader */
+  brandRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  } as React.CSSProperties,
+
+  logo: {
+    width: "28px",
+    height: "28px",
+    display: "block",
+    flexShrink: 0,
+  } as React.CSSProperties,
+
   brand: {
     margin: "0",
     fontSize: "24px",

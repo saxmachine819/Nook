@@ -242,6 +242,7 @@ model Reservation {
   endAt              DateTime
   seatCount          Int              @default(1)
   startAt            DateTime
+  pendingExpiresAt   DateTime?
   seat               Seat?            @relation(fields: [seatId], references: [id])
   table              Table?           @relation(fields: [tableId], references: [id])
   venue              Venue            @relation(fields: [venueId], references: [id], onDelete: Cascade)
@@ -654,4 +655,20 @@ model NotificationEvent {
   @@index([status])
   @@index([createdAt])
   @@map("notification_events")
+}
+
+model WebhookEvent {
+  id            String    @id @default(cuid())
+  stripeEventId String    @unique
+  eventType     String
+  processed     Boolean  @default(false)
+  payload       Json
+  account       String?
+  createdAt     DateTime  @default(now())
+  processedAt   DateTime?
+  error         String?
+
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("webhook_events")
 }

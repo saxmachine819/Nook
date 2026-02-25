@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
-import { buildBookingContext, computeBookingPrice } from "@/lib/booking"
-import { stripe } from "@/lib/stripe"
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { buildBookingContext, computeBookingPrice } from '@/lib/booking'
+import { stripe } from '@/lib/stripe'
 
-export const runtime = "nodejs"
+export const runtime = 'nodejs'
 
 /** Nook's platform commission: 20% of the booking subtotal */
 const COMMISSION_RATE = 0.2
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "You must be signed in." }, { status: 401 })
+      return NextResponse.json({ error: 'You must be signed in.' }, { status: 401 })
     }
 
     const userRecord = await prisma.user.findUnique({
@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
 
     if (!userRecord) {
       return NextResponse.json(
-        { error: "User account not found. Please sign out and sign in again." },
+        { error: 'User account not found. Please sign out and sign in again.' },
         { status: 401 }
       )
     }
 
     if (!userRecord.termsAcceptedAt) {
       return NextResponse.json(
-        { error: "You must accept the Terms & Conditions to make a reservation." },
+        { error: 'You must accept the Terms & Conditions to make a reservation.' },
         { status: 403 }
       )
     }
@@ -44,14 +44,14 @@ export async function POST(request: NextRequest) {
       const status = err?.status ?? 400
       const code = err?.code
       return NextResponse.json(
-        { error: err?.message || "Failed to prepare checkout.", ...(code ? { code } : {}) },
+        { error: err?.message || 'Failed to prepare checkout.', ...(code ? { code } : {}) },
         { status }
       )
     }
 
     if (!context.venue?.stripeAccountId) {
       return NextResponse.json(
-        { error: "This venue is not connected to Stripe yet." },
+        { error: 'This venue is not connected to Stripe yet.' },
         { status: 400 }
       )
     }
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
     const pricing = computeBookingPrice(context)
     if (pricing.amountCents <= 0) {
       return NextResponse.json(
-        { error: "Unable to calculate a valid payment amount." },
+        { error: 'Unable to calculate a valid payment amount.' },
         { status: 400 }
       )
     }
@@ -83,10 +83,11 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         startAt: context.parsedStart,
         endAt: context.parsedEnd,
-        seatCount: context.isGroupBooking 
+        pendingExpiresAt: new Date(Date.now() + 3 * 60 * 1000),
+        seatCount: context.isGroupBooking
           ? (context.requestedSeatCount ?? context.table?.seatCount ?? 1)
           : context.finalSeatIds.length,
-        status: "pending",
+        status: 'pending',
       },
     })
 
@@ -96,41 +97,41 @@ export async function POST(request: NextRequest) {
         userId: session.user.id,
         reservationId: reservation.id,
         amount: pricing.amountCents,
-        currency: "usd",
+        currency: 'usd',
         applicationFeeAmount,
         stripeAccountId: context.venue?.stripeAccountId ?? null,
         bookingPayload: body,
       },
     })
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || ""
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || ''
     if (!appUrl) {
       return NextResponse.json(
-        { error: "Missing NEXT_PUBLIC_APP_URL for Stripe redirects." },
+        { error: 'Missing NEXT_PUBLIC_APP_URL for Stripe redirects.' },
         { status: 500 }
       )
     }
 
     const sessionResponse = await stripe.checkout.sessions.create(
       {
-        ui_mode: "embedded",
-        mode: "payment",
+        ui_mode: 'embedded',
+        mode: 'payment',
         line_items: [
           {
             quantity: 1,
             price_data: {
-              currency: "usd",
+              currency: 'usd',
               unit_amount: pricing.amountCents,
               product_data: {
-                name: `Reservation at ${context.venue?.name ?? "Venue"}`,
+                name: `Reservation at ${context.venue?.name ?? 'Venue'}`,
                 description: context.isGroupBooking
-                  ? `Group table reservation (includes Stripe processing fee)`
-                  : `Seat reservation (includes Stripe processing fee)`,
+                  ? `Group table reservation (includes 3% processing fee)`
+                  : `Seat reservation (includes 3% processing fee)`,
               },
             },
           },
         ],
-        return_url: `${appUrl.replace(/\/$/, "")}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
+        return_url: `${appUrl.replace(/\/$/, '')}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
         customer_email: userRecord.email ?? undefined,
         metadata: {
           paymentId: payment.id,
@@ -156,17 +157,20 @@ export async function POST(request: NextRequest) {
       data: { stripeCheckoutSessionId: sessionResponse.id },
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       clientSecret: sessionResponse.client_secret,
-      stripeAccountId: context.venue?.stripeAccountId
+      stripeAccountId: context.venue?.stripeAccountId,
     })
   } catch (error) {
-    console.error("POST /api/payments/checkout:", error)
-    const errorMessage = error instanceof Error ? error.message : "Failed to start checkout."
+    console.error('POST /api/payments/checkout:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Failed to start checkout.'
     const errorDetails = error instanceof Error ? error.stack : String(error)
-    console.error("Error details:", errorDetails)
+    console.error('Error details:', errorDetails)
     return NextResponse.json(
-      { error: errorMessage, details: process.env.NODE_ENV === "development" ? errorDetails : undefined },
+      {
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined,
+      },
       { status: 500 }
     )
   }

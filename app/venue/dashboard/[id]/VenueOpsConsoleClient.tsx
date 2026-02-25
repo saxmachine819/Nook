@@ -376,6 +376,10 @@ export function VenueOpsConsoleClient({
   const [weeklyRevenue, setWeeklyRevenue] = useState<number | null>(null)
   const [dailyRevenueLoading, setDailyRevenueLoading] = useState(false)
   const [weeklyRevenueLoading, setWeeklyRevenueLoading] = useState(false)
+  const [payoutInfoOpen, setPayoutInfoOpen] = useState<"daily" | "weekly" | "withdrawal" | null>(null)
+  const dailyInfoRef = useRef<HTMLDivElement>(null)
+  const weeklyInfoRef = useRef<HTMLDivElement>(null)
+  const withdrawalInfoRef = useRef<HTMLDivElement>(null)
   const [isPayoutDialogOpen, setIsPayoutDialogOpen] = useState(false)
   const [payoutAmount, setPayoutAmount] = useState("")
   const [isPayoutSubmitting, setIsPayoutSubmitting] = useState(false)
@@ -398,6 +402,28 @@ export function VenueOpsConsoleClient({
   const nowSectionRef = useRef<HTMLDivElement>(null)
   const todaySectionRef = useRef<HTMLDivElement>(null)
   const weekSectionRef = useRef<HTMLDivElement>(null)
+
+  // Close payout info tooltip when clicking outside (e.g. on mobile)
+  useEffect(() => {
+    if (payoutInfoOpen === null) return
+    const ref =
+      payoutInfoOpen === "daily"
+        ? dailyInfoRef
+        : payoutInfoOpen === "weekly"
+          ? weeklyInfoRef
+          : withdrawalInfoRef
+    const handleClick = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setPayoutInfoOpen(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    document.addEventListener("touchstart", handleClick, { passive: true })
+    return () => {
+      document.removeEventListener("mousedown", handleClick)
+      document.removeEventListener("touchstart", handleClick)
+    }
+  }, [payoutInfoOpen])
 
   const [visibleSection, setVisibleSection] = useState<"Now" | "Today" | "This week">("Now")
 
@@ -1684,8 +1710,28 @@ export function VenueOpsConsoleClient({
                         onRetry={fetchStripeSetupStatus}
                       />
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <div className="rounded-lg border bg-muted/40 p-3">
-                          <div className="text-xs text-muted-foreground">Daily Revenue</div>
+                        <div className="relative rounded-lg border bg-muted/40 p-3">
+                          <div
+                            ref={dailyInfoRef}
+                            className="absolute top-2 right-2 flex flex-col items-end"
+                            onMouseEnter={() => setPayoutInfoOpen("daily")}
+                            onMouseLeave={() => setPayoutInfoOpen((prev) => (prev === "daily" ? null : prev))}
+                          >
+                            <button
+                              type="button"
+                              className="rounded-full p-0.5 text-muted-foreground/70 hover:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              aria-label="Info"
+                              onClick={() => setPayoutInfoOpen((prev) => (prev === "daily" ? null : "daily"))}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                            {payoutInfoOpen === "daily" && (
+                              <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+                                This is total revenue minus fees and Nooc&apos;s commission.
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Daily Net Revenue</div>
                           <div className="text-lg font-semibold">
                             {dailyRevenueLoading ? (
                               <Loader2 className="h-4 w-4 animate-spin text-primary/40 mt-1" />
@@ -1696,8 +1742,28 @@ export function VenueOpsConsoleClient({
                             )}
                           </div>
                         </div>
-                        <div className="rounded-lg border bg-muted/40 p-3">
-                          <div className="text-xs text-muted-foreground">Weekly Revenue</div>
+                        <div className="relative rounded-lg border bg-muted/40 p-3">
+                          <div
+                            ref={weeklyInfoRef}
+                            className="absolute top-2 right-2 flex flex-col items-end"
+                            onMouseEnter={() => setPayoutInfoOpen("weekly")}
+                            onMouseLeave={() => setPayoutInfoOpen((prev) => (prev === "weekly" ? null : prev))}
+                          >
+                            <button
+                              type="button"
+                              className="rounded-full p-0.5 text-muted-foreground/70 hover:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              aria-label="Info"
+                              onClick={() => setPayoutInfoOpen((prev) => (prev === "weekly" ? null : "weekly"))}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                            {payoutInfoOpen === "weekly" && (
+                              <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+                                This is total revenue minus fees and Nooc&apos;s commission.
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Weekly Net Revenue</div>
                           <div className="text-lg font-semibold">
                             {weeklyRevenueLoading ? (
                               <Loader2 className="h-4 w-4 animate-spin text-primary/40 mt-1" />
@@ -1708,7 +1774,27 @@ export function VenueOpsConsoleClient({
                             )}
                           </div>
                         </div>
-                        <div className="rounded-lg border bg-muted/40 p-3 space-y-1">
+                        <div className="relative rounded-lg border bg-muted/40 p-3 space-y-1">
+                          <div
+                            ref={withdrawalInfoRef}
+                            className="absolute top-2 right-2 flex flex-col items-end"
+                            onMouseEnter={() => setPayoutInfoOpen("withdrawal")}
+                            onMouseLeave={() => setPayoutInfoOpen((prev) => (prev === "withdrawal" ? null : prev))}
+                          >
+                            <button
+                              type="button"
+                              className="rounded-full p-0.5 text-muted-foreground/70 hover:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              aria-label="Info"
+                              onClick={() => setPayoutInfoOpen((prev) => (prev === "withdrawal" ? null : "withdrawal"))}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                            {payoutInfoOpen === "withdrawal" && (
+                              <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+                                Payments take ~5–7 business days to clear and show here.
+                              </div>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">Withdrawal Balance</div>
                           <div className="text-lg font-semibold text-emerald-600">
                             {stripeLoading ? (

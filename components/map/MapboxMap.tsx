@@ -44,9 +44,9 @@ interface MapboxMapProps {
   isInitialLoading?: boolean
 }
 
-// NYC coordinates (default center) - narrower initial zoom for better performance
-const NYC_CENTER = { lat: 40.7128, lng: -74.006 }
-const DEFAULT_ZOOM = 13 // Narrower default zoom for faster initial load
+// Default map view (from Explore map moveend: center + zoom)
+const NYC_CENTER = { lat: 40.725, lng: -73.9727 }
+const DEFAULT_ZOOM = 10.85
 
 export function MapboxMap({
   venues,
@@ -1089,30 +1089,12 @@ export function MapboxMap({
   // Helper function to force map repaint after data update
   // Called synchronously immediately after setData() to ensure instant repaint
   const forceMapRepaint = (map: mapboxgl.Map) => {
-    // Force a repaint to ensure the map renders the updated source data immediately
+    // Production-only issue: markers don't appear after text search
+    // This is a rendering trigger, exact mechanism TBD
     if (!map || !map.loaded()) return
-    
-    // Try internal triggerRepaint first (fastest)
-    if (typeof (map as any).triggerRepaint === 'function') {
-      (map as any).triggerRepaint()
-    }
-    
-    // Immediate synchronous repaint - trigger a moveend event (same as panning)
+
+    // Trigger repaint by firing moveend event
     map.fire('moveend')
-    
-    // Set center to itself to force view update
-    const center = map.getCenter()
-    map.setCenter([center.lng, center.lat])
-    
-    // Fallback: resize() forces re-layout and repaint in Mapbox GL JS
-    if (typeof map.resize === 'function') {
-      map.resize()
-    }
-    
-    // Micro zoom: force a real view change so the map re-renders all layers
-    const z = map.getZoom()
-    map.setZoom(z + 0.0001)
-    map.setZoom(z)
   }
   
   // Store shouldFitBounds in a ref so we can access latest value in intervals/callbacks
@@ -1204,16 +1186,11 @@ export function MapboxMap({
               })
             }
             
-            // If area search just finished (ref persists after prop clears), force repaint with micro-zoom
+            // If area search just finished (ref persists after prop clears), force repaint with unified function
             if (pendingAreaSearchRepaintRef.current) {
               pendingAreaSearchRepaintRef.current = false
-              const m = mapRef.current
-              if (m?.loaded()) {
-                const z = m.getZoom()
-                m.setZoom(z - 0.001)
-                requestAnimationFrame(() => {
-                  if (mapRef.current?.loaded()) mapRef.current.setZoom(z)
-                })
+              if (mapRef.current?.loaded()) {
+                forceMapRepaint(mapRef.current)
               }
               return
             }
@@ -1420,25 +1397,15 @@ export function MapboxMap({
           clearLoadingAfterPaintIfNeeded()
           previousVenueIdsRef.current = currentVenueIds
           lastVenuesCountRef.current = venues.length
+
+          // Force repaint immediately after setData using unified function
           const map = mapRef.current
-          
-          // Force repaint immediately after setData using micro-zoom
-          const forceRepaint = () => {
-            const m = mapRef.current
-            if (!m?.loaded()) return
-            const z = m.getZoom()
-            m.setZoom(z - 0.001)
-            requestAnimationFrame(() => {
-              if (mapRef.current?.loaded()) mapRef.current.setZoom(z)
-            })
-          }
-          
-          // Run micro-zoom to force repaint
           if (map?.loaded()) {
-            forceRepaint()
+            forceMapRepaint(map)
+            // Delayed retries for area search reliability
+            setTimeout(() => { if (mapRef.current?.loaded()) forceMapRepaint(mapRef.current) }, 50)
+            setTimeout(() => { if (mapRef.current?.loaded()) forceMapRepaint(mapRef.current) }, 200)
           }
-          setTimeout(forceRepaint, 50)
-          setTimeout(forceRepaint, 200)
           return
         } else if (!hasUserInteractedWithMapRef.current) {
           // Only re-initialize if user hasn't interacted (e.g., filter change on initial load)
