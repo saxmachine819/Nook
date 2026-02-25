@@ -1,15 +1,14 @@
 "use client"
 
-import React, { useState, useCallback, useEffect } from "react"
+import React, { useState, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { MapPin, Search, Clock, Users, Navigation, ArrowRight } from "lucide-react"
-import Link from "next/link"
+import { MapPin, Search, Users, Navigation, Map, List } from "lucide-react"
 import Image from "next/image"
+import { roundUpToNext15Minutes, getLocalDateString } from "@/lib/availability-utils"
 
 interface SearchResult {
   id: string
@@ -30,13 +29,25 @@ interface SearchResult {
 
 export function SearchClient() {
   const router = useRouter()
+
+  // Initialize date/time to now (rounded to next 15 min)
+  const now = useMemo(() => new Date(), [])
+  const rounded = useMemo(() => roundUpToNext15Minutes(now), [now])
+  const todayStr = useMemo(() => getLocalDateString(now), [now])
+
+  const [date, setDate] = useState(todayStr)
+  const [startTime, setStartTime] = useState(
+    `${String(rounded.getHours()).padStart(2, "0")}:${String(rounded.getMinutes()).padStart(2, "0")}`
+  )
+  const [durationHours, setDurationHours] = useState(2)
   const [seats, setSeats] = useState(2)
-  const [timing, setTiming] = useState<"now" | "today">("now")
+
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "granted" | "denied">("idle")
   const [results, setResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [viewMode, setViewMode] = useState<"list" | "map">("list")
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
@@ -56,7 +67,6 @@ export function SearchClient() {
     )
   }, [])
 
-  // Auto-request location on mount so results sort by distance
   useEffect(() => {
     requestLocation()
   }, [requestLocation])
@@ -67,11 +77,18 @@ export function SearchClient() {
     try {
       const params = new URLSearchParams()
       params.set("seats", String(seats))
-      if (timing === "now") params.set("availableNow", "true")
-      if (timing === "today") params.set("openToday", "true")
       if (userLocation) {
         params.set("lat", String(userLocation.lat))
         params.set("lng", String(userLocation.lng))
+      }
+      // Use date + time to determine if "available now" or "open today"
+      const isToday = date === todayStr
+      const nowRounded = roundUpToNext15Minutes(new Date())
+      const nowTimeStr = `${String(nowRounded.getHours()).padStart(2, "0")}:${String(nowRounded.getMinutes()).padStart(2, "0")}`
+      if (isToday && startTime <= nowTimeStr) {
+        params.set("availableNow", "true")
+      } else {
+        params.set("openToday", "true")
       }
 
       const res = await fetch(`/api/search?${params.toString()}`)
@@ -82,7 +99,7 @@ export function SearchClient() {
     } finally {
       setIsSearching(false)
     }
-  }, [seats, timing, userLocation])
+  }, [seats, userLocation, date, startTime, todayStr])
 
   const formatDistance = (km: number | null) => {
     if (km == null) return null
@@ -90,95 +107,130 @@ export function SearchClient() {
     return `${km.toFixed(1)}km away`
   }
 
+  // Build deep-link URL to venue booking page with pre-filled params
+  const getVenueUrl = useCallback(
+    (venueId: string) => {
+      const [h, m] = startTime.split(":").map(Number)
+      const startTimeValue = h * 100 + m
+      const bookingPayload = encodeURIComponent(
+        JSON.stringify({
+          date,
+          startTime: startTimeValue,
+          duration: durationHours,
+        })
+      )
+      return `/venue/${venueId}?seats=${seats}&booking=${bookingPayload}`
+    },
+    [date, startTime, durationHours, seats]
+  )
+
+  const inputClass =
+    "rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
+
+  // Map view — navigate to explore map
+  useEffect(() => {
+    if (viewMode === "map") {
+      router.replace("/?view=map")
+    }
+  }, [viewMode, router])
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <div className="px-4 pt-12 pb-8 sm:pt-16 sm:pb-10">
+      <div className="px-4 pt-10 pb-6 sm:pt-14 sm:pb-8">
         <div className="mx-auto max-w-lg text-center">
+          <div className="mb-3 flex items-center justify-center">
+            <Image
+              src="/icon.png"
+              alt="Nooc"
+              width={44}
+              height={44}
+              className="rounded-xl"
+            />
+          </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Find a workspace
+            Find a Nooc
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Reserve a calm workspace by the hour
           </p>
         </div>
       </div>
 
       {/* Search Form */}
-      <div className="px-4 pb-6">
+      <div className="px-4 pb-4">
         <Card className="mx-auto max-w-lg">
-          <CardContent className="p-5 space-y-5">
-            {/* When? */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                When?
-              </Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={timing === "now" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTiming("now")}
-                  className="flex-1"
-                >
-                  Right now
-                </Button>
-                <Button
-                  variant={timing === "today" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTiming("today")}
-                  className="flex-1"
-                >
-                  Today
-                </Button>
+          <CardContent className="p-5 space-y-4">
+            {/* Date & Time row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Date
+                </Label>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  min={todayStr}
+                />
+              </div>
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Start time
+                </Label>
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
               </div>
             </div>
 
-            {/* How many seats? */}
-            <div className="space-y-2">
-              <Label htmlFor="seat-count" className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />
-                How many seats?
-              </Label>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={() => setSeats((s) => Math.max(1, s - 1))}
-                  disabled={seats <= 1}
+            {/* Duration & Seats row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Duration
+                </Label>
+                <select
+                  className={inputClass}
+                  value={durationHours}
+                  onChange={(e) => setDurationHours(Number(e.target.value))}
                 >
-                  &minus;
-                </Button>
-                <Input
-                  id="seat-count"
-                  type="number"
-                  min={1}
-                  max={20}
+                  {Array.from({ length: 8 }, (_, i) => i + 1).map((h) => (
+                    <option key={h} value={h}>
+                      {h} hour{h > 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Seats
+                </Label>
+                <select
+                  className={inputClass}
                   value={seats}
-                  onChange={(e) => setSeats(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="text-center text-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  onClick={() => setSeats((s) => Math.min(20, s + 1))}
-                  disabled={seats >= 20}
+                  onChange={(e) => setSeats(Number(e.target.value))}
                 >
-                  +
-                </Button>
+                  {Array.from({ length: 8 }, (_, i) => i + 1).map((s) => (
+                    <option key={s} value={s}>
+                      {s} seat{s > 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
             {/* Location */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">
                 Location
               </Label>
               {locationStatus === "granted" && userLocation ? (
-                <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2 text-sm text-primary">
+                <div className="flex items-center gap-2 rounded-md bg-primary/5 px-3 py-2 text-sm text-primary">
                   <Navigation className="h-4 w-4 shrink-0" />
                   <span className="font-medium">Using your location</span>
                 </div>
@@ -212,6 +264,38 @@ export function SearchClient() {
         </Card>
       </div>
 
+      {/* Map / List toggle bar */}
+      <div className="px-4 pb-4">
+        <div className="mx-auto max-w-lg flex items-center justify-center">
+          <div className="inline-flex rounded-xl border bg-white shadow-sm overflow-hidden">
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${
+                viewMode === "list"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setViewMode("list")}
+            >
+              <List className="h-3.5 w-3.5" />
+              List
+            </button>
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-colors ${
+                viewMode === "map"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+              onClick={() => setViewMode("map")}
+            >
+              <Map className="h-3.5 w-3.5" />
+              Map
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Results */}
       {hasSearched && (
         <div className="px-4 pb-24">
@@ -231,11 +315,10 @@ export function SearchClient() {
                     key={venue.id}
                     type="button"
                     className="w-full text-left outline-none"
-                    onClick={() => router.push(`/venue/${venue.id}`)}
+                    onClick={() => router.push(getVenueUrl(venue.id))}
                   >
                     <Card className="overflow-hidden transition-all hover:shadow-md active:scale-[0.99]">
                       <div className="flex">
-                        {/* Venue Image */}
                         <div className="relative h-28 w-28 shrink-0 bg-muted sm:h-32 sm:w-32">
                           {venue.imageUrls.length > 0 ? (
                             <Image
@@ -251,8 +334,6 @@ export function SearchClient() {
                             </div>
                           )}
                         </div>
-
-                        {/* Info */}
                         <CardContent className="flex flex-1 flex-col justify-center p-3 sm:p-4">
                           <div className="flex items-start justify-between gap-2">
                             <h3 className="font-bold text-foreground line-clamp-1">{venue.name}</h3>
@@ -260,14 +341,12 @@ export function SearchClient() {
                               ${venue.minPrice.toFixed(0)}<span className="text-[10px] text-muted-foreground font-semibold">/hr</span>
                             </p>
                           </div>
-
                           {(venue.neighborhood || venue.address) && (
                             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                               {venue.neighborhood || venue.address}
                               {venue.city ? `, ${venue.city}` : ""}
                             </p>
                           )}
-
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {venue.availabilityLabel && (
                               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
@@ -288,19 +367,8 @@ export function SearchClient() {
                     </Card>
                   </button>
                 ))}
-
-                {/* View on Map CTA */}
-                <div className="pt-3 text-center">
-                  <Button variant="outline" size="sm" asChild className="gap-1.5">
-                    <Link href="/?view=map">
-                      <MapPin className="h-4 w-4" />
-                      View on map
-                    </Link>
-                  </Button>
-                </div>
               </div>
             ) : (
-              /* Empty state */
               <div className="flex flex-col items-center py-12 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                   <Search className="h-7 w-7 text-muted-foreground/50" />
@@ -309,27 +377,9 @@ export function SearchClient() {
                 <p className="mt-1 max-w-xs text-sm text-muted-foreground">
                   Try adjusting your search — fewer seats or a different time might show more options.
                 </p>
-                <Button variant="outline" size="sm" asChild className="mt-4 gap-1.5">
-                  <Link href="/">
-                    <ArrowRight className="h-4 w-4" />
-                    Browse all venues
-                  </Link>
-                </Button>
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Pre-search: subtle CTA to Explore */}
-      {!hasSearched && (
-        <div className="px-4 pb-24 text-center">
-          <p className="text-xs text-muted-foreground">
-            or{" "}
-            <Link href="/?view=map" className="font-medium text-primary underline underline-offset-2">
-              browse all venues on the map
-            </Link>
-          </p>
         </div>
       )}
     </div>
