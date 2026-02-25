@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/venue-auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { CheckCircle2, Building2, Users, QrCode, Mail, Package } from "lucide-react"
+import { CheckCircle2, Building2, Users, QrCode, Mail, Package, Settings } from "lucide-react"
 
 export default async function AdminPage() {
   const session = await auth()
@@ -120,6 +120,20 @@ export default async function AdminPage() {
               <CardTitle>Email Debug</CardTitle>
               <CardDescription>
                 View recent notification events (read-only)
+              </CardDescription>
+            </CardHeader>
+          </Link>
+        </Card>
+
+        <Card className="transition-colors hover:bg-accent/50">
+          <Link href="/admin/settings" className="block">
+            <CardHeader>
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Settings className="h-5 w-5 text-primary" />
+              </div>
+              <CardTitle>Feature Flags</CardTitle>
+              <CardDescription>
+                Toggle site-wide features like Search Landing Page
               </CardDescription>
             </CardHeader>
           </Link>
