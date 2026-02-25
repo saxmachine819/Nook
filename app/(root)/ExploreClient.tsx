@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { MapView } from "@/components/explore/MapView";
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls";
 import { ExploreWelcomeBanner } from "@/components/ExploreWelcomeBanner";
@@ -70,6 +72,8 @@ export function ExploreClient({
   initialFilters,
 }: ExploreClientProps) {
   const queryClient = useQueryClient();
+  const exploreSearchParams = useSearchParams();
+  const showBackToSearch = exploreSearchParams?.get("from") === "search";
   const [isClient, setIsClient] = useState(false);
 
   const {
@@ -467,6 +471,17 @@ export function ExploreClient({
             }
             onClose={() => setSelectedVenueId(null)}
           />
+          {showBackToSearch && (
+            <Link
+              href="/search"
+              className="fixed bottom-24 left-1/2 z-30 -translate-x-1/2 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Back to Search
+            </Link>
+          )}
         </>
       )}
     </div>
