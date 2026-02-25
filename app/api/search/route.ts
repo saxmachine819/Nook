@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const lat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null
     const lng = searchParams.get("lng") ? parseFloat(searchParams.get("lng")!) : null
     const availableNow = searchParams.get("availableNow") === "true"
+    const openToday = searchParams.get("openToday") === "true"
 
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
@@ -119,6 +120,24 @@ export async function GET(request: Request) {
         }, 0)
 
         return (capacity - bookedSeats) >= seats
+      })
+    }
+
+    // Filter to venues open at some point today (not necessarily right now)
+    if (openToday && !availableNow) {
+      const todayDow = now.getDay() // 0=Sun ... 6=Sat
+      venuesWithStatus = venuesWithStatus.filter(({ venue, openStatus }) => {
+        if (openStatus) {
+          return openStatus.status !== "CLOSED_TODAY"
+        }
+        // Fallback: check venueHours records for today's day of week
+        const venueAny = venue as any
+        if (Array.isArray(venueAny.venueHours)) {
+          const todayHours = venueAny.venueHours.find((h: any) => h.dayOfWeek === todayDow)
+          if (todayHours) return !todayHours.isClosed
+        }
+        // No hours data — include venue (don't exclude based on missing info)
+        return true
       })
     }
 

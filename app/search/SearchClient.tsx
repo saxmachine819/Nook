@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
+import React, { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -56,6 +56,11 @@ export function SearchClient() {
     )
   }, [])
 
+  // Auto-request location on mount so results sort by distance
+  useEffect(() => {
+    requestLocation()
+  }, [requestLocation])
+
   const handleSearch = useCallback(async () => {
     setIsSearching(true)
     setHasSearched(true)
@@ -63,6 +68,7 @@ export function SearchClient() {
       const params = new URLSearchParams()
       params.set("seats", String(seats))
       if (timing === "now") params.set("availableNow", "true")
+      if (timing === "today") params.set("openToday", "true")
       if (userLocation) {
         params.set("lat", String(userLocation.lat))
         params.set("lng", String(userLocation.lng))
