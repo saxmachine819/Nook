@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { isSearchLandingEnabled } from "@/lib/site-settings";
 import { ExploreClient } from "./ExploreClient";
 
 interface ExplorePageProps {
@@ -13,12 +15,23 @@ interface ExplorePageProps {
     seatCount?: string;
     bookingMode?: string;
     availableNow?: string;
+    view?: string;
+    from?: string;
   }>;
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const session = await auth();
   const params = await searchParams;
+
+  // Feature flag: redirect to search landing page if enabled
+  // Allow ?view=map to bypass the flag (used by "View on map" links)
+  if (params?.view !== "map") {
+    const searchEnabled = await isSearchLandingEnabled();
+    if (searchEnabled) {
+      redirect("/search");
+    }
+  }
 
   let favoritedVenueIds = new Set<string>();
 
@@ -68,10 +81,13 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     initialFilters.filters.dealsOnly ||
     initialFilters.filters.favoritesOnly;
 
+  const showBackToSearch = params?.view === "map" && params?.from === "search"
+
   return (
     <ExploreClient
       favoritedVenueIds={favoritedVenueIds}
       initialFilters={hasUrlFilters ? initialFilters : undefined}
+      showBackToSearch={showBackToSearch}
     />
   );
 }
