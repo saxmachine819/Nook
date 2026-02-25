@@ -124,8 +124,8 @@ export async function POST(request: NextRequest) {
               product_data: {
                 name: `Reservation at ${context.venue?.name ?? "Venue"}`,
                 description: context.isGroupBooking
-                  ? `Group table reservation (includes 3% processing fee)`
-                  : `Seat reservation (includes 3% processing fee)`,
+                  ? `Group table reservation (includes Stripe processing fee)`
+                  : `Seat reservation (includes Stripe processing fee)`,
               },
             },
           },
