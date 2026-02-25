@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MapView } from "@/components/explore/MapView";
 import { TopOverlayControls } from "@/components/explore/TopOverlayControls";
@@ -65,15 +64,15 @@ function venueCardToExploreVenue(card: VenueCard): ExploreVenue {
 interface ExploreClientProps {
   favoritedVenueIds?: Set<string>;
   initialFilters?: InitialFilters;
+  showBackToSearch?: boolean;
 }
 
 export function ExploreClient({
   favoritedVenueIds = new Set<string>(),
   initialFilters,
+  showBackToSearch = false,
 }: ExploreClientProps) {
   const queryClient = useQueryClient();
-  const exploreSearchParams = useSearchParams();
-  const showBackToSearch = exploreSearchParams?.get("from") === "search";
   const [isClient, setIsClient] = useState(false);
 
   const {

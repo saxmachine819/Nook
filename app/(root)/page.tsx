@@ -16,6 +16,7 @@ interface ExplorePageProps {
     bookingMode?: string;
     availableNow?: string;
     view?: string;
+    from?: string;
   }>;
 }
 
@@ -80,10 +81,13 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     initialFilters.filters.dealsOnly ||
     initialFilters.filters.favoritesOnly;
 
+  const showBackToSearch = params?.view === "map" && params?.from === "search"
+
   return (
     <ExploreClient
       favoritedVenueIds={favoritedVenueIds}
       initialFilters={hasUrlFilters ? initialFilters : undefined}
+      showBackToSearch={showBackToSearch}
     />
   );
 }
