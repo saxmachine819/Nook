@@ -141,7 +141,7 @@ export function SearchClient() {
         <div className="mx-auto max-w-lg text-center">
           <div className="mb-3 flex items-center justify-center">
             <Image
-              src="/icon.png"
+              src="/nooc-logo.png"
               alt="Nooc"
               width={44}
               height={44}
