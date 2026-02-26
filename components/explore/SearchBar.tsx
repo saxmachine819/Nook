@@ -17,32 +17,48 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
   const [query, setQuery] = useState("")
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // --- SEARCH BAR COMMENTED OUT: uncomment block below to restore in-place search ---
   // Debounce search calls (400ms delay)
-  useEffect(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current)
-    }
-
-    debounceTimerRef.current = setTimeout(() => {
-      onSearch(query)
-    }, 400)
-
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-    }
-  }, [query, onSearch])
-
-  const handleClear = () => {
-    setQuery("")
-    onSearch("")
-  }
+  // useEffect(() => {
+  //   if (debounceTimerRef.current) {
+  //     clearTimeout(debounceTimerRef.current)
+  //   }
+  //
+  //   debounceTimerRef.current = setTimeout(() => {
+  //     onSearch(query)
+  //   }, 400)
+  //
+  //   return () => {
+  //     if (debounceTimerRef.current) {
+  //       clearTimeout(debounceTimerRef.current)
+  //     }
+  //   }
+  // }, [query, onSearch])
+  //
+  // const handleClear = () => {
+  //   setQuery("")
+  //   onSearch("")
+  // }
 
   return (
-    <div className={cn("relative w-full group", className)}>
-      <div className="relative flex items-center">
-        {/* Search icon - link to /search when searchIconHref is set */}
+    <div className={cn("relative shrink-0", className)}>
+      {/* Icon-only button matching filter button style (h-14 w-14); links to /search when searchIconHref set */}
+      {searchIconHref ? (
+        <Link
+          href={searchIconHref}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          aria-label="Go to search"
+        >
+          <Search size={20} strokeWidth={2.5} className="text-primary/70" />
+        </Link>
+      ) : (
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold premium-shadow">
+          <Search size={20} strokeWidth={2.5} className="text-primary/70" />
+        </div>
+      )}
+
+      {/* --- SEARCH BAR INPUT COMMENTED OUT: uncomment block below to restore --- */}
+      {/* <div className="relative flex items-center">
         <div className="absolute left-4 z-10 text-primary/60 transition-colors group-focus-within:text-primary">
           {searchIconHref ? (
             <Link
@@ -57,7 +73,6 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
           )}
         </div>
 
-        {/* Input */}
         <input
           type="text"
           value={query}
@@ -66,7 +81,6 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
           className="w-full rounded-2xl border-none bg-white py-3.5 pl-12 pr-12 text-base font-medium premium-shadow ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all duration-300"
         />
 
-        {/* Clear button */}
         {query.length > 0 && (
           <button
             type="button"
@@ -77,8 +91,7 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
             <X size={14} strokeWidth={3} />
           </button>
         )}
-      </div>
+      </div> */}
     </div>
   )
 }
-

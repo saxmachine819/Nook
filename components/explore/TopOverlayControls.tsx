@@ -40,10 +40,9 @@ export function TopOverlayControls({
           className
         )}
       >
-        <div className="flex gap-4">
-          <div className="flex-1 min-w-0">
-            <SearchBar onSearch={onSearch} searchIconHref={searchIconHref} />
-          </div>
+        <div className="flex gap-4 items-center">
+          <SearchBar onSearch={onSearch} searchIconHref={searchIconHref} />
+          <div className="flex-1 min-w-0" />
           <Button
             type="button"
             variant="outline"

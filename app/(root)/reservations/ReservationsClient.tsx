@@ -304,14 +304,14 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
       <div className="container mx-auto px-4 pt-4 pb-10 max-w-2xl">
         <h1 className="text-4xl font-black tracking-tight mb-8 px-1">My Reservations</h1>
 
-        {/* Tabs */}
-        <div className="mb-8 flex p-1 gap-1 bg-primary/5 rounded-2xl">
+        {/* Tabs: compact pill, width fits content */}
+        <div className="mb-5 inline-flex p-0.5 gap-0.5 bg-primary/5 rounded-xl">
           {(["upcoming", "past", "cancelled"] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                "flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all duration-300 rounded-xl flex items-center justify-center gap-2",
+                "px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all duration-200 rounded-lg flex items-center justify-center gap-1.5",
                 activeTab === tab
                   ? "bg-white text-primary shadow-sm"
                   : "text-muted-foreground/60 hover:text-primary/70"
@@ -320,7 +320,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
               {tab}
               {counts[tab] > 0 && (
                 <span className={cn(
-                  "text-[10px] px-1.5 py-0.5 rounded-full",
+                  "text-[9px] min-w-[1.25rem] px-1 py-0.5 rounded-full text-center tabular-nums",
                   activeTab === tab ? "bg-primary/10 text-primary" : "bg-muted-foreground/10 text-muted-foreground/60"
                 )}>
                   {counts[tab]}

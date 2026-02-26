@@ -2,12 +2,13 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { MapPin, Search, Navigation, Map, List, X } from "lucide-react"
+import { MapPin, Search, Navigation, Map, X } from "lucide-react"
 import Image from "next/image"
 import { roundUpToNext15Minutes, getLocalDateString } from "@/lib/availability-utils"
 
@@ -134,6 +135,17 @@ export function SearchClient() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Map icon top-left: same size and position as magnifying glass on explore map */}
+      <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-10">
+        <Link
+          href="/?view=map&from=search"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          aria-label="View on map"
+        >
+          <Map size={20} strokeWidth={2.5} className="text-primary/70" />
+        </Link>
+      </div>
+
       {/* Hero */}
       <div className="px-4 pt-10 pb-6 sm:pt-14 sm:pb-8">
         <div className="mx-auto max-w-lg text-center">
@@ -263,29 +275,6 @@ export function SearchClient() {
             </Button>
           </CardContent>
         </Card>
-      </div>
-
-      {/* List / Map toggle */}
-      <div className="px-4 pb-4">
-        <div className="mx-auto max-w-lg flex items-center justify-center">
-          <div className="inline-flex rounded-xl border bg-white shadow-sm overflow-hidden">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-primary text-primary-foreground"
-            >
-              <List className="h-3.5 w-3.5" />
-              List
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-              onClick={() => router.push("/?view=map&from=search")}
-            >
-              <Map className="h-3.5 w-3.5" />
-              Map
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Results */}
