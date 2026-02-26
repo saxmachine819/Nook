@@ -1308,15 +1308,20 @@ export function VenueBookingWidget({
               <span>${totalPrice.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                Processing fee
-                <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
-              </span>
-              <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+              <span>Processing fee</span>
+              <span>+${(
+                totalPrice > 0
+                  ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100).toFixed(2)
+                  : "0.00"
+              )}</span>
             </div>
             <div className="flex items-center justify-between border-t pt-1.5">
               <span className="text-xs font-semibold">Total</span>
-              <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+              <span className="text-sm font-bold">${(
+                totalPrice > 0
+                  ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100).toFixed(2)
+                  : "0.00"
+              )}</span>
             </div>
           </div>
           <Button
@@ -1484,35 +1489,6 @@ export function VenueBookingWidget({
             </h3>
 
             {renderSeatSelection()}
-            {/* Price estimate */}
-            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
-              (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-                <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Subtotal ({durationHours}h)</span>
-                    <span>${totalPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      Processing fee
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">Stripe</span>
-                    </span>
-                    <span>+${(
-                      totalPrice > 0
-                        ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100)
-                        : 0
-                    ).toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-1.5">
-                    <span className="text-xs font-semibold">Total</span>
-                    <span className="text-sm font-bold">${(
-                      totalPrice > 0
-                        ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100)
-                        : 0
-                    ).toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
           </div>
         )}
 
@@ -1534,15 +1510,20 @@ export function VenueBookingWidget({
                   <span>${totalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    Processing fee
-                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
-                  </span>
-                  <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+                  <span>Processing fee</span>
+                  <span>+${(
+                    totalPrice > 0
+                      ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100).toFixed(2)
+                      : "0.00"
+                  )}</span>
                 </div>
                 <div className="flex items-center justify-between border-t pt-1.5">
                   <span className="text-xs font-semibold">Total</span>
-                  <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+                  <span className="text-sm font-bold">${(
+                    totalPrice > 0
+                      ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100).toFixed(2)
+                      : "0.00"
+                  )}</span>
                 </div>
               </div>
               <Button

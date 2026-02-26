@@ -330,7 +330,7 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
                     <span>${subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Service charge (3%)</span>
+                    <span className="text-muted-foreground">Service charge (3% + $0.30)</span>
                     <span>${serviceCharge.toFixed(2)}</span>
                   </div>
                   <div className="border-t pt-2">
