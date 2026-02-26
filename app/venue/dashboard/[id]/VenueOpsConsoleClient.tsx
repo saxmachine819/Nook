@@ -1774,7 +1774,7 @@ export function VenueOpsConsoleClient({
                             )}
                           </div>
                         </div>
-                        <div className="relative rounded-lg border bg-muted/40 p-3">
+                        <div className="relative rounded-lg border bg-muted/40 p-3 space-y-1">
                           <div
                             ref={withdrawalInfoRef}
                             className="absolute top-2 right-2 flex flex-col items-end"
@@ -1804,6 +1804,12 @@ export function VenueOpsConsoleClient({
                             ) : (
                               "—"
                             )}
+                          </div>
+                          <div className="flex items-start gap-1 pt-0.5">
+                            <Info className="h-3 w-3 text-muted-foreground/60 mt-0.5 shrink-0" />
+                            <p className="text-[10px] leading-snug text-muted-foreground/70">
+                              Payments take ~5–7 business days to clear and show here
+                            </p>
                           </div>
                         </div>
                       </div>

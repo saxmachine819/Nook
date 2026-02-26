@@ -26,16 +26,21 @@ export type BookingContext = {
 }
 
 export type BookingPrice = {
-  subtotalCents: number // raw booking price (seats × hours)
-  processingFeeCents: number // 3% surcharge passed to customer
-  amountCents: number // total charged (subtotal + fee)
+  subtotalCents: number        // raw booking price (seats × hours)
+  processingFeeCents: number   // 3% surcharge passed to customer
+  amountCents: number          // total charged (subtotal + fee)
   totalPricePerHour: number
   seatCountForAverage: number
   hours: number
 }
 
-/** 3% processing fee added on top of the booking subtotal, charged to the customer. */
-export const PROCESSING_FEE_RATE = 0.03
+/** 
+ * Stripe exact processing fee equation: 
+ * Total = (Subtotal + fixed_fee) / (1 - percentage_fee) 
+ * We use 2.9% + $0.30 (standard US rate) 
+ */
+export const STRIPE_PERCENTAGE_RATE = 0.029
+export const STRIPE_FIXED_RATE_CENTS = 30
 
 const MS_PER_HOUR = 1000 * 60 * 60
 
@@ -275,17 +280,11 @@ export function computeBookingPrice(context: BookingContext): BookingPrice {
   }
 
   const subtotalCents = Math.max(0, Math.round(totalPricePerHour * hours * 100))
-  const processingFeeCents = Math.round(subtotalCents * PROCESSING_FEE_RATE)
+  const amountCentsWithFee = subtotalCents > 0 ? Math.round((subtotalCents + STRIPE_FIXED_RATE_CENTS) / (1 - STRIPE_PERCENTAGE_RATE)) : 0
+  const processingFeeCents = amountCentsWithFee - subtotalCents
   const amountCents = subtotalCents + processingFeeCents
 
-  return {
-    subtotalCents,
-    processingFeeCents,
-    amountCents,
-    totalPricePerHour,
-    seatCountForAverage,
-    hours,
-  }
+  return { subtotalCents, processingFeeCents, amountCents, totalPricePerHour, seatCountForAverage, hours }
 }
 
 export async function createReservationFromContext(context: BookingContext, userId: string) {
