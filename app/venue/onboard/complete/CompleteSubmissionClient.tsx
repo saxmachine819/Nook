@@ -64,13 +64,13 @@ export function CompleteSubmissionClient({
               </div>
               <CardTitle className="text-2xl">Thanks—your venue request is submitted.</CardTitle>
               <CardDescription className="text-base">
-                We'll review and follow up shortly.
+                We&apos;ll review and follow up shortly.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Your venue "{venueName}" has been submitted for review.
+                  Your venue &quot;{venueName}&quot; has been submitted for review.
                 </p>
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button asChild variant="outline">
@@ -102,7 +102,7 @@ export function CompleteSubmissionClient({
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="text-sm text-muted-foreground">
-            Here's what we'll send for review. You can change any of this later from your venue
+            Here&apos;s what we&apos;ll send for review. You can change any of this later from your venue
             dashboard.
           </p>
 

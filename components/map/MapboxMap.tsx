@@ -566,7 +566,8 @@ export function MapboxMap({
           if (!pinImageLoadedRef.current) {
             try {
               const pinImageDataUrl = createPinImage()
-              // Create Image object from data URL
+              // Create Image object from data URL (Mapbox addImage requires HTMLImageElement)
+              // eslint-disable-next-line @next/next/no-img-element -- Mapbox addImage() requires HTMLImageElement
               const img = new Image()
               img.onload = () => {
                 try {
@@ -1322,6 +1323,7 @@ export function MapboxMap({
     if (pinImageLoadedRef.current && !mapRef.current.hasImage("venue-pin")) {
       try {
         const pinImageDataUrl = createPinImage()
+        // eslint-disable-next-line @next/next/no-img-element -- Mapbox addImage() requires HTMLImageElement
         const img = new Image()
         img.onload = () => {
           if (mapRef.current) {

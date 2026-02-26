@@ -1329,7 +1329,7 @@ export function VenueBookingWidget({
             {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            You'll complete payment securely before the booking is confirmed.
+            You&apos;ll complete payment securely before the booking is confirmed.
           </p>
         </div>
       </div>
@@ -1491,7 +1491,7 @@ export function VenueBookingWidget({
 
         {!hasAvailabilityData && (
           <p className="text-xs text-muted-foreground">
-            Select a date and time, then click "Check availability" to see available seats.
+            Select a date and time, then click &quot;Check availability&quot; to see available seats.
           </p>
         )}
 

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from "react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { ImageGalleryModal } from "@/components/ui/ImageGalleryModal"
 
@@ -18,6 +19,12 @@ export function VenueImageCarousel({ images, className, enableGallery = true, ob
   const [translateX, setTranslateX] = useState(0)
   const [isGalleryOpen, setIsGalleryOpen] = useState(false)
   const carouselRef = useRef<HTMLDivElement>(null)
+
+  const imagesLength = images?.length ?? 0
+  // Reset to first image if images array changes (must run before any early return)
+  useEffect(() => {
+    setCurrentIndex(0)
+  }, [imagesLength])
 
   // If no images, show placeholder
   if (!images || images.length === 0) {
@@ -57,12 +64,13 @@ export function VenueImageCarousel({ images, className, enableGallery = true, ob
           objectFit === "contain" ? className : cn("h-[217px] sm:h-64", className)
         )}
       >
-        <img
+        <Image
           src={images[0]}
           alt="Venue"
-          className={cn("h-full w-full", objectFit === "contain" ? "object-contain object-center" : "object-cover")}
+          fill
+          sizes="(max-width: 768px) 100vw, 400px"
+          className={cn(objectFit === "contain" ? "object-contain object-center" : "object-cover")}
           onError={(e) => {
-            // Fallback if image fails to load
             const target = e.target as HTMLImageElement
             target.style.display = "none"
           }}
@@ -136,11 +144,6 @@ export function VenueImageCarousel({ images, className, enableGallery = true, ob
     }
   }
 
-  // Reset to first image if images array changes
-  useEffect(() => {
-    setCurrentIndex(0)
-  }, [images.length])
-
   return (
     <>
       <div
@@ -166,13 +169,15 @@ export function VenueImageCarousel({ images, className, enableGallery = true, ob
           {images.map((image, index) => (
             <div
               key={index}
-              className={cn("h-full w-full shrink-0", enableGallery && "cursor-pointer")}
+              className={cn("relative h-full w-full shrink-0", enableGallery && "cursor-pointer")}
               onClick={enableGallery ? () => setIsGalleryOpen(true) : undefined}
             >
-              <img
+              <Image
                 src={image}
                 alt={`Venue image ${index + 1}`}
-                className={cn("h-full w-full object-center", objectFit === "contain" ? "object-contain" : "object-cover")}
+                fill
+                sizes="(max-width: 768px) 100vw, 400px"
+                className={cn("object-center", objectFit === "contain" ? "object-contain" : "object-cover")}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement
                   target.style.display = "none"

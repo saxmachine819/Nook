@@ -142,13 +142,13 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
               Nooc uses Stripe Connect to send your share of each booking automatically.
             </p>
             <p className="text-sm text-muted-foreground">
-              You'll be able to see payouts and manage your account in Stripe.
+              You&apos;ll be able to see payouts and manage your account in Stripe.
             </p>
           </div>
 
           <div className="rounded-md border bg-muted/30 p-4 space-y-4">
             <h3 className="text-sm font-semibold tracking-tight">
-              Stripe Connect onboarding (what you'll need)
+              Stripe Connect onboarding (what you&apos;ll need)
             </h3>
             <p className="text-sm text-muted-foreground">
               To receive payouts, vendors complete a quick Stripe Connect setup. This is a standard
@@ -156,7 +156,7 @@ export function StripeConnectClient({ venueId }: StripeConnectClientProps) {
             </p>
 
             <h4 className="text-sm font-semibold text-foreground">
-              What you'll need (5–10 minutes)
+              What you&apos;ll need (5–10 minutes)
             </h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>

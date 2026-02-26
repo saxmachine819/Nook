@@ -271,13 +271,13 @@ export function QRRegistrationForm({
               </select>
               {resourceType === "seat" && seats.length === 0 && tables.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  This venue only has group tables. Please select "Table" as the resource type.
+                  This venue only has group tables. Please select &quot;Table&quot; as the resource type.
                 </p>
               )}
               {resourceType === "table" &&
                 tables.filter((table) => (table.bookingMode || "individual") === "group").length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    This venue only has individual tables. Please select "Seat" as the resource type.
+                    This venue only has individual tables. Please select &quot;Seat&quot; as the resource type.
                   </p>
                 )}
               </>
