@@ -43,6 +43,13 @@ export async function POST(
         business_profile: {
           name: venue.name,
         },
+        settings: {
+          payouts: {
+            schedule: {
+              interval: "manual",
+            },
+          },
+        },
         metadata: {
           venueId: venue.id,
         },
