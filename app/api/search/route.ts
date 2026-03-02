@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import {
-  getCanonicalVenueHours,
-  isReservationWithinCanonicalHours,
-} from "@/lib/hours"
+import { batchGetCanonicalVenueHours, isReservationWithinCanonicalHours } from "@/lib/hours"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 30
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const seats = parseInt(searchParams.get("seats") || "1", 10)
+    const seatsParam = searchParams.get("seats")
+    const seats = seatsParam ? parseInt(seatsParam, 10) : 1
+    if (isNaN(seats) || seats < 1 || seats > 10) {
+      return NextResponse.json({ error: "Seats must be between 1 and 10" }, { status: 400 })
+    }
+
     const startAtParam = searchParams.get("startAt")
     const endAtParam = searchParams.get("endAt")
     const lat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null
@@ -18,20 +20,20 @@ export async function GET(request: Request) {
     const locationQuery = searchParams.get("location")?.trim() || ""
 
     if (!startAtParam || !endAtParam) {
-      return NextResponse.json(
-        { error: "Missing startAt and endAt parameters." },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Missing startAt and endAt parameters" }, { status: 400 })
     }
 
     const startAt = new Date(startAtParam)
     const endAt = new Date(endAtParam)
 
     if (isNaN(startAt.getTime()) || isNaN(endAt.getTime()) || endAt <= startAt) {
-      return NextResponse.json(
-        { error: "Invalid startAt/endAt." },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Invalid startAt/endAt" }, { status: 400 })
+    }
+
+    const maxFutureDate = new Date()
+    maxFutureDate.setDate(maxFutureDate.getDate() + 30)
+    if (startAt > maxFutureDate) {
+      return NextResponse.json({ error: "Search date cannot be more than 30 days in the future" }, { status: 400 })
     }
 
     const whereClause: any = {
@@ -40,7 +42,6 @@ export async function GET(request: Request) {
       pausedAt: null,
     }
 
-    // Text-based location filter
     if (locationQuery.length > 0) {
       whereClause.OR = [
         { neighborhood: { contains: locationQuery, mode: "insensitive" } },
@@ -50,95 +51,104 @@ export async function GET(request: Request) {
       ]
     }
 
-    let venues = await prisma.venue.findMany({
-      where: whereClause,
-      include: {
-        tables: {
-          include: { seats: true },
+    const [venues, reservations, seatBlocks] = await Promise.all([
+      prisma.venue.findMany({
+        where: whereClause,
+        include: {
+          tables: {
+            include: { seats: true },
+          },
         },
-      } as any,
-      take: 100,
-      orderBy: { name: "asc" },
-    })
+        take: 50,
+        orderBy: { name: "asc" },
+      }),
+      prisma.reservation.findMany({
+        where: {
+          status: { not: "cancelled" },
+          startAt: { lt: endAt },
+          endAt: { gt: startAt },
+        },
+        select: { venueId: true, seatId: true, tableId: true, seatCount: true },
+      }),
+      prisma.seatBlock.findMany({
+        where: {
+          startAt: { lt: endAt },
+          endAt: { gt: startAt },
+        },
+        select: { venueId: true, seatId: true },
+      }),
+    ])
 
-    // Filter by total seat capacity
-    venues = venues.filter((venue) => {
-      const venueAny = venue as any
-      const capacity = venueAny.tables.reduce((sum: number, table: any) => {
-        if (table.isActive === false) return sum
-        const activeSeats = table.seats.filter((s: any) => s.isActive !== false)
-        if (activeSeats.length > 0) return sum + activeSeats.length
-        return sum + (table.seatCount || 0)
-      }, 0)
-      return capacity >= seats
-    })
+    const venueIds = venues.map((v) => v.id)
+    const hoursMap = await batchGetCanonicalVenueHours(venueIds)
 
-    // Per-venue availability check: verify hours + reservations + blocks
+    const reservationsByVenue = new Map<string, typeof reservations>()
+    for (const r of reservations) {
+      if (!reservationsByVenue.has(r.venueId)) {
+        reservationsByVenue.set(r.venueId, [])
+      }
+      reservationsByVenue.get(r.venueId)!.push(r)
+    }
+
+    const seatBlocksByVenue = new Map<string, typeof seatBlocks>()
+    for (const b of seatBlocks) {
+      if (!seatBlocksByVenue.has(b.venueId)) {
+        seatBlocksByVenue.set(b.venueId, [])
+      }
+      seatBlocksByVenue.get(b.venueId)!.push(b)
+    }
+
     const availableVenues: Array<{
-      venue: typeof venues[0]
+      venue: (typeof venues)[0]
       availableSeats: number
       capacity: number
+      timezone: string
     }> = []
 
     for (const venue of venues) {
-      // Check canonical hours
-      const canonical = await getCanonicalVenueHours(venue.id)
+      const canonical = hoursMap.get(venue.id)
       if (!canonical) continue
 
       const hoursCheck = isReservationWithinCanonicalHours(startAt, endAt, canonical)
       if (!hoursCheck.isValid) continue
 
-      // Check reservations overlap
       const venueAny = venue as any
-      const capacity = venueAny.tables.reduce((sum: number, table: any) => {
-        if (table.isActive === false) return sum
-        const activeSeats = table.seats.filter((s: any) => s.isActive !== false)
-        if (activeSeats.length > 0) return sum + activeSeats.length
-        return sum + (table.seatCount || 0)
-      }, 0)
-
-      const overlapping = await prisma.reservation.findMany({
-        where: {
-          venueId: venue.id,
-          status: { not: "cancelled" },
-          startAt: { lt: endAt },
-          endAt: { gt: startAt },
-        },
-        select: { seatId: true, tableId: true, seatCount: true },
-      })
-
-      const overlappingBlocks = await prisma.seatBlock.findMany({
-        where: {
-          venueId: venue.id,
-          startAt: { lt: endAt },
-          endAt: { gt: startAt },
-        },
-        select: { seatId: true },
-      })
-
-      // Count unavailable seat IDs
-      const unavailableSeatIds = new Set<string>()
-      overlapping.forEach((r) => {
-        if (r.seatId) unavailableSeatIds.add(r.seatId)
-      })
-      overlappingBlocks.forEach((b) => {
-        if (b.seatId) unavailableSeatIds.add(b.seatId)
-      })
-
-      // Venue-wide blocks
-      const hasVenueBlock = overlappingBlocks.some((b) => b.seatId === null)
-      if (hasVenueBlock) continue
-
-      // Group table reservations block all seats in the table
-      const groupRes = overlapping.filter((r) => r.tableId && !r.seatId)
-      for (const gr of groupRes) {
-        const table = venueAny.tables.find((t: any) => t.id === gr.tableId)
-        if (table) {
-          table.seats.forEach((s: any) => unavailableSeatIds.add(s.id))
+      let capacity = 0
+      for (const table of venueAny.tables) {
+        if (table.isActive === false) continue
+        if (table.seats.length > 0) {
+          capacity += table.seats.filter((s: any) => s.isActive !== false).length
+        } else {
+          capacity += table.seatCount || 0
         }
       }
 
-      // Count available seats
+      if (capacity < seats) continue
+
+      const venueReservations = reservationsByVenue.get(venue.id) || []
+      const venueBlocks = seatBlocksByVenue.get(venue.id) || []
+
+      const unavailableSeatIds = new Set<string>()
+      for (const r of venueReservations) {
+        if (r.seatId) unavailableSeatIds.add(r.seatId)
+      }
+      for (const b of venueBlocks) {
+        if (b.seatId) unavailableSeatIds.add(b.seatId)
+      }
+
+      const hasVenueBlock = venueBlocks.some((b) => b.seatId === null)
+      if (hasVenueBlock) continue
+
+      for (const table of venueAny.tables) {
+        if (table.isActive === false) continue
+        const tableRes = venueReservations.filter((r) => r.tableId === table.id && !r.seatId)
+        for (const gr of tableRes) {
+          for (const s of table.seats) {
+            unavailableSeatIds.add(s.id)
+          }
+        }
+      }
+
       let availableCount = 0
       for (const table of venueAny.tables) {
         if (table.isActive === false) continue
@@ -146,9 +156,8 @@ export async function GET(request: Request) {
           if (seat.isActive === false) continue
           if (!unavailableSeatIds.has(seat.id)) availableCount++
         }
-        // Fallback for tables without Seat records
         if (table.seats.length === 0) {
-          const tableBookedSeats = overlapping
+          const tableBookedSeats = venueReservations
             .filter((r) => r.tableId === table.id)
             .reduce((sum, r) => sum + r.seatCount, 0)
           availableCount += Math.max(0, (table.seatCount || 0) - tableBookedSeats)
@@ -156,11 +165,15 @@ export async function GET(request: Request) {
       }
 
       if (availableCount >= seats) {
-        availableVenues.push({ venue, availableSeats: availableCount, capacity })
+        availableVenues.push({
+          venue,
+          availableSeats: Math.min(availableCount, capacity),
+          capacity,
+          timezone: canonical.timezone,
+        })
       }
     }
 
-    // Distance helper
     function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
       const R = 6371
       const dLat = ((lat2 - lat1) * Math.PI) / 180
@@ -174,21 +187,23 @@ export async function GET(request: Request) {
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     }
 
-    // Format results
-    const results = availableVenues.map(({ venue, availableSeats, capacity }) => {
+    const results = availableVenues.map(({ venue, availableSeats, capacity, timezone }) => {
       const venueAny = venue as any
 
-      const allSeatPrices = venueAny.tables
-        .filter((t: any) => t.bookingMode === "individual")
-        .flatMap((t: any) =>
-          (t.seats || []).map((s: any) => s.pricePerHour).filter((p: number) => p != null && p > 0)
-        )
-      const allTablePrices = venueAny.tables
-        .filter((t: any) => t.bookingMode === "group" && t.tablePricePerHour != null && t.tablePricePerHour > 0)
-        .map((t: any) => t.tablePricePerHour)
-      const candidatePrices = [...allSeatPrices, ...allTablePrices]
-      const fallback = venue.hourlySeatPrice > 0 ? venue.hourlySeatPrice : 0
-      const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
+      let minPrice = venue.hourlySeatPrice > 0 ? venue.hourlySeatPrice : 0
+      for (const table of venueAny.tables) {
+        if (table.bookingMode === "individual") {
+          for (const seat of table.seats) {
+            if (seat.pricePerHour > 0 && (minPrice === 0 || seat.pricePerHour < minPrice)) {
+              minPrice = seat.pricePerHour
+            }
+          }
+        } else if (table.bookingMode === "group" && table.tablePricePerHour != null && table.tablePricePerHour > 0) {
+          if (minPrice === 0 || table.tablePricePerHour < minPrice) {
+            minPrice = table.tablePricePerHour
+          }
+        }
+      }
 
       let imageUrls: string[] = []
       if (venueAny.imageUrls) {
@@ -197,7 +212,9 @@ export async function GET(request: Request) {
         } else if (typeof venueAny.imageUrls === "string") {
           try {
             const parsed = JSON.parse(venueAny.imageUrls)
-            if (Array.isArray(parsed)) imageUrls = parsed.filter((url: any): url is string => typeof url === "string" && url.length > 0)
+            if (Array.isArray(parsed)) {
+              imageUrls = parsed.filter((url: any): url is string => typeof url === "string" && url.length > 0)
+            }
           } catch {
             if (venueAny.imageUrls.length > 0) imageUrls = [venueAny.imageUrls]
           }
@@ -224,12 +241,12 @@ export async function GET(request: Request) {
         minPrice,
         capacity,
         availableSeats,
-        imageUrls,
+        imageUrls: imageUrls.slice(0, 1),
         distanceKm,
+        timezone,
       }
     })
 
-    // Sort by distance if available, otherwise by name
     if (lat != null && lng != null) {
       results.sort((a, b) => {
         if (a.distanceKm == null && b.distanceKm == null) return 0
@@ -243,9 +260,6 @@ export async function GET(request: Request) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error("Error in search API:", message)
-    return NextResponse.json(
-      { error: "Failed to search venues." },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to search venues" }, { status: 500 })
   }
 }

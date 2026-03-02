@@ -14,6 +14,12 @@ import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } 
 import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
 import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
+import { 
+  storePendingReservation, 
+  getPendingReservation, 
+  clearPendingReservation 
+} from "@/lib/pending-reservation"
+import { recoverPendingReservation } from "@/app/actions/recover-pending-reservation"
 
 /** Set to true to show CTA overlay on hero; false for in-card sticky CTA. */
 const CTA_OVER_HERO = false
@@ -582,11 +588,18 @@ export function VenueBookingWidget({
 
       if (!response.ok) {
         if (response.status === 401) {
+          storePendingReservation({
+            venueId,
+            startAt: requestBody.startAt,
+            endAt: requestBody.endAt,
+            seatId: requestBody.seatId,
+            tableId: requestBody.tableId,
+            seatCount: requestBody.seatCount,
+          })
           pendingReservationPayloadRef.current = requestBody
           setShowSignInModal(true)
           return
         }
-        // Handle PAST_TIME error code specifically
         if (data?.code === "PAST_TIME") {
           setError(data.error || "This date/time is in the past. Please select a current or future time.")
         } else {
@@ -616,36 +629,57 @@ export function VenueBookingWidget({
     setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const result = await recoverPendingReservation({
+        venueId: payload.venueId,
+        startAt: payload.startAt,
+        endAt: payload.endAt,
+        seatId: payload.seatId,
+        tableId: payload.tableId,
+        seatCount: payload.seatCount,
       })
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        if (data?.code === "PAST_TIME") {
-          setError(data.error || "This date/time is in the past. Please select a current or future time.")
-        } else {
-          setError(data?.error || "Failed to create reservation. Please try again.")
-        }
+
+      if (!result.success) {
+        setError(result.error || "Failed to recover reservation. Please try again.")
         pendingReservationPayloadRef.current = null
+        clearPendingReservation()
         return
       }
-      pendingReservationPayloadRef.current = null
-      if (!data?.url) {
+
+      if (!result.checkoutUrl) {
         setError("Unable to start checkout. Please try again.")
+        pendingReservationPayloadRef.current = null
+        clearPendingReservation()
         return
       }
-      showToast("Redirecting to secure checkout...", "success")
-      window.location.assign(data.url)
-    } catch (err) {
-      console.error("Error creating reservation:", err)
-      setError("Something went wrong while creating your reservation.")
+
+      clearPendingReservation()
       pendingReservationPayloadRef.current = null
+      showToast("Redirecting to secure checkout...", "success")
+      window.location.assign(result.checkoutUrl)
+    } catch (err) {
+      console.error("Error recovering reservation:", err)
+      setError("Something went wrong while recovering your reservation.")
+      pendingReservationPayloadRef.current = null
+      clearPendingReservation()
     } finally {
       setIsSubmitting(false)
     }
-  }, [pathname, showToast])
+  }, [venueId, showToast])
+
+  useEffect(() => {
+    const pending = getPendingReservation()
+    if (pending && pending.venueId === venueId) {
+      pendingReservationPayloadRef.current = {
+        venueId: pending.venueId,
+        startAt: pending.startAt,
+        endAt: pending.endAt,
+        seatId: pending.seatId,
+        tableId: pending.tableId,
+        seatCount: pending.seatCount,
+      }
+      retryReservation()
+    }
+  }, [venueId, retryReservation])
 
   // Helper function to render single seat selection
   const renderSingleSeatSelection = () => {
@@ -1546,6 +1580,7 @@ export function VenueBookingWidget({
           if (!open) pendingReservationPayloadRef.current = null
         }}
         onSignInSuccess={retryReservation}
+        hasPendingReservation={pendingReservationPayloadRef.current !== null}
         description="Sign in to complete your reservation."
         callbackUrl={signInCallbackUrl}
       />
