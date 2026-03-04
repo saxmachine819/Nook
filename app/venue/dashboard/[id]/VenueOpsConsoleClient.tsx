@@ -1427,10 +1427,11 @@ export function VenueOpsConsoleClient({
       if (!payload?.url) {
         throw new Error("Stripe dashboard link missing.")
       }
-      window.location.assign(payload.url)
+      window.open(payload.url, "_blank", "noopener,noreferrer")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Stripe dashboard failed."
       showToast(message, "error")
+    } finally {
       setIsStripeDashboardOpening(false)
     }
   }, [isStripeDashboardOpening, showToast, venue.id])

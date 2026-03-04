@@ -357,7 +357,6 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
                     onCancel={() => setShowCancelConfirm(true)}
                     onGetDirections={() => handleGetDirections(heroReservation)}
                     onViewReceipt={() => handleViewReceipt(heroReservation)}
-                    calculatePrice={calculatePrice}
                     formatDateTimeRange={formatDateTimeRange}
                     getSeatInfo={getSeatInfo}
                   />
@@ -414,7 +413,6 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
                       key={reservation.id}
                       reservation={reservation}
                       onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
-                      calculatePrice={calculatePrice}
                       formatDateTimeRange={formatDateTimeRange}
                       getSeatInfo={getSeatInfo}
                     />
@@ -423,7 +421,6 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
                       key={reservation.id}
                       reservation={reservation}
                       onViewDetails={() => router.push(`/reservations/${reservation.id}`)}
-                      calculatePrice={calculatePrice}
                       formatDateTimeRange={formatDateTimeRange}
                       getSeatInfo={getSeatInfo}
                     />
@@ -482,7 +479,6 @@ function HeroReservationCard({
   onAddToCalendar,
   onCancel,
   onGetDirections,
-  calculatePrice,
   formatDateTimeRange,
   getSeatInfo,
   onViewReceipt,
@@ -492,7 +488,6 @@ function HeroReservationCard({
   onAddToCalendar: () => void
   onCancel: () => void
   onGetDirections: () => void
-  calculatePrice: (r: Reservation) => number
   formatDateTimeRange: (start: Date, end: Date) => string
   getSeatInfo: (r: Reservation) => string
   onViewReceipt?: () => void
@@ -523,17 +518,12 @@ function HeroReservationCard({
       )}
       <CardContent className="p-8">
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            {reservation.venue.address ? (
-              <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground/60 min-w-0 flex-1">
-                <MapPin className="h-4 w-4 shrink-0" />
-                <span className="truncate">{reservation.venue.address}</span>
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground/60" />
-            )}
-            <span className="text-xl font-black tracking-tighter text-primary shrink-0">${calculatePrice(reservation).toFixed(0)}</span>
-          </div>
+          {reservation.venue.address ? (
+            <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground/60 min-w-0">
+              <MapPin className="h-4 w-4 shrink-0" />
+              <span className="truncate">{reservation.venue.address}</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full w-fit min-w-0">
               {getSeatInfo(reservation)}
@@ -609,13 +599,11 @@ function UpcomingListItem({
 function PastReservationCard({
   reservation,
   onViewDetails,
-  calculatePrice,
   formatDateTimeRange,
   getSeatInfo,
 }: {
   reservation: Reservation
   onViewDetails: () => void
-  calculatePrice: (r: Reservation) => number
   formatDateTimeRange: (start: Date, end: Date) => string
   getSeatInfo: (r: Reservation) => string
 }) {
@@ -632,10 +620,7 @@ function PastReservationCard({
         </div>
         <div className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{getSeatInfo(reservation)}</div>
       </div>
-      <div className="flex items-center gap-4">
-        <span className="text-lg font-black tracking-tight text-foreground/60">
-          ${calculatePrice(reservation).toFixed(0)}
-        </span>
+      <div className="flex items-center">
         <ChevronRight size={18} className="text-muted-foreground/20 group-hover:text-foreground/40 transition-colors" />
       </div>
     </div>
@@ -646,13 +631,11 @@ function PastReservationCard({
 function CancelledReservationCard({
   reservation,
   onViewDetails,
-  calculatePrice,
   formatDateTimeRange,
   getSeatInfo,
 }: {
   reservation: Reservation
   onViewDetails: () => void
-  calculatePrice: (r: Reservation) => number
   formatDateTimeRange: (start: Date, end: Date) => string
   getSeatInfo: (r: Reservation) => string
 }) {
