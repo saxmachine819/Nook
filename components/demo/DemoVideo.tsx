@@ -8,9 +8,22 @@ export function DemoVideo() {
 
   useEffect(() => {
     fetch("/api/demo-video-url")
-      .then((res) => res.json())
-      .then((data: { url: string | null }) => {
-        setUrl(data.url ?? null)
+      .then((res) => {
+        if (!res.ok) return { url: null }
+        return res.json() as Promise<{ url: string | null }>
+      })
+      .then((data) => {
+        const apiUrl = data?.url ?? null
+        if (apiUrl) {
+          setUrl(apiUrl)
+          return
+        }
+        // Local dev: fallback to file in public/ when API returns no URL
+        if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+          setUrl("/demo-video.mov")
+        } else {
+          setUrl(null)
+        }
       })
       .catch(() => setUrl(null))
       .finally(() => setLoading(false))
