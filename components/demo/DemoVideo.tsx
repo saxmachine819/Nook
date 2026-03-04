@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react"
 
+const FALLBACK_DEMO_VIDEO_URL =
+  "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/2026-03-04_NoocDemo.mov"
+
 export function DemoVideo() {
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -22,7 +25,8 @@ export function DemoVideo() {
         if (typeof window !== "undefined" && window.location.hostname === "localhost") {
           setUrl("/demo-video.mov")
         } else {
-          setUrl(null)
+          // Staging/production: use known blob URL when API returns null (env not in runtime)
+          setUrl(FALLBACK_DEMO_VIDEO_URL)
         }
       })
       .catch(() => setUrl(null))
