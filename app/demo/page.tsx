@@ -13,8 +13,9 @@ const CAL_EMBED_URL = "https://cal.com/jordan-cohen-3zchhq?embed=true"
 export default function DemoPage() {
   // Optional: set NEXT_PUBLIC_DEMO_PHONE in .env for a real number
   const demoPhone = process.env.NEXT_PUBLIC_DEMO_PHONE ?? null
-  // Production: set NEXT_PUBLIC_DEMO_VIDEO_URL to a CDN URL; else uses /demo-video.mov (local or Option A)
-  const demoVideoUrl = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ?? "/demo-video.mov"
+  // Set NEXT_PUBLIC_DEMO_VIDEO_URL (Vercel env or .env) for the video; must be an absolute URL so we never request /demo-video.mov on staging/prod
+  const raw = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL?.trim()
+  const demoVideoUrl = raw?.startsWith("http") ? raw : null
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
@@ -35,15 +36,21 @@ export default function DemoPage() {
         {/* Demo video */}
         <section className="mb-14">
           <div className="aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden border border-border bg-black">
-            <video
-              className="w-full h-full object-contain"
-              controls
-              playsInline
-              preload="metadata"
-              src={demoVideoUrl}
-            >
-              Your browser does not support the video tag.
-            </video>
+            {demoVideoUrl ? (
+              <video
+                className="w-full h-full object-contain"
+                controls
+                playsInline
+                preload="metadata"
+                src={demoVideoUrl}
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-muted">
+                <p className="text-muted-foreground font-medium">Video coming soon</p>
+              </div>
+            )}
           </div>
         </section>
 
