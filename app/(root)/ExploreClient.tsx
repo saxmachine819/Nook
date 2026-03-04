@@ -337,49 +337,51 @@ export function ExploreClient({
       )}
       {isClient && mapReady && (
         <>
-          <MapView
-            venues={pins.map((p) => {
-              const card = cardsById.get(p.id);
-              // Use pin's data - stable, no flicker when cards load
-              return {
-                id: p.id,
-                name: p.name,
-                address: card?.address ?? "",
-                latitude: p.lat,
-                longitude: p.lng,
-                minPrice: p.minPrice,
-                maxPrice: card?.maxPrice ?? p.minPrice,
-                availabilityLabel: card?.availabilityLabel ?? (p.status === "OPEN_NOW" ? "Available now" : undefined),
-              };
-            })}
-            userLocation={userLocation}
-            onSelectVenue={setSelectedVenueId}
-            onMapClick={() => setSelectedVenueId(null)}
-            onSearchArea={handleSearchArea}
-            isSearching={isPinsSearching}
-            centerOnVenueId={centerOnVenueId}
-            centerOnCoordinates={centerOnCoordinates}
-            hasMapboxToken={!!mapboxToken}
-            shouldFitBounds={shouldFitMapBounds}
-            skipFitBounds={didAreaSearchRef.current}
-            onBoundsFitted={() => setShouldFitMapBounds(false)}
-            onRequestLocation={requestLocation}
-            locationState={locationState}
-            isSearchingArea={didAreaSearchRef.current}
-            onBoundsChange={setDebugBounds}
-            onInitialBounds={handleInitialBounds}
-            didAreaSearch={didAreaSearchRef.current}
-            initialLoadingComplete={pins.length > 0 || !isPinsLoading}
-            isFetchingPins={isPinsFetching}
-            isInitialLoading={isInitialLoad}
-          />
-          {process.env.NODE_ENV !== "production" && (
-            <div className="fixed bottom-20 left-2 z-10 rounded bg-background/90 px-2 py-1 text-xs font-mono text-muted-foreground shadow">
-              pins: {pins.length} | cards: {venues.length} | pins:
-              {isPinsSearching ? "⏳" : "✓"} cards:
-              {isCardsSearching ? "⏳" : "✓"}
-            </div>
-          )}
+          <div>
+            <MapView
+              venues={pins.map((p) => {
+                const card = cardsById.get(p.id);
+                // Use pin's data - stable, no flicker when cards load
+                return {
+                  id: p.id,
+                  name: p.name,
+                  address: card?.address ?? "",
+                  latitude: p.lat,
+                  longitude: p.lng,
+                  minPrice: p.minPrice,
+                  maxPrice: card?.maxPrice ?? p.minPrice,
+                  availabilityLabel: card?.availabilityLabel ?? (p.status === "OPEN_NOW" ? "Available now" : undefined),
+                };
+              })}
+              userLocation={userLocation}
+              onSelectVenue={setSelectedVenueId}
+              onMapClick={() => setSelectedVenueId(null)}
+              onSearchArea={handleSearchArea}
+              isSearching={isPinsSearching}
+              centerOnVenueId={centerOnVenueId}
+              centerOnCoordinates={centerOnCoordinates}
+              hasMapboxToken={!!mapboxToken}
+              shouldFitBounds={shouldFitMapBounds}
+              skipFitBounds={didAreaSearchRef.current}
+              onBoundsFitted={() => setShouldFitMapBounds(false)}
+              onRequestLocation={requestLocation}
+              locationState={locationState}
+              isSearchingArea={didAreaSearchRef.current}
+              onBoundsChange={setDebugBounds}
+              onInitialBounds={handleInitialBounds}
+              didAreaSearch={didAreaSearchRef.current}
+              initialLoadingComplete={pins.length > 0 || !isPinsLoading}
+              isFetchingPins={isPinsFetching}
+              isInitialLoading={isInitialLoad}
+            />
+            {process.env.NODE_ENV !== "production" && (
+              <div className="fixed bottom-20 left-2 z-10 rounded bg-background/90 px-2 py-1 text-xs font-mono text-muted-foreground shadow">
+                pins: {pins.length} | cards: {venues.length} | pins:
+                {isPinsSearching ? "⏳" : "✓"} cards:
+                {isCardsSearching ? "⏳" : "✓"}
+              </div>
+            )}
+          </div>
           <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
             <ExploreWelcomeBanner
               onUseLocation={requestLocation}
@@ -442,7 +444,6 @@ export function ExploreClient({
             onClearFavoritesFilter={() =>
               setFilters({ ...filters, favoritesOnly: false })
             }
-            // In search/filter mode, use venues.length; in browse mode, use pins total
             total={hasFilters ? venues.length : (pinsData?.total ?? 0)}
             isSearchMode={hasFilters}
             searchQuery={searchQuery}

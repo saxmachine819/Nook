@@ -135,10 +135,10 @@ export function SearchClient() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Map icon top-left: same size and position as magnifying glass on explore map */}
+      {/* Top-left: Map icon → full map view */}
       <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-10">
         <Link
-          href="/?view=map&from=search"
+          href="/?view=map"
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
           aria-label="View on map"
         >
@@ -347,6 +347,24 @@ export function SearchClient() {
           </div>
         </div>
       )}
+
+      {/* Footer: Contact + Add your venue */}
+      <footer className="mt-auto px-4 py-8 pb-24 border-t border-border/50">
+        <div className="mx-auto max-w-lg flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+          <a
+            href="mailto:Jordan@nooc.io"
+            className="hover:text-foreground underline-offset-2 hover:underline"
+          >
+            Contact
+          </a>
+          <Link
+            href="/venue/onboard"
+            className="hover:text-foreground underline-offset-2 hover:underline"
+          >
+            Add your venue
+          </Link>
+        </div>
+      </footer>
     </div>
   )
 }
