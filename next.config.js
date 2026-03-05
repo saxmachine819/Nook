@@ -31,6 +31,18 @@ const nextConfig = {
     if (dev) {
       config.cache = false
     }
+    // Ensure MiniCssExtractPlugin is present when CSS is extracted (avoids "You forgot to add mini-css-extract-plugin" when loaders expect it)
+    try {
+      const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+      const hasMiniCss = config.plugins.some(
+        (p) => p && p.constructor && p.constructor.name === "MiniCssExtractPlugin"
+      );
+      if (!hasMiniCss) {
+        config.plugins.push(new MiniCssExtractPlugin());
+      }
+    } catch (_) {
+      // mini-css-extract-plugin not available; skip (Next.js may provide it elsewhere)
+    }
     return config
   },
 }

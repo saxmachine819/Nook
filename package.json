@@ -54,6 +54,7 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "mini-css-extract-plugin": "^2.7.6",
     "@tanstack/react-query-devtools": "^5.91.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
