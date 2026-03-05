@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 
 const FALLBACK_DEMO_VIDEO_URL =
-  "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/2026-03-04_NoocDemo.mov"
+  "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/2026-03-05_NoocDemo.mov"
 
 export function DemoVideo() {
   const [url, setUrl] = useState<string | null>(null)
@@ -54,7 +54,6 @@ export function DemoVideo() {
       ctx.drawImage(video, 0, 0, width, height)
       const dataUrl = canvas.toDataURL("image/jpeg")
       setPoster(dataUrl)
-      video.currentTime = 0
     } catch {
       // Ignore errors (e.g. cross-origin restrictions)
     }
