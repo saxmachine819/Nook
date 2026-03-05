@@ -1,7 +1,10 @@
 import dynamic from "next/dynamic"
 
 const BottomNav = dynamic(
-  () => import("@/components/layout/BottomNav").then((mod) => ({ default: mod.BottomNav })),
+  () =>
+    import("@/components/layout/BottomNav")
+      .then((mod) => ({ default: mod?.BottomNav ?? (() => null) }))
+      .catch(() => ({ default: () => null })),
   { ssr: false }
 )
 
