@@ -1,3 +1,5 @@
+"use client"
+
 import { clearBookingUIState, clearPendingReservation } from '@/lib/pending-reservation'
 import { useEffect } from 'react'
 
