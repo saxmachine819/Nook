@@ -1,8 +1,10 @@
 "use client"
 
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Settings, LogIn } from "lucide-react"
+import { Settings, LogIn, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 interface UnregisteredQRPageProps {
@@ -11,7 +13,14 @@ interface UnregisteredQRPageProps {
 }
 
 export function UnregisteredQRPage({ token, canRegister }: UnregisteredQRPageProps) {
+  const router = useRouter()
+  const [isNavigatingToRegister, setIsNavigatingToRegister] = useState(false)
   const callbackUrl = `/q/${token}`
+
+  const handleRegisterClick = () => {
+    setIsNavigatingToRegister(true)
+    router.push(`/q/${token}/register`)
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -38,11 +47,22 @@ export function UnregisteredQRPage({ token, canRegister }: UnregisteredQRPagePro
                 </Button>
               )}
               {canRegister && (
-                <Button asChild variant="default">
-                  <Link href={`/q/${token}/register`}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Register this QR code
-                  </Link>
+                <Button
+                  variant="default"
+                  onClick={handleRegisterClick}
+                  disabled={isNavigatingToRegister}
+                >
+                  {isNavigatingToRegister ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      Loading…
+                    </>
+                  ) : (
+                    <>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Register this QR code
+                    </>
+                  )}
                 </Button>
               )}
             </div>

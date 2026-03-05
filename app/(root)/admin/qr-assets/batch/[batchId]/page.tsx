@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ManufacturingPackCard } from "./ManufacturingPackCard"
 
 interface BatchPrintPageProps {
   params: Promise<{ batchId: string }>
@@ -38,10 +39,17 @@ export default async function BatchPrintPage({ params, searchParams }: BatchPrin
   const limit = sp.limit ? Number.parseInt(sp.limit, 10) : 24
   const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 120) : 24
 
-  const total = await prisma.qRAsset.count({
-    where: { batchId },
-  })
+  const [total, sample] = await Promise.all([
+    prisma.qRAsset.count({ where: { batchId } }),
+    prisma.qRAsset.findFirst({
+      where: { batchId },
+      select: { batchLabel: true, reservedOrderId: true },
+    }),
+  ])
 
+  const batchLabel = sample?.batchLabel ?? null
+  const isManufacturingBatch =
+    sample?.reservedOrderId === `manufacturing-${batchId}`
   const pdfHref = `/api/admin/qr-assets/batch/${encodeURIComponent(batchId)}/print.pdf?limit=${safeLimit}`
 
   return (
@@ -53,6 +61,9 @@ export default async function BatchPrintPage({ params, searchParams }: BatchPrin
             <p className="text-sm text-muted-foreground">
               Batch: <span className="font-mono">{batchId}</span>
             </p>
+            {batchLabel && (
+              <p className="text-sm text-muted-foreground">Label: {batchLabel}</p>
+            )}
             <p className="text-sm text-muted-foreground">Assets in batch: {total}</p>
           </div>
           <Button asChild variant="outline">
@@ -89,6 +100,12 @@ export default async function BatchPrintPage({ params, searchParams }: BatchPrin
           </p>
         </CardContent>
       </Card>
+
+      {isManufacturingBatch && (
+        <div className="mt-6">
+          <ManufacturingPackCard batchId={batchId} />
+        </div>
+      )}
     </div>
   )
 }

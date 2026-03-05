@@ -11,7 +11,12 @@ import { RetiredQRPage } from "@/components/qr/RetiredQRPage"
 import { QRPlaceholderPage } from "@/components/qr/QRPlaceholderPage"
 
 const QRRedirectWithAdminPanel = dynamic(
-  () => import("@/components/qr/QRRedirectWithAdminPanel").then((mod) => ({ default: mod.QRRedirectWithAdminPanel })),
+  () =>
+    import("@/components/qr/QRRedirectWithAdminPanel")
+      .then((mod) => ({
+        default: mod?.QRRedirectWithAdminPanel ?? (() => null),
+      }))
+      .catch(() => ({ default: () => null })),
   { ssr: false }
 )
 
