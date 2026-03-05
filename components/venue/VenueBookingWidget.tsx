@@ -1581,7 +1581,7 @@ export function VenueBookingWidget({
         onSignInSuccess={retryReservation}
         hasPendingReservation={pendingReservationPayloadRef.current !== null}
         description="Sign in to complete your reservation."
-        callbackUrl={signInCallbackUrl}
+        callbackUrl={signInCallbackUrl ?? undefined}
       />
 
       <EmbeddedCheckoutModal
