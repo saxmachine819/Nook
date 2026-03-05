@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const FALLBACK_DEMO_VIDEO_URL =
   "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/2026-03-04_NoocDemo.mov"
@@ -8,6 +8,8 @@ const FALLBACK_DEMO_VIDEO_URL =
 export function DemoVideo() {
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [poster, setPoster] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
     fetch("/api/demo-video-url")
@@ -33,6 +35,31 @@ export function DemoVideo() {
       .finally(() => setLoading(false))
   }, [])
 
+  const handleLoadedData = () => {
+    const video = videoRef.current
+    if (!video || poster) return
+
+    try {
+      const canvas = document.createElement("canvas")
+      const width = video.videoWidth
+      const height = video.videoHeight
+      if (!width || !height) return
+
+      canvas.width = width
+      canvas.height = height
+
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      ctx.drawImage(video, 0, 0, width, height)
+      const dataUrl = canvas.toDataURL("image/jpeg")
+      setPoster(dataUrl)
+      video.currentTime = 0
+    } catch {
+      // Ignore errors (e.g. cross-origin restrictions)
+    }
+  }
+
   if (loading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-muted">
@@ -51,11 +78,15 @@ export function DemoVideo() {
 
   return (
     <video
+      ref={videoRef}
       className="w-full h-full object-contain"
       controls
       playsInline
       preload="metadata"
+      crossOrigin="anonymous"
       src={url}
+      poster={poster ?? undefined}
+      onLoadedData={handleLoadedData}
     >
       Your browser does not support the video tag.
     </video>
