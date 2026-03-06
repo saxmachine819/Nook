@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { DemoVideo } from "@/components/demo/DemoVideo"
 import { Button } from "@/components/ui/button"
+import { CAL_EMBED_URL } from "@/lib/cal"
 import { Calendar, Coffee } from "lucide-react"
 
 export const metadata = {
@@ -8,8 +9,6 @@ export const metadata = {
   description:
     "Reserve seats by the hour. Set your own pricing. Get paid. See how Nooc works for your shop.",
 }
-
-const CAL_EMBED_URL = "https://cal.com/jordan-cohen-3zchhq?embed=true"
 
 export default function DemoPage() {
   // Optional: set NEXT_PUBLIC_DEMO_PHONE in .env for a real number

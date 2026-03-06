@@ -62,8 +62,12 @@ import {
 import { DealList } from "@/components/venue/DealList"
 import { DealForm } from "@/components/venue/DealForm"
 import { SignageOrderWizard } from "@/components/venue/SignageOrderWizard"
+import { CAL_EMBED_URL } from "@/lib/cal"
 import { type Deal } from "@prisma/client"
 import { useVenueRole } from "./VenueRoleProvider"
+
+/** Set to true to re-enable the full Order QR Code Signage wizard. When false, "Order signage" shows a booking dialog instead. */
+const SIGNAGE_ORDER_WIZARD_ENABLED = false
 
 type StripeSetupStatus =
   | { status: "not_started" }
@@ -343,6 +347,7 @@ export function VenueOpsConsoleClient({
     NonNullable<VenueOpsConsoleClientProps["signageOrders"]>[number] | null
   >(null)
   const [signageOrderWizardOpen, setSignageOrderWizardOpen] = useState(false)
+  const [signageBookingDialogOpen, setSignageBookingDialogOpen] = useState(false)
   const [teamManagementOpen, setTeamManagementOpen] = useState(false)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null)
@@ -2189,7 +2194,11 @@ export function VenueOpsConsoleClient({
                                   variant="ghost"
                                   size="sm"
                                   className="h-6 text-[10px] px-1.5"
-                                  onClick={() => setSignageOrderWizardOpen(true)}
+                                  onClick={() =>
+                                    SIGNAGE_ORDER_WIZARD_ENABLED
+                                      ? setSignageOrderWizardOpen(true)
+                                      : setSignageBookingDialogOpen(true)
+                                  }
                                 >
                                   Order signage
                                 </Button>
@@ -2633,6 +2642,25 @@ export function VenueOpsConsoleClient({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Signage booking fallback when SIGNAGE_ORDER_WIZARD_ENABLED is false */}
+      <Dialog open={signageBookingDialogOpen} onOpenChange={setSignageBookingDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Order QR Code Signage</DialogTitle>
+            <DialogDescription>
+              We&apos;re working on self-serve signage ordering. Until then, book a short call and we&apos;ll get you set up with everything you need.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl overflow-hidden border border-border bg-card min-h-[380px] w-full">
+            <iframe
+              title="Schedule a call for signage"
+              src={CAL_EMBED_URL}
+              className="w-full min-h-[380px] border-0"
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
