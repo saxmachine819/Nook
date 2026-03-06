@@ -341,6 +341,29 @@ export function VenueBookingWidget({
   useLayoutEffect(() => {
     if (hasInitialized.current) return
 
+    const bookingParam = searchParams?.get("booking")
+    if (bookingParam) {
+      try {
+        const bookingData = JSON.parse(bookingParam)
+        if (bookingData.date && bookingData.startTime) {
+          const timeStr = String(bookingData.startTime).padStart(4, "0")
+          if (timeStr.length === 4) {
+            setDate(bookingData.date)
+            setStartTime(`${timeStr.slice(0, 2)}:${timeStr.slice(2)}`)
+            setDurationHours(bookingData.duration ?? 2)
+            hasInitialized.current = true
+
+            setTimeout(() => {
+              handleCheckAvailabilityRef.current()
+            }, 200)
+            return
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse booking param:", e)
+      }
+    }
+
     const savedState = getBookingUIState(venueId)
     if (savedState) {
       setDate(savedState.date)
@@ -391,7 +414,7 @@ export function VenueBookingWidget({
         handleCheckAvailabilityRef.current()
       }
     }, 150)
-  }, [venueId, showToast])
+  }, [venueId, showToast, searchParams])
 
   // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {
