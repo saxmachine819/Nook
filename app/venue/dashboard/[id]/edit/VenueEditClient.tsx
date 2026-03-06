@@ -1119,6 +1119,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                               : "border-muted hover:border-primary/50"
                           )}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic photo URL */}
                           <img
                             src={item.photoUrl}
                             alt={item.source === "place" ? "Place photo" : "Your photo"}
@@ -1201,6 +1202,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                             key={idx}
                             className="group relative aspect-square overflow-hidden rounded-lg border-2 border-primary ring-2 ring-primary ring-offset-2"
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- blob/selected URL */}
                             <img
                               src={url}
                               alt="Selected"
@@ -1561,6 +1563,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                             <div className="grid grid-cols-3 gap-2">
                               {table.imageUrls.map((url, idx) => (
                                 <div key={idx} className="relative aspect-square overflow-hidden rounded-md">
+                                  {/* eslint-disable-next-line @next/next/no-img-element -- blob URL in gallery */}
                                   <img src={url} alt={`Table photo ${idx + 1}`} className="h-full w-full object-cover" />
                                   <button
                                     type="button"
@@ -1683,6 +1686,7 @@ export function VenueEditClient({ venue }: VenueEditClientProps) {
                                   <div className="grid grid-cols-2 gap-1">
                                     {seat.imageUrls.map((url, idx) => (
                                       <div key={idx} className="relative aspect-square overflow-hidden rounded-md">
+                                        {/* eslint-disable-next-line @next/next/no-img-element -- blob URL in gallery */}
                                         <img src={url} alt={`Seat photo ${idx + 1}`} className="h-full w-full object-cover" />
                                         <button
                                           type="button"

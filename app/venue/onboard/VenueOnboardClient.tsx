@@ -1069,6 +1069,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
                               : "border-muted hover:border-primary/50"
                           )}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic photo URL */}
                           <img
                             src={item.photoUrl}
                             alt={item.source === "google" ? item.name : "Your photo"}
@@ -1395,6 +1396,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
                             <div className="grid grid-cols-3 gap-2">
                               {table.imageUrls.map((url, idx) => (
                                 <div key={idx} className="relative aspect-square overflow-hidden rounded-md">
+                                  {/* eslint-disable-next-line @next/next/no-img-element -- blob URL in gallery */}
                                   <img src={url} alt={`Table photo ${idx + 1}`} className="h-full w-full object-cover" />
                                   <button
                                     type="button"
@@ -1527,6 +1529,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
                                 <div className="grid grid-cols-2 gap-1">
                                   {seat.imageUrls.map((url, idx) => (
                                     <div key={idx} className="relative aspect-square overflow-hidden rounded-md">
+                                      {/* eslint-disable-next-line @next/next/no-img-element -- blob URL in gallery */}
                                       <img src={url} alt={`Seat photo ${idx + 1}`} className="h-full w-full object-cover" />
                                       <button
                                         type="button"
@@ -1599,6 +1602,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
           {qrModalToken && (
             <div className="space-y-4">
               <div className="flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- dynamic API SVG */}
                 <img
                   src={`/api/qr-assets/${qrModalToken}/qr-only.svg`}
                   alt="QR preview"

@@ -79,6 +79,7 @@ export function SeatCard({
               if (seat.imageUrls.length > 0) setIsImageOpen(true)
             }}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic seat thumbnail */}
             <img
               src={thumbnailUrl}
               alt={displayLabel}

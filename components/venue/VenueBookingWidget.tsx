@@ -326,7 +326,7 @@ export function VenueBookingWidget({
     } finally {
       setIsLoadingAvailability(false)
     }
-  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast])
+  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast, canonicalHours?.timezone])
 
   // Track if we've initialized date/time to prevent re-initialization
   const hasInitialized = useRef(false)
@@ -653,7 +653,7 @@ export function VenueBookingWidget({
     } finally {
       setIsSubmitting(false)
     }
-  }, [venueId, showToast])
+  }, [showToast])
 
   useEffect(() => {
     const pending = getPendingReservation()
@@ -722,6 +722,7 @@ export function VenueBookingWidget({
                           openImageModal(table.imageUrls, 0)
                         }}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -808,6 +809,7 @@ export function VenueBookingWidget({
                   >
                     {table.imageUrls.length > 0 && (
                       <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -890,6 +892,7 @@ export function VenueBookingWidget({
                             openImageModal(table.imageUrls as string[], 0)
                           }}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                           <img
                             src={table.imageUrls[0]}
                             alt={table.name || "Table"}
@@ -1061,6 +1064,7 @@ export function VenueBookingWidget({
                           openImageModal(table.imageUrls, 0)
                         }}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -1147,6 +1151,7 @@ export function VenueBookingWidget({
                   >
                     {table.imageUrls.length > 0 && (
                       <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -1225,6 +1230,7 @@ export function VenueBookingWidget({
                               openImageModal(table.imageUrls as string[], 0)
                             }}
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                             <img
                               src={table.imageUrls[0]}
                               alt={table.name || "Table"}

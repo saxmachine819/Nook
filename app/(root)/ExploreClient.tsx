@@ -119,7 +119,7 @@ export function ExploreClient({
     isFetching: isPinsFetching,
   } = useVenuePins(currentBounds, isClient && !hasFilters);
 
-  const viewportPins = pinsData?.pins ?? [];
+  const viewportPins = useMemo(() => pinsData?.pins ?? [], [pinsData?.pins]);
   const pinIds = useMemo(() => viewportPins.map((p) => p.id), [viewportPins]);
 
   const {

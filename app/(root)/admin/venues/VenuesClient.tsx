@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,15 +42,18 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
   }, [initialVenues])
 
   // Update search query in URL
-  const updateSearch = (query: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (query.trim()) {
-      params.set("search", query.trim())
-    } else {
-      params.delete("search")
-    }
-    router.push(`/admin/venues?${params.toString()}`)
-  }
+  const updateSearch = useCallback(
+    (query: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      if (query.trim()) {
+        params.set("search", query.trim())
+      } else {
+        params.delete("search")
+      }
+      router.push(`/admin/venues?${params.toString()}`)
+    },
+    [router, searchParams]
+  )
 
   // Debounce search (only if search query actually changed from initial)
   useEffect(() => {
@@ -72,7 +75,7 @@ export function VenuesClient({ initialVenues, initialSearchQuery }: VenuesClient
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [searchQuery, initialSearchQuery])
+  }, [searchQuery, initialSearchQuery, updateSearch])
 
   const formatDate = (date: Date | string | null) => {
     if (!date) return "N/A"

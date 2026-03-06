@@ -248,6 +248,7 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
             <div className="relative h-64 w-full bg-muted animate-pulse" />
           ) : imageUrl ? (
             <div className="relative h-64 w-full overflow-hidden bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue image URL */}
               <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover" />
             </div>
           ) : null}

@@ -956,7 +956,8 @@ export function MapboxMap({
       setMapError("Failed to initialize map")
       setIsLoading(false)
     }
-  }, [accessToken]) // Map should only initialize once when accessToken is available, not when userLocation changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map init once when accessToken is available; other deps intentionally excluded
+  }, [accessToken])
 
 
   const addUserLocationMarker = (map: mapboxgl.Map, location: { lat: number; lng: number }) => {
@@ -1566,6 +1567,7 @@ export function MapboxMap({
         console.log("🗺️ Skipping source initialization during area search (first time)")
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeVenuesSource and others read via refs; deps chosen to avoid over-running
   }, [venues, isLoading, shouldFitBounds, onBoundsFitted, didAreaSearch])
 
   const handleSearchArea = () => {
@@ -1665,6 +1667,7 @@ export function MapboxMap({
       })
       hasAutoCenteredRef.current = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isSearchingArea read via ref; avoid re-running on every search state change
   }, [userLocation, locationState, isLoading])
 
   if (mapError) {

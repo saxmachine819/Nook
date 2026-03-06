@@ -97,11 +97,14 @@ export function VenueDashboardClient() {
                 <div className="flex flex-1 gap-3 sm:gap-4">
                   <div className="h-16 w-20 shrink-0 overflow-hidden rounded-md bg-muted">
                     {v.thumbnail ? (
-                      <img
-                        src={v.thumbnail}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue thumbnail */}
+                        <img
+                          src={v.thumbnail}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </>
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
                         No image

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -63,14 +63,17 @@ export function OrdersClient({
     setOrders(initialOrders)
   }, [initialOrders])
 
-  const updateUrl = (statusVal: string, searchVal: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? "")
-    if (statusVal) params.set("status", statusVal)
-    else params.delete("status")
-    if (searchVal.trim()) params.set("search", searchVal.trim())
-    else params.delete("search")
-    router.push(`/admin/orders?${params.toString()}`)
-  }
+  const updateUrl = useCallback(
+    (statusVal: string, searchVal: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "")
+      if (statusVal) params.set("status", statusVal)
+      else params.delete("status")
+      if (searchVal.trim()) params.set("search", searchVal.trim())
+      else params.delete("search")
+      router.push(`/admin/orders?${params.toString()}`)
+    },
+    [router, searchParams]
+  )
 
   useEffect(() => {
     if (status === initialStatus && searchQuery === initialSearch) return
@@ -81,7 +84,7 @@ export function OrdersClient({
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     }
-  }, [status, searchQuery])
+  }, [status, searchQuery, initialStatus, initialSearch, updateUrl])
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)

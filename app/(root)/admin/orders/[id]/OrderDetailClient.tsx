@@ -73,7 +73,7 @@ export function OrderDetailClient({ order: initialOrder }: OrderDetailClientProp
   // Keep in sync when navigating to a different order
   useEffect(() => {
     setOrder(initialOrder)
-  }, [initialOrder.id])
+  }, [initialOrder])
 
   const patch = async (body: Record<string, unknown>) => {
     setError(null)
@@ -195,6 +195,7 @@ export function OrderDetailClient({ order: initialOrder }: OrderDetailClientProp
                   key={item.id}
                   className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3 sm:flex-row sm:items-center"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- dynamic API SVG, fixed size */}
                   <img
                     src={`/api/qr-assets/${item.qrAsset.token}/qr-only.svg`}
                     alt=""

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,15 +41,18 @@ export function UsersClient({ initialUsers, initialSearchQuery }: UsersClientPro
   }, [initialUsers, users])
 
   // Update search query in URL
-  const updateSearch = (query: string) => {
-    const params = new URLSearchParams(searchParams?.toString() ?? '')
-    if (query.trim()) {
-      params.set("search", query.trim())
-    } else {
-      params.delete("search")
-    }
-    router.push(`/admin/users?${params.toString()}`)
-  }
+  const updateSearch = useCallback(
+    (query: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      if (query.trim()) {
+        params.set("search", query.trim())
+      } else {
+        params.delete("search")
+      }
+      router.push(`/admin/users?${params.toString()}`)
+    },
+    [router, searchParams]
+  )
 
   // Debounce search (only if search query actually changed from initial)
   useEffect(() => {
@@ -71,7 +74,7 @@ export function UsersClient({ initialUsers, initialSearchQuery }: UsersClientPro
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [searchQuery, initialSearchQuery])
+  }, [searchQuery, initialSearchQuery, updateSearch])
 
   // Sync users with initialUsers prop when it changes (from server re-render)
   useEffect(() => {

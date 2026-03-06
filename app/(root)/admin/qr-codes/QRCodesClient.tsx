@@ -133,8 +133,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
     } finally {
       setLoading(false)
     }
-  // showToast omitted from deps to avoid re-creating fetchList every render (useToast returns new ref each time)
-  }, [page, pageSize, statusFilter, venueFilter, batchIdFilter, reservedFilter, showOnlyScanned])
+  }, [page, pageSize, statusFilter, venueFilter, batchIdFilter, reservedFilter, showOnlyScanned, showToast])
 
   useEffect(() => {
     fetchList()
@@ -156,7 +155,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
     } finally {
       setManufacturingBatchesLoading(false)
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     fetchManufacturingBatches()

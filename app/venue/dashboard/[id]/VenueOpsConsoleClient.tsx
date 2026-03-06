@@ -2606,6 +2606,7 @@ export function VenueOpsConsoleClient({
           {printQRModal && (
             <div className="space-y-4">
               <div className="flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element -- dynamic API SVG */}
                 <img
                   src={`/api/qr-assets/${printQRModal.token}/qr-only.svg`}
                   alt="QR preview"
@@ -2697,6 +2698,7 @@ export function VenueOpsConsoleClient({
                         key={item.id}
                         className="flex items-center gap-3 rounded-md border bg-muted/30 p-2 text-sm"
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic API SVG */}
                         <img
                           src={`/api/qr-assets/${item.qrAsset.token}/qr-only.svg`}
                           alt=""

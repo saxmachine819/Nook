@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Dialog,
   DialogContent,
@@ -48,16 +48,7 @@ export function UserDetailModal({ userId, open, onOpenChange }: UserDetailModalP
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (open && userId) {
-      fetchUserDetail()
-    } else {
-      setUserDetail(null)
-      setError(null)
-    }
-  }, [open, userId])
-
-  const fetchUserDetail = async () => {
+  const fetchUserDetail = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
@@ -76,7 +67,16 @@ export function UserDetailModal({ userId, open, onOpenChange }: UserDetailModalP
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    if (open && userId) {
+      fetchUserDetail()
+    } else {
+      setUserDetail(null)
+      setError(null)
+    }
+  }, [open, userId, fetchUserDetail])
 
   const formatDate = (date: Date | string) => {
     const dateObj = typeof date === "string" ? new Date(date) : date

@@ -503,6 +503,7 @@ function HeroReservationCard({
     <Card className="overflow-hidden border-none shadow-xl rounded-[2.5rem] bg-white group">
       {imageUrl && (
         <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue image URL */}
           <img src={imageUrl} alt={reservation.venue.name} className="h-full w-full object-cover object-center" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           <div className="absolute bottom-6 left-6 right-6">
