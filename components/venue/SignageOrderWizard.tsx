@@ -315,11 +315,14 @@ export function SignageOrderWizard({ venue, open, onOpenChange, onSuccess }: Sig
                         <CardHeader className="p-3">
                           <div className="flex items-start gap-3">
                             {t.previewImageUrl && (
-                              <img
-                                src={t.previewImageUrl}
-                                alt=""
-                                className="h-12 w-12 rounded object-cover shrink-0"
-                              />
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element -- dynamic preview URL */}
+                                <img
+                                  src={t.previewImageUrl}
+                                  alt=""
+                                  className="h-12 w-12 rounded object-cover shrink-0"
+                                />
+                              </>
                             )}
                             <div className="min-w-0 flex-1">
                               <CardTitle className="text-sm">{t.name}</CardTitle>

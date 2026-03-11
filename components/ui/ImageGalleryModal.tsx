@@ -189,6 +189,7 @@ export function ImageGalleryModal({
               key={index}
               className="h-full w-full shrink-0 flex items-center justify-center p-4"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- gallery modal dynamic URLs */}
               <img
                 src={image}
                 alt={`Image ${index + 1} of ${images.length}`}

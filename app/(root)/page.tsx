@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { ExploreClient } from "./ExploreClient";
@@ -13,12 +14,19 @@ interface ExplorePageProps {
     seatCount?: string;
     bookingMode?: string;
     availableNow?: string;
+    view?: string;
+    from?: string;
   }>;
 }
 
 export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   const session = await auth();
   const params = await searchParams;
+
+  // Homepage (nooc.io /) goes to search; only show explore when ?view=map (e.g. "View on map" from search)
+  if (params?.view !== "map") {
+    redirect("/search");
+  }
 
   let favoritedVenueIds = new Set<string>();
 
@@ -68,10 +76,13 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     initialFilters.filters.dealsOnly ||
     initialFilters.filters.favoritesOnly;
 
+  const showBackToSearch = params?.view === "map" && params?.from === "search"
+
   return (
     <ExploreClient
       favoritedVenueIds={favoritedVenueIds}
       initialFilters={hasUrlFilters ? initialFilters : undefined}
+      showBackToSearch={showBackToSearch}
     />
   );
 }

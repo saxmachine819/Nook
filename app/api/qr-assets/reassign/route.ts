@@ -33,15 +33,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate resourceType
-    if (!["seat", "table", "area"].includes(resourceType)) {
+    if (!["seat", "table", "area", "venue"].includes(resourceType)) {
       return NextResponse.json(
-        { error: "resourceType must be 'seat', 'table', or 'area'" },
+        { error: "resourceType must be 'seat', 'table', 'area', or 'venue'" },
         { status: 400 }
       )
     }
 
-    // Validate resourceId (required for seat and table, optional for area)
-    if (resourceType !== "area" && !resourceId) {
+    // Validate resourceId (required for seat and table, optional for area, must be null for venue)
+    if (resourceType === "venue" && resourceId != null && resourceId !== "") {
+      return NextResponse.json(
+        { error: "resourceId must be empty for resourceType 'venue'" },
+        { status: 400 }
+      )
+    }
+    if (resourceType !== "area" && resourceType !== "venue" && !resourceId) {
       return NextResponse.json(
         { error: `resourceId is required for resourceType '${resourceType}'` },
         { status: 400 }
@@ -97,7 +103,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify resource exists and belongs to venue (if not area)
+    // For venue: enforce one Venue QR per venue (dashboard shows a single slot)
+    if (resourceType === "venue") {
+      const existingVenueQr = await prisma.qRAsset.findFirst({
+        where: {
+          venueId,
+          status: "ACTIVE",
+          resourceType: "venue",
+          resourceId: null,
+          id: { not: qrAsset.id },
+        },
+        select: { id: true },
+      })
+      if (existingVenueQr) {
+        return NextResponse.json(
+          {
+            error:
+              "This venue already has a Venue QR (Register / Front Window) assigned. Retire it from the venue dashboard first.",
+          },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Verify resource exists and belongs to venue (if not area and not venue)
     if (resourceType === "seat" && resourceId) {
       const seat = await prisma.seat.findUnique({
         where: { id: resourceId },
@@ -147,7 +176,7 @@ export async function POST(request: NextRequest) {
         )
       }
     }
-    // For "area", no validation needed (just a string identifier)
+    // For "area", no validation needed (just a string identifier). For "venue", no resourceId.
 
     // Update QR asset (reassign)
     const activatedBy = session.user?.id ?? session.user?.email ?? null
@@ -156,7 +185,7 @@ export async function POST(request: NextRequest) {
       data: {
         venueId,
         resourceType,
-        resourceId: resourceId || null,
+        resourceId: resourceType === "venue" ? null : (resourceId || null),
         activatedAt: new Date(),
         activatedBy,
       },

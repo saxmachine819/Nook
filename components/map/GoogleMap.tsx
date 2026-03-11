@@ -35,14 +35,15 @@ export function GoogleMap({ venues }: GoogleMapProps) {
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-  // Debug: Log component mount
+  // Debug: Log component mount (intentionally empty deps - run once)
   useEffect(() => {
-    console.error("🗺️ GOOGLE MAP COMPONENT MOUNTED", { 
-      hasApiKey: !!apiKey, 
+    console.error("🗺️ GOOGLE MAP COMPONENT MOUNTED", {
+      hasApiKey: !!apiKey,
       apiKey: apiKey ? `${apiKey.substring(0, 10)}...` : "MISSING",
       venuesCount: venues.length,
-      hasMapRef: !!mapRef.current 
+      hasMapRef: !!mapRef.current
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debug log on mount only
   }, [])
 
   // Load Google Maps script
@@ -120,6 +121,7 @@ export function GoogleMap({ venues }: GoogleMapProps) {
     return () => {
       console.log("🧹 Cleaning up map component")
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeMap is stable; run when apiKey is set
   }, [apiKey])
 
   // Update markers when venues change
@@ -128,6 +130,7 @@ export function GoogleMap({ venues }: GoogleMapProps) {
       console.log("🔄 Venues changed, updating markers...", venues.length)
       addMarkersToMap(mapInstanceRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- addMarkersToMap reads venues from closure; only re-run when venues change
   }, [venues])
 
   const addMarkersToMap = (map: any) => {

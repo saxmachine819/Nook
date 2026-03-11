@@ -32,6 +32,7 @@
     "@stripe/stripe-js": "^8.7.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/react-query": "^5.90.20",
+    "archiver": "^7.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.19",
@@ -53,9 +54,11 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
+    "mini-css-extract-plugin": "^2.7.6",
     "@tanstack/react-query-devtools": "^5.91.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/archiver": "^7.0.0",
     "@types/node": "^20.14.0",
     "@types/pdfkit": "^0.17.4",
     "@types/qrcode": "^1.5.6",

@@ -5,34 +5,19 @@ import { formatDealBadgeSummary } from "@/lib/deal-utils"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 import { batchGetCanonicalVenueHours, getOpenStatus } from "@/lib/hours"
 
-const DEBUG_LOG = (payload: { location: string; message: string; data?: Record<string, unknown>; hypothesisId?: string }) => {
-  fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: "debug-session" }),
-  }).catch(() => {})
-}
-
-export const dynamic = "force-dynamic"
+export const revalidate = 30
 
 export async function GET(request: Request) {
-  console.log("🔍 /api/venues/search route called")
   try {
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:entry", message: "GET search started", hypothesisId: "H2" })
-    // #endregion
-    // Get session for favorite state fetching
     const session = await auth()
-    
     const { searchParams } = new URL(request.url)
-    console.log("📋 Search params:", Object.fromEntries(searchParams.entries()))
+
     const north = searchParams.get("north")
     const south = searchParams.get("south")
     const east = searchParams.get("east")
     const west = searchParams.get("west")
     const q = searchParams.get("q")?.trim() || ""
-    
-    // Filter parameters
+
     const tagsParam = searchParams.get("tags")
     const tags = tagsParam ? tagsParam.split(",").filter(Boolean) : []
     const priceMin = searchParams.get("priceMin")
@@ -66,35 +51,19 @@ export async function GET(request: Request) {
       const eastNum = parseFloat(east)
       const westNum = parseFloat(west)
 
-      if (
-        !isNaN(northNum) &&
-        !isNaN(southNum) &&
-        !isNaN(eastNum) &&
-        !isNaN(westNum) &&
-        northNum > southNum &&
-        eastNum > westNum
-      ) {
+      if (!isNaN(northNum) && !isNaN(southNum) && !isNaN(eastNum) && !isNaN(westNum) && northNum > southNum && eastNum > westNum) {
         boundsValid = true
         parsedBounds = { north: northNum, south: southNum, east: eastNum, west: westNum }
       } else {
-        return NextResponse.json(
-          { error: "Invalid map bounds provided." },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: "Invalid map bounds provided" }, { status: 400 })
       }
-    }
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Explore API] bounds", { hasBounds: boundsValid, parsedBounds })
     }
 
     const now = new Date()
     const horizonEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000)
 
-    // Build where clause
     const whereClause: any = {}
 
-    // Add bounds filter only when no text query (text search = full DB; area/initial = bounded)
     if (boundsValid && parsedBounds && q.length === 0) {
       whereClause.latitude = {
         gte: parsedBounds.south,
@@ -106,32 +75,22 @@ export async function GET(request: Request) {
       }
     }
 
-    // Add text search filter if query provided
     if (q.length > 0) {
       const searchConditions: any[] = [
         { name: { contains: q, mode: "insensitive" as const } },
         { address: { contains: q, mode: "insensitive" as const } },
+        { city: { contains: q, mode: "insensitive" as const } },
+        { neighborhood: { contains: q, mode: "insensitive" as const } },
       ]
-
-      // Add city and neighborhood if they exist
-      if (q.length > 0) {
-        searchConditions.push({ city: { contains: q, mode: "insensitive" as const } })
-        searchConditions.push({ neighborhood: { contains: q, mode: "insensitive" as const } })
-      }
-
-      // For tags array search, we'll filter in JavaScript after fetching
-      // Prisma doesn't have great array contains with case-insensitive matching
       whereClause.OR = searchConditions
     }
 
-    // Add tags filter (hasSome - match any selected tag)
     if (tags.length > 0) {
       whereClause.tags = {
         hasSome: tags,
       }
     }
 
-    // Add price filter (using venue.hourlySeatPrice as "starting at" price)
     if (priceMinNum !== null && !isNaN(priceMinNum)) {
       whereClause.hourlySeatPrice = {
         ...(whereClause.hourlySeatPrice || {}),
@@ -145,41 +104,29 @@ export async function GET(request: Request) {
       }
     }
 
-    // Add dealsOnly filter
     if (dealsOnly) {
-      // Filter venues that have at least one active deal
       whereClause.deals = {
-        some: { 
-          isActive: true 
-        }
+        some: {
+          isActive: true,
+        },
       }
-      console.log("✅ Applied dealsOnly filter to whereClause:", JSON.stringify(whereClause.deals))
     }
 
-    // Add favoritesOnly filter (only if user is authenticated)
     if (favoritesOnly && session?.user?.id) {
       whereClause.favoriteVenues = {
         some: {
           userId: session.user.id,
         },
       }
-      console.log("✅ Applied favoritesOnly filter to whereClause")
     } else if (favoritesOnly && !session?.user?.id) {
-      // If favoritesOnly is requested but user is not signed in, return empty results
       return NextResponse.json({ venues: [], favoritedVenueIds: [] })
     }
 
-    // Only show APPROVED venues in search results
     whereClause.onboardingStatus = "APPROVED"
-    // Exclude soft-deleted and paused venues from Explore
     whereClause.status = { not: "DELETED" }
     whereClause.pausedAt = null
 
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:beforeFindMany", message: "before prisma.venue.findMany", hypothesisId: "H2" })
-    // #endregion
-    // Query venues with filters
-    let venues = await prisma.venue.findMany({
+    const venues = await prisma.venue.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       include: {
         tables: {
@@ -189,11 +136,8 @@ export async function GET(request: Request) {
         },
         deals: {
           where: { isActive: true },
-          orderBy: [
-            { featured: 'desc' },
-            { createdAt: 'desc' }
-          ],
-          take: 1, // Only need the primary deal
+          orderBy: [{ featured: "desc" }, { createdAt: "desc" }],
+          take: 1,
         },
         venueHours: {
           orderBy: {
@@ -201,23 +145,16 @@ export async function GET(request: Request) {
           },
         },
       } as any,
-      take: 100, // Limit results
+      take: 100,
       orderBy: q.length > 0 ? { name: "asc" } : { createdAt: "desc" },
     })
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:afterFindMany", message: "after findMany", data: { venueCount: venues.length, firstId: venues[0]?.id }, hypothesisId: "H2" })
-    // #endregion
-    
-    if (dealsOnly) {
-      console.log(`📊 Found ${venues.length} venues with deals filter applied`)
-    }
 
-    // Filter by tags if query provided (case-insensitive)
+    let filteredVenues = venues
+
     if (q.length > 0) {
       const queryLower = q.toLowerCase()
-      venues = venues.filter((venue) => {
-        // Check if already matched by other fields
-        const matchedByOtherFields = 
+      filteredVenues = filteredVenues.filter((venue) => {
+        const matchedByOtherFields =
           venue.name.toLowerCase().includes(queryLower) ||
           venue.address?.toLowerCase().includes(queryLower) ||
           venue.city?.toLowerCase().includes(queryLower) ||
@@ -225,7 +162,6 @@ export async function GET(request: Request) {
 
         if (matchedByOtherFields) return true
 
-        // Check tags array
         if (Array.isArray(venue.tags) && venue.tags.length > 0) {
           return venue.tags.some((tag: string) => tag.toLowerCase().includes(queryLower))
         }
@@ -234,11 +170,9 @@ export async function GET(request: Request) {
       })
     }
 
-    // Apply seat count filter (requires calculating capacity)
     if (seatCount !== null && !isNaN(seatCount) && seatCount > 0) {
-      venues = venues.filter((venue) => {
+      filteredVenues = filteredVenues.filter((venue) => {
         const venueWithTables = venue as any
-        // Calculate total capacity
         const capacity = venueWithTables.tables.reduce((sum: number, table: any) => {
           if (table.seats.length > 0) {
             return sum + table.seats.length
@@ -249,17 +183,13 @@ export async function GET(request: Request) {
       })
     }
 
-    // Apply booking mode filter (multiple modes can be selected)
     if (bookingModes.length > 0) {
-      venues = venues.filter((venue) => {
+      filteredVenues = filteredVenues.filter((venue) => {
         const venueWithTables = venue as any
-        // Check if venue matches any of the selected booking modes
         return bookingModes.some((mode) => {
           if (mode === "communal") {
-            // Check if venue has any communal tables
             return venueWithTables.tables.some((table: any) => table.isCommunal === true)
           } else if (mode === "full-table") {
-            // Check if venue has any group booking mode tables
             return venueWithTables.tables.some((table: any) => table.bookingMode === "group")
           }
           return false
@@ -267,7 +197,7 @@ export async function GET(request: Request) {
       })
     }
 
-    const venueIds = venues.map((v) => v.id)
+    const venueIds = filteredVenues.map((v) => v.id)
 
     const reservations = venueIds.length
       ? await prisma.reservation.findMany({
@@ -304,7 +234,6 @@ export async function GET(request: Request) {
       return acc
     }, {})
 
-    // Helper function to round up to next 15 minutes
     function roundUpToNext15Minutes(date: Date): Date {
       const result = new Date(date)
       const minutes = result.getMinutes()
@@ -319,34 +248,20 @@ export async function GET(request: Request) {
       return result
     }
 
-    // Resolve open status for each venue using batch loading (eliminates N+1 queries)
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:beforeBatchHours", message: "before batchGetCanonicalVenueHours", data: { venueCount: venues.length }, hypothesisId: "H1,H5" })
-    // #endregion
     const hoursMap = await batchGetCanonicalVenueHours(venueIds)
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:afterBatchHours", message: "after batchGetCanonicalVenueHours", data: { hoursMapSize: hoursMap.size }, hypothesisId: "H1,H5" })
-    // #endregion
 
-    let venuesWithOpenStatus = venues.map((venue) => {
+    let venuesWithOpenStatus = filteredVenues.map((venue) => {
       try {
         const canonical = hoursMap.get(venue.id) ?? null
         const openStatus = canonical ? getOpenStatus(canonical, now) : null
         return { venue, openStatus, timezone: canonical?.timezone ?? null }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // #region agent log
-        DEBUG_LOG({ location: "search/route.ts:mapCatch", message: "hours catch", data: { venueId: venue.id, error: msg }, hypothesisId: "H1,H5" })
-        // #endregion
-        console.error("[Explore API] hours for venue", venue.id, err)
+        console.error("[Explore API] hours for venue", venue.id, msg)
         return { venue, openStatus: null, timezone: null }
       }
     })
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:afterHoursMap", message: "after hours mapping", data: { count: venuesWithOpenStatus.length }, hypothesisId: "H1" })
-    // #endregion
 
-    // Apply "Available Now" filter if requested
     if (availableNow) {
       venuesWithOpenStatus = venuesWithOpenStatus.filter(({ venue, openStatus }) => {
         if (!openStatus?.isOpen) return false
@@ -371,25 +286,16 @@ export async function GET(request: Request) {
       })
     }
 
-    // Format venues for client
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:beforeFormat", message: "before formattedVenues.map", data: { inputCount: venuesWithOpenStatus.length }, hypothesisId: "H3" })
-    // #endregion
-    const formattedVenues = venuesWithOpenStatus.map(({ venue, openStatus, timezone }, idx) => {
+    const formattedVenues = venuesWithOpenStatus.map(({ venue, openStatus, timezone }) => {
       const venueWithIncludes = venue as any
-      // #region agent log
-      if (idx === 0) DEBUG_LOG({ location: "search/route.ts:formatFirst", message: "format first venue", data: { venueId: venue.id, hasTables: !!venueWithIncludes.tables }, hypothesisId: "H3" })
-      // #endregion
-      // Calculate capacity: use actual Seat records if available, otherwise fall back to table.seatCount
+
       const capacity = venueWithIncludes.tables.reduce((sum: number, table: any) => {
         if (table.seats.length > 0) {
           return sum + table.seats.length
         }
-        // Fallback for older venues without Seat records
         return sum + (table.seatCount || 0)
       }, 0)
-      
-      // Cheapest price: min of (all seat prices from individual tables, all table total prices from group tables)
+
       const allSeatPrices = venueWithIncludes.tables
         .filter((t: any) => t.bookingMode === "individual")
         .flatMap((t: any) => (t.seats || []).map((s: any) => s.pricePerHour).filter((p: number) => p != null && p > 0))
@@ -400,7 +306,7 @@ export async function GET(request: Request) {
       const fallback = venue.hourlySeatPrice != null && venue.hourlySeatPrice > 0 ? venue.hourlySeatPrice : 0
       const minPrice = candidatePrices.length > 0 ? Math.min(...candidatePrices) : fallback
       const maxPrice = candidatePrices.length > 0 ? Math.max(...candidatePrices) : fallback
-      
+
       const venueReservations = reservationsByVenue[venue.id] || []
       const availabilityLabel = computeAvailabilityLabel(
         capacity,
@@ -409,35 +315,28 @@ export async function GET(request: Request) {
         { timeZone: timezone ?? undefined }
       )
 
-      // Parse and combine image URLs
-      // heroImageUrl takes priority as first image, then imageUrls array
       let imageUrls: string[] = []
-      
-      // Parse imageUrls JSON field (can be array, string, or null)
       if (venueWithIncludes.imageUrls) {
         if (Array.isArray(venueWithIncludes.imageUrls)) {
-          imageUrls = venueWithIncludes.imageUrls.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
-        } else if (typeof venueWithIncludes.imageUrls === 'string') {
+          imageUrls = venueWithIncludes.imageUrls.filter((url: any): url is string => typeof url === "string" && url.length > 0)
+        } else if (typeof venueWithIncludes.imageUrls === "string") {
           try {
             const parsed = JSON.parse(venueWithIncludes.imageUrls)
             if (Array.isArray(parsed)) {
-              imageUrls = parsed.filter((url: any): url is string => typeof url === 'string' && url.length > 0)
+              imageUrls = parsed.filter((url: any): url is string => typeof url === "string" && url.length > 0)
             }
           } catch {
-            // If parsing fails, treat as single URL string
             if (venueWithIncludes.imageUrls.length > 0) {
               imageUrls = [venueWithIncludes.imageUrls]
             }
           }
         }
       }
-      
-      // Add heroImageUrl as first image if it exists
-      if (venueWithIncludes.heroImageUrl && typeof venueWithIncludes.heroImageUrl === 'string' && venueWithIncludes.heroImageUrl.length > 0) {
+
+      if (venueWithIncludes.heroImageUrl && typeof venueWithIncludes.heroImageUrl === "string" && venueWithIncludes.heroImageUrl.length > 0) {
         imageUrls = [venueWithIncludes.heroImageUrl, ...imageUrls.filter((url: string) => url !== venueWithIncludes.heroImageUrl)]
       }
 
-      // Compute dealBadge: use featured deal if exists, otherwise first active deal
       let dealBadge = null
       try {
         const primaryDeal = venueWithIncludes.deals && Array.isArray(venueWithIncludes.deals) && venueWithIncludes.deals.length > 0 ? venueWithIncludes.deals[0] : null
@@ -451,7 +350,6 @@ export async function GET(request: Request) {
         }
       } catch (error) {
         console.error("Error computing dealBadge for venue:", venue.id, error)
-        dealBadge = null
       }
 
       return {
@@ -475,17 +373,17 @@ export async function GET(request: Request) {
           : null,
         imageUrls,
         dealBadge,
+        timezone,
       }
     })
 
-    // Fetch favorite states for all venues in batch
     let favoritedVenueIds: string[] = []
     if (session?.user?.id && formattedVenues.length > 0) {
-      const venueIds = formattedVenues.map((v) => v.id)
+      const venueIdsList = formattedVenues.map((v) => v.id)
       const favorites = await prisma.favoriteVenue.findMany({
         where: {
           userId: session.user.id,
-          venueId: { in: venueIds },
+          venueId: { in: venueIdsList },
         },
         select: {
           venueId: true,
@@ -494,29 +392,15 @@ export async function GET(request: Request) {
       favoritedVenueIds = favorites.map((f: { venueId: string }) => f.venueId)
     }
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Explore API] response", {
-        count: formattedVenues.length,
-        first3Ids: formattedVenues.slice(0, 3).map((v) => v.id),
-      })
-    }
-
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:beforeJson", message: "before NextResponse.json", data: { formattedCount: formattedVenues.length }, hypothesisId: "H4" })
-    // #endregion
-    return NextResponse.json({ 
+    return NextResponse.json({
       venues: formattedVenues,
       favoritedVenueIds,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
-    const stack = error instanceof Error ? error.stack : undefined
-    // #region agent log
-    DEBUG_LOG({ location: "search/route.ts:catch", message: "outer catch", data: { error: message, stack: (stack ?? "").slice(0, 200) }, hypothesisId: "H1,H2,H3,H4,H5" })
-    // #endregion
-    console.error("Error searching venues by bounds:", message, stack ?? "")
+    console.error("Error searching venues by bounds:", message)
     return NextResponse.json(
-      { error: "Failed to search venues. Please try again." },
+      { error: "Failed to search venues. Please try again" },
       { status: 500 }
     )
   }

@@ -360,6 +360,7 @@ export function ResultsDrawer({
                     >
                       {venue.imageUrls && venue.imageUrls.length > 0 && (
                         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue image URL */}
                           <img
                             src={venue.imageUrls[0]}
                             alt={venue.name}

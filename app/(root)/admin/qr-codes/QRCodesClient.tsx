@@ -20,6 +20,8 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Loader2,
+  Package,
 } from "lucide-react"
 
 interface VenueOption {
@@ -32,6 +34,7 @@ interface QRAssetItem {
   token: string
   status: string
   batchId: string | null
+  batchLabel: string | null
   venueId: string | null
   venue: { id: string; name: string } | null
   resourceType: string | null
@@ -61,6 +64,15 @@ interface ListResponse {
   pageSize: number
 }
 
+interface ManufacturingBatchItem {
+  batchId: string
+  batchLabel: string | null
+  createdAt: string
+  tokenCount: number
+  reservedCount: number
+  generated: boolean
+}
+
 interface QRCodesClientProps {
   venues: VenueOption[]
 }
@@ -76,6 +88,9 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
   const [createLoading, setCreateLoading] = useState(false)
   const [checkInventoryLoading, setCheckInventoryLoading] = useState(false)
   const [batchCount, setBatchCount] = useState(100)
+  const [manufacturingCount, setManufacturingCount] = useState(100)
+  const [manufacturingLabel, setManufacturingLabel] = useState("")
+  const [manufacturingLoading, setManufacturingLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState("")
   const [venueFilter, setVenueFilter] = useState("")
   const [batchIdFilter, setBatchIdFilter] = useState("")
@@ -84,9 +99,12 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
   const [retiringToken, setRetiringToken] = useState<string | null>(null)
   const [reassignModal, setReassignModal] = useState<{ token: string } | null>(null)
   const [reassignVenueId, setReassignVenueId] = useState("")
-  const [reassignResourceType, setReassignResourceType] = useState<"seat" | "table" | "area">("seat")
+  const [reassignResourceType, setReassignResourceType] = useState<"seat" | "table" | "area" | "venue">("seat")
   const [reassignResourceId, setReassignResourceId] = useState("")
   const [reassignLoading, setReassignLoading] = useState(false)
+  const [manufacturingBatches, setManufacturingBatches] = useState<ManufacturingBatchItem[]>([])
+  const [manufacturingBatchesLoading, setManufacturingBatchesLoading] = useState(true)
+  const [generatingBatchId, setGeneratingBatchId] = useState<string | null>(null)
 
   const fetchList = useCallback(async () => {
     setLoading(true)
@@ -115,12 +133,33 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
     } finally {
       setLoading(false)
     }
-  // showToast omitted from deps to avoid re-creating fetchList every render (useToast returns new ref each time)
-  }, [page, pageSize, statusFilter, venueFilter, batchIdFilter, reservedFilter, showOnlyScanned])
+  }, [page, pageSize, statusFilter, venueFilter, batchIdFilter, reservedFilter, showOnlyScanned, showToast])
 
   useEffect(() => {
     fetchList()
   }, [fetchList])
+
+  const fetchManufacturingBatches = useCallback(async () => {
+    setManufacturingBatchesLoading(true)
+    try {
+      const res = await fetch("/api/admin/qr-assets/manufacturing-batches")
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        showToast(data.error || "Failed to load manufacturing batches", "error")
+        return
+      }
+      const data = await res.json()
+      setManufacturingBatches(data.batches ?? [])
+    } catch {
+      showToast("Failed to load manufacturing batches", "error")
+    } finally {
+      setManufacturingBatchesLoading(false)
+    }
+  }, [showToast])
+
+  useEffect(() => {
+    fetchManufacturingBatches()
+  }, [fetchManufacturingBatches])
 
   const handleCreateBatch = async () => {
     const count = Math.min(5000, Math.max(10, batchCount))
@@ -143,6 +182,61 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
       showToast("Failed to create batch", "error")
     } finally {
       setCreateLoading(false)
+    }
+  }
+
+  const handleCreateManufacturingBatch = async () => {
+    const count = Math.min(5000, Math.max(10, manufacturingCount))
+    setManufacturingCount(count)
+    const idempotencyKey = crypto.randomUUID()
+    setManufacturingLoading(true)
+    try {
+      const res = await fetch("/api/admin/qr-assets/manufacturing-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          count,
+          label: manufacturingLabel.trim() || undefined,
+          idempotencyKey,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to create manufacturing batch", "error")
+        return
+      }
+      const msg = data.batchLabel
+        ? `Created ${data.created} QR assets (batch: ${data.batchLabel})`
+        : `Created ${data.created} QR assets (batch ${data.batchId})`
+      showToast(msg, "success")
+      fetchList()
+      fetchManufacturingBatches()
+    } catch {
+      showToast("Failed to create manufacturing batch", "error")
+    } finally {
+      setManufacturingLoading(false)
+    }
+  }
+
+  const handleGenerateForBatch = async (batchId: string) => {
+    setGeneratingBatchId(batchId)
+    try {
+      const res = await fetch(
+        `/api/admin/qr-assets/batch/${encodeURIComponent(batchId)}/manufacturing-pack/generate`,
+        { method: "POST" }
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToast(data.error || "Failed to generate assets", "error")
+        return
+      }
+      showToast(`Generated ${data.generated} PNGs, skipped ${data.skipped} existing.`, "success")
+      fetchManufacturingBatches()
+      fetchList()
+    } catch {
+      showToast("Failed to generate manufacturing assets", "error")
+    } finally {
+      setGeneratingBatchId(null)
     }
   }
 
@@ -199,7 +293,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
       showToast("Venue and resource type required", "error")
       return
     }
-    if (reassignResourceType !== "area" && !reassignResourceId.trim()) {
+    if (reassignResourceType !== "area" && reassignResourceType !== "venue" && !reassignResourceId.trim()) {
       showToast("Resource ID required for seat/table", "error")
       return
     }
@@ -212,7 +306,10 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
           token: reassignModal.token,
           venueId: reassignVenueId,
           resourceType: reassignResourceType,
-          resourceId: reassignResourceType === "area" ? null : reassignResourceId.trim() || null,
+          resourceId:
+            reassignResourceType === "area" || reassignResourceType === "venue"
+              ? null
+              : reassignResourceId.trim() || null,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -223,7 +320,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
       showToast("Reassigned", "success")
       setReassignModal(null)
       setReassignVenueId("")
-      setReassignResourceType("seat")
+      setReassignResourceType("seat" as const)
       setReassignResourceId("")
       fetchList()
     } catch {
@@ -332,6 +429,141 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
         </CardContent>
       </Card>
 
+      {/* Create manufacturing batch */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Create Manufacturing Batch</CardTitle>
+          <CardDescription>
+            Create a batch of QR codes reserved for table tent manufacturers. Tokens stay unregistered and are not used by venue Print QR allocation (10–5000).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Count</label>
+              <input
+                type="number"
+                min={10}
+                max={5000}
+                value={manufacturingCount}
+                onChange={(e) => setManufacturingCount(Math.min(5000, Math.max(10, parseInt(e.target.value, 10) || 10)))}
+                className="w-28 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <Button
+              onClick={handleCreateManufacturingBatch}
+              disabled={manufacturingLoading}
+            >
+              {manufacturingLoading ? "Creating…" : "Create Manufacturing Batch"}
+            </Button>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Label / notes (optional)</label>
+            <input
+              type="text"
+              placeholder="e.g. Coffee Fest March 2026 - Table Tents"
+              value={manufacturingLabel}
+              onChange={(e) => setManufacturingLabel(e.target.value)}
+              className="w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Manufacturing Batches */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Manufacturing Batches</CardTitle>
+          <CardDescription>
+            Batches created for table tent manufacturers. Generate PNGs and download the pack per batch.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          {manufacturingBatchesLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : manufacturingBatches.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No manufacturing batches yet. Create one above.
+            </p>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2 font-medium">Batch ID</th>
+                  <th className="text-left p-2 font-medium">Label / notes</th>
+                  <th className="text-left p-2 font-medium">Created</th>
+                  <th className="text-left p-2 font-medium">Token count</th>
+                  <th className="text-left p-2 font-medium">Reserved count</th>
+                  <th className="text-left p-2 font-medium">Generated</th>
+                  <th className="text-left p-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {manufacturingBatches.map((b) => (
+                  <tr key={b.batchId} className="border-b last:border-0">
+                    <td className="p-2">
+                      <a
+                        href={`/admin/qr-assets/batch/${encodeURIComponent(b.batchId)}`}
+                        className="font-mono text-xs text-primary hover:underline"
+                      >
+                        {b.batchId}
+                      </a>
+                    </td>
+                    <td className="p-2 text-muted-foreground">{b.batchLabel ?? "—"}</td>
+                    <td className="p-2 text-muted-foreground">{formatDate(b.createdAt)}</td>
+                    <td className="p-2">{b.tokenCount}</td>
+                    <td className="p-2">{b.reservedCount}</td>
+                    <td className="p-2">{b.generated ? "Generated" : "Not generated"}</td>
+                    <td className="p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {!b.generated && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={generatingBatchId !== null}
+                            onClick={() => handleGenerateForBatch(b.batchId)}
+                          >
+                            {generatingBatchId === b.batchId ? (
+                              <>
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                                Generating…
+                              </>
+                            ) : (
+                              "Generate assets"
+                            )}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" asChild>
+                          <a
+                            href={`/api/admin/qr-assets/batch/${encodeURIComponent(b.batchId)}/manufacturing-pack`}
+                            download={`manufacturing-pack-${b.batchId}.zip`}
+                          >
+                            <Download className="mr-1 h-3 w-3" />
+                            Download pack
+                          </a>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setBatchIdFilter(b.batchId)
+                            setReservedFilter("reserved")
+                            setPage(1)
+                          }}
+                        >
+                          <Package className="mr-1 h-3 w-3" />
+                          View tokens
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Filters */}
       <Card>
         <CardHeader>
@@ -421,7 +653,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
                   <tr className="border-b">
                     <th className="text-left p-2 font-medium">Token</th>
                     <th className="text-left p-2 font-medium">Status</th>
-                    <th className="text-left p-2 font-medium">Batch ID</th>
+                    <th className="text-left p-2 font-medium">Batch</th>
                     <th className="text-left p-2 font-medium">Venue</th>
                     <th className="text-left p-2 font-medium">Resource</th>
                     <th className="text-left p-2 font-medium">Reserved order</th>
@@ -442,7 +674,21 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
                           <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Reserved</span>
                         )}
                       </td>
-                      <td className="p-2 text-muted-foreground">{a.batchId ?? "—"}</td>
+                      <td className="p-2 text-muted-foreground">
+                        {a.batchId ? (
+                          <a
+                            href={`/admin/qr-assets/batch/${encodeURIComponent(a.batchId)}`}
+                            className="font-mono text-xs text-primary hover:underline"
+                          >
+                            {a.batchId}
+                          </a>
+                        ) : (
+                          <span className="font-mono text-xs">—</span>
+                        )}
+                        {a.batchLabel && (
+                          <span className="ml-1.5 block text-xs text-muted-foreground">{a.batchLabel}</span>
+                        )}
+                      </td>
                       <td className="p-2">{a.venue?.name ?? "—"}</td>
                       <td className="p-2">{a.resourceType ?? "—"} {a.resourceId ? `/ ${a.resourceId}` : ""}</td>
                       <td className="p-2 text-muted-foreground">{a.reservedOrderId ?? "—"}</td>
@@ -485,7 +731,7 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
                                 onClick={() => {
                                   setReassignModal({ token: a.token })
                                   setReassignVenueId(a.venueId ?? "")
-                                  setReassignResourceType((a.resourceType as "seat" | "table" | "area") || "seat")
+                                  setReassignResourceType((a.resourceType as "seat" | "table" | "area" | "venue") || "seat")
                                   setReassignResourceId(a.resourceId ?? "")
                                 }}
                               >
@@ -554,15 +800,16 @@ export function QRCodesClient({ venues }: QRCodesClientProps) {
               <label className="mb-1 block text-sm font-medium">Resource type</label>
               <select
                 value={reassignResourceType}
-                onChange={(e) => setReassignResourceType(e.target.value as "seat" | "table" | "area")}
+                onChange={(e) => setReassignResourceType(e.target.value as "seat" | "table" | "area" | "venue")}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="seat">Seat</option>
                 <option value="table">Table</option>
                 <option value="area">Area</option>
+                <option value="venue">Venue QR (Register / Front Window)</option>
               </select>
             </div>
-            {reassignResourceType !== "area" && (
+            {reassignResourceType !== "area" && reassignResourceType !== "venue" && (
               <div>
                 <label className="mb-1 block text-sm font-medium">Resource ID</label>
                 <input

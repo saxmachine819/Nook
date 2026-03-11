@@ -64,14 +64,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Application fee = Nook's 20% commission on the subtotal + the full 3% processing fee.
-    // This means the venue always receives exactly 80% of the subtotal.
-    // Example: $10 subtotal → customer pays $10.30 → Nook keeps $2.30 (20% + $0.30 fee) → venue gets $8.00
+    // Application fee = Nooc's 20% commission on the subtotal only.
+    // The customer pays subtotal + processing fee; the full charge goes to the venue's Stripe account.
+    // Stripe deducts their fee from the venue's side; we take only 20% so the venue keeps 80% of the subtotal.
+    // Example: $3 subtotal → customer pays $3.40 → Stripe deducts ~$0.40 → venue has $3.00 → we take $0.60 → venue gets $2.40 (80%).
     const nookCommission = Math.round(pricing.subtotalCents * COMMISSION_RATE)
-    const applicationFeeAmount = Math.max(
-      0,
-      Math.min(pricing.amountCents, nookCommission + pricing.processingFeeCents)
-    )
+    const applicationFeeAmount = Math.max(0, Math.min(pricing.amountCents, nookCommission))
 
     // Create reservation first (with pending status until payment completes)
     const firstSeat = context.seats[0]

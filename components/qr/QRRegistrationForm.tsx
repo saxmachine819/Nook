@@ -49,8 +49,8 @@ export function QRRegistrationForm({
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(
     initialVenueId || (venues.length === 1 ? venues[0].id : null)
   )
-  const [resourceType, setResourceType] = useState<"seat" | "table" | "area" | null>(
-    (initialResourceType as "seat" | "table" | "area") || null
+  const [resourceType, setResourceType] = useState<"seat" | "table" | "area" | "venue" | null>(
+    (initialResourceType as "seat" | "table" | "area" | "venue") || null
   )
   const [resourceId, setResourceId] = useState<string>(initialResourceId || "")
   const [seats, setSeats] = useState<Seat[]>([])
@@ -86,9 +86,11 @@ export function QRRegistrationForm({
         setTables(data.tables || [])
         
         // If we have prefilled values and venue matches, restore them after resources load
-        if (initialVenueId === selectedVenueId && initialResourceType && initialResourceId) {
-          setResourceType(initialResourceType as "seat" | "table" | "area")
-          setResourceId(initialResourceId)
+        if (initialVenueId === selectedVenueId && initialResourceType) {
+          setResourceType(initialResourceType as "seat" | "table" | "area" | "venue")
+          if (initialResourceType !== "venue" && initialResourceId) {
+            setResourceId(initialResourceId)
+          }
         }
       })
       .catch((err) => {
@@ -117,7 +119,7 @@ export function QRRegistrationForm({
       return
     }
 
-    if (resourceType !== "area" && !resourceId) {
+    if (resourceType !== "area" && resourceType !== "venue" && !resourceId) {
       setError("Please select a resource")
       return
     }
@@ -142,7 +144,7 @@ export function QRRegistrationForm({
           token,
           venueId: selectedVenueId,
           resourceType,
-          resourceId: resourceId.trim() || null,
+          resourceId: resourceType === "venue" ? null : (resourceId.trim() || null),
         }),
       })
 
@@ -168,7 +170,11 @@ export function QRRegistrationForm({
   const canSubmit =
     selectedVenueId &&
     resourceType &&
-    (resourceType === "area" ? resourceId.trim() : resourceId)
+    (resourceType === "venue"
+      ? true
+      : resourceType === "area"
+        ? resourceId.trim()
+        : resourceId)
 
   return (
     <>
@@ -204,13 +210,18 @@ export function QRRegistrationForm({
 
         {/* Resource Type Selection */}
         <div className="space-y-2">
-          <Label htmlFor="resourceType">Resource Type</Label>
+          <Label htmlFor="resourceType" className="flex items-center gap-2">
+            Resource Type
+            {selectedVenueId && isLoadingResources && (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+            )}
+          </Label>
           <select
             id="resourceType"
             value={resourceType || ""}
             onChange={(e) =>
               setResourceType(
-                (e.target.value as "seat" | "table" | "area") || null
+                (e.target.value as "seat" | "table" | "area" | "venue") || null
               )
             }
             disabled={!selectedVenueId || isLoadingResources}
@@ -221,11 +232,12 @@ export function QRRegistrationForm({
             <option value="seat">Seat</option>
             <option value="table">Table</option>
             <option value="area">Area</option>
+            <option value="venue">Venue QR (Register / Front Window)</option>
           </select>
         </div>
 
-        {/* Resource Selection */}
-        {resourceType && selectedVenueId && (
+        {/* Resource Selection (not shown for venue - venue-level QR has no resource) */}
+        {resourceType && resourceType !== "venue" && selectedVenueId && (
           <div className="space-y-2">
             <Label htmlFor="resource">
               {resourceType === "seat"
@@ -271,13 +283,13 @@ export function QRRegistrationForm({
               </select>
               {resourceType === "seat" && seats.length === 0 && tables.length > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  This venue only has group tables. Please select "Table" as the resource type.
+                  This venue only has group tables. Please select &quot;Table&quot; as the resource type.
                 </p>
               )}
               {resourceType === "table" &&
                 tables.filter((table) => (table.bookingMode || "individual") === "group").length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    This venue only has individual tables. Please select "Seat" as the resource type.
+                    This venue only has individual tables. Please select &quot;Seat&quot; as the resource type.
                   </p>
                 )}
               </>

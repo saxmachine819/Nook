@@ -3,10 +3,11 @@ generator client {
 }
 
 // DATABASE_URL: use pooler (port 6543) for app runtime; add ?pgbouncer=true and ?sslmode=require if needed.
-// If "prisma migrate" hangs, add DIRECT_URL in .env with the direct connection (port 5432) — see docs/PRISMA_MIGRATE_SUPABASE.md
+// For Supabase: set DIRECT_URL in .env to the direct connection (port 5432) so migrate does not hang — see docs/PRISMA_MIGRATE_SUPABASE.md
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum DealType {
@@ -512,6 +513,8 @@ model QRAsset {
   token            String        @unique
   status           QRAssetStatus @default(UNREGISTERED)
   batchId          String?
+  batchLabel       String?       @map("batch_label") // Optional label for manufacturing batches
+  manufacturingPng Bytes?       @map("manufacturing_png") // Plain B&W PNG for manufacturing pack (admin)
   reservedOrderId  String? // Reserved for an order or short-lived allocation claim
   venueId          String?
   resourceType     String? // 'seat' | 'table' | 'area'
@@ -671,4 +674,12 @@ model WebhookEvent {
   @@index([eventType])
   @@index([createdAt])
   @@map("webhook_events")
+}
+
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
 }

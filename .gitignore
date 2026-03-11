@@ -37,6 +37,9 @@ next-env.d.ts
 
 # prisma
 /prisma/migrations
+
+# large demo asset (optional: host on CDN for production)
+public/demo-video.mov
 # Environment files with secrets
 .env.bak
 ENV_SETUP.txt

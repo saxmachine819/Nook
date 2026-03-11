@@ -208,3 +208,23 @@ export async function generateQROnlySVG(options: QROnlyOptions): Promise<string>
 
   return svg
 }
+
+/**
+ * Plain black-and-white PNG for manufacturing pack only.
+ * No logo, no text — just the QR code. Encodes qrUrl (e.g. https://domain/q/<token>).
+ */
+export async function generatePlainManufacturingPNG(options: {
+  qrUrl: string
+  size?: number
+  margin?: number
+}): Promise<Buffer> {
+  const { qrUrl, size = 512, margin = 4 } = options
+  const buffer = await QRCode.toBuffer(qrUrl, {
+    type: "png",
+    errorCorrectionLevel: "M",
+    margin,
+    width: size,
+    color: { dark: "#000000", light: "#FFFFFF" },
+  })
+  return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as ArrayBuffer)
+}

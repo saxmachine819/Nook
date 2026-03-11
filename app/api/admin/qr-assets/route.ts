@@ -112,6 +112,7 @@ export async function GET(request: NextRequest) {
       token: a.token,
       status: a.status,
       batchId: a.batchId,
+      batchLabel: a.batchLabel ?? null,
       venueId: a.venueId,
       venue: a.venue ? { id: a.venue.id, name: a.venue.name } : null,
       resourceType: a.resourceType,

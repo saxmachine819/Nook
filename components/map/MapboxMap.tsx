@@ -566,7 +566,8 @@ export function MapboxMap({
           if (!pinImageLoadedRef.current) {
             try {
               const pinImageDataUrl = createPinImage()
-              // Create Image object from data URL
+              // Create Image object from data URL (Mapbox addImage requires HTMLImageElement)
+              // eslint-disable-next-line @next/next/no-img-element -- Mapbox addImage() requires HTMLImageElement
               const img = new Image()
               img.onload = () => {
                 try {
@@ -955,7 +956,8 @@ export function MapboxMap({
       setMapError("Failed to initialize map")
       setIsLoading(false)
     }
-  }, [accessToken]) // Map should only initialize once when accessToken is available, not when userLocation changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- map init once when accessToken is available; other deps intentionally excluded
+  }, [accessToken])
 
 
   const addUserLocationMarker = (map: mapboxgl.Map, location: { lat: number; lng: number }) => {
@@ -1322,6 +1324,7 @@ export function MapboxMap({
     if (pinImageLoadedRef.current && !mapRef.current.hasImage("venue-pin")) {
       try {
         const pinImageDataUrl = createPinImage()
+        // eslint-disable-next-line @next/next/no-img-element -- Mapbox addImage() requires HTMLImageElement
         const img = new Image()
         img.onload = () => {
           if (mapRef.current) {
@@ -1564,6 +1567,7 @@ export function MapboxMap({
         console.log("🗺️ Skipping source initialization during area search (first time)")
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeVenuesSource and others read via refs; deps chosen to avoid over-running
   }, [venues, isLoading, shouldFitBounds, onBoundsFitted, didAreaSearch])
 
   const handleSearchArea = () => {
@@ -1663,6 +1667,7 @@ export function MapboxMap({
       })
       hasAutoCenteredRef.current = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isSearchingArea read via ref; avoid re-running on every search state change
   }, [userLocation, locationState, isLoading])
 
   if (mapError) {

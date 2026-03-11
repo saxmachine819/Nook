@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { DemoVideo } from "@/components/demo/DemoVideo"
 import { Button } from "@/components/ui/button"
 import { Calendar, Coffee } from "lucide-react"
 
@@ -13,7 +14,6 @@ const CAL_EMBED_URL = "https://cal.com/jordan-cohen-3zchhq?embed=true"
 export default function DemoPage() {
   // Optional: set NEXT_PUBLIC_DEMO_PHONE in .env for a real number
   const demoPhone = process.env.NEXT_PUBLIC_DEMO_PHONE ?? null
-
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.06),transparent_50%)]" />
@@ -30,10 +30,10 @@ export default function DemoPage() {
           </p>
         </header>
 
-        {/* Video placeholder */}
+        {/* Demo video — URL fetched at request time via /api/demo-video-url so env works without rebuild */}
         <section className="mb-14">
-          <div className="aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden bg-muted border border-border flex items-center justify-center">
-            <p className="text-muted-foreground font-medium">Video coming soon</p>
+          <div className="aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden border border-border bg-black">
+            <DemoVideo />
           </div>
         </section>
 

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import React, { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,15 @@ import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } 
 import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
 import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
+import {
+  storePendingReservation,
+  getPendingReservation,
+  clearPendingReservation,
+  storeBookingUIState,
+  getBookingUIState,
+  clearBookingUIState
+} from "@/lib/pending-reservation"
+import { recoverPendingReservation } from "@/app/actions/recover-pending-reservation"
 
 /** Set to true to show CTA overlay on hero; false for in-card sticky CTA. */
 const CTA_OVER_HERO = false
@@ -183,7 +192,6 @@ export function VenueBookingWidget({
 
     setIsLoadingAvailability(true)
     setError(null)
-    // Don't clear selections if we have a preselected resource - wait to see if it's available
     if (!preselectedSeatId && !preselectedTableId) {
       setSelectedSeatId(null)
       setSelectedSeatIds([])
@@ -318,7 +326,7 @@ export function VenueBookingWidget({
     } finally {
       setIsLoadingAvailability(false)
     }
-  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast])
+  }, [date, startTime, durationHours, venueId, seatCount, preselectedSeatId, preselectedTableId, showToast, canonicalHours?.timezone])
 
   // Track if we've initialized date/time to prevent re-initialization
   const hasInitialized = useRef(false)
@@ -330,72 +338,60 @@ export function VenueBookingWidget({
     handleCheckAvailabilityRef.current = handleCheckAvailability
   }, [handleCheckAvailability])
 
-  // Restore booking data from URL params if present (after sign-in)
-  useEffect(() => {
-    const bookingParam = searchParams?.get("booking")
-    if (bookingParam) {
-      try {
-        const bookingData = JSON.parse(decodeURIComponent(bookingParam))
-        if (bookingData.date) setDate(bookingData.date)
-        if (bookingData.startTime) {
-          const timeStr = String(bookingData.startTime).padStart(4, "0")
-          if (timeStr.length === 4) {
-            setStartTime(`${timeStr.slice(0, 2)}:${timeStr.slice(2)}`)
-          }
-        }
-        if (bookingData.duration !== undefined) {
-          setDurationHours(bookingData.duration)
-        }
-        if (bookingData.seatId) setSelectedSeatId(bookingData.seatId)
-        if (bookingData.tableId) setSelectedGroupTableId(bookingData.tableId)
-        const seatsParam = searchParams?.get("seats")
-        if (seatsParam) {
-          const parsed = parseInt(seatsParam, 10)
-          if (parsed > 0) setSeatCount(parsed)
-        }
+  useLayoutEffect(() => {
+    if (hasInitialized.current) return
 
-        const newUrl = new URL(window.location.href)
-        newUrl.searchParams.delete("booking")
-        router.replace(newUrl.pathname + newUrl.search, { scroll: false })
+    const savedState = getBookingUIState(venueId)
+    if (savedState) {
+      setDate(savedState.date)
+      setStartTime(savedState.startTime)
+      setDurationHours(savedState.durationHours)
+      setSelectedSeatId(savedState.selectedSeatId)
+      setSelectedSeatIds(savedState.selectedSeatIds)
+      setSelectedGroupTableId(savedState.selectedGroupTableId)
+      setAvailableSeats(savedState.availableSeats)
+      setUnavailableSeats(savedState.unavailableSeats)
+      setAvailableSeatGroups(savedState.availableSeatGroups)
+      setAvailableGroupTables(savedState.availableGroupTables)
+      setUnavailableGroupTables(savedState.unavailableGroupTables)
+      setUnavailableSeatIds(new Set(savedState.unavailableSeatIds))
 
-        // Auto-fetch availability if time is set
-        if (bookingData.date && bookingData.startTime) {
-          setTimeout(() => {
-            handleCheckAvailabilityRef.current()
-          }, 200)
+      if (savedState.selectedGroupTableId) {
+        const selectedTable = savedState.availableGroupTables.find((t: any) => t.id === savedState.selectedGroupTableId)
+        if (selectedTable) {
+          setSeatCount(selectedTable.seatCount)
+        } else {
+          setSeatCount(savedState.seatCount)
         }
-        hasInitialized.current = true
-      } catch (e) {
-        console.error("Failed to parse booking data:", e)
+      } else {
+        setSeatCount(savedState.seatCount)
       }
+
+      hasInitialized.current = true
+      showToast("Restored your booking", "success")
       return
     }
 
-    // Default initialization - only run once on mount
-    if (!hasInitialized.current && date === "" && startTime === "") {
-      const now = new Date()
-      const rounded = roundUpToNext15Minutes(now)
+    const now = new Date()
+    const rounded = roundUpToNext15Minutes(now)
 
-      const yyyy = rounded.getFullYear()
-      const mm = String(rounded.getMonth() + 1).padStart(2, "0")
-      const dd = String(rounded.getDate()).padStart(2, "0")
-      const hh = String(rounded.getHours()).padStart(2, "0")
-      const min = String(rounded.getMinutes()).padStart(2, "0")
+    const yyyy = rounded.getFullYear()
+    const mm = String(rounded.getMonth() + 1).padStart(2, "0")
+    const dd = String(rounded.getDate()).padStart(2, "0")
+    const hh = String(rounded.getHours()).padStart(2, "0")
+    const min = String(rounded.getMinutes()).padStart(2, "0")
 
-      setDate(`${yyyy}-${mm}-${dd}`)
-      setStartTime(`${hh}:${min}`)
-      hasInitialized.current = true
+    setDate(`${yyyy}-${mm}-${dd}`)
+    setStartTime(`${hh}:${min}`)
+    hasInitialized.current = true
 
-      // Auto-trigger availability check after setting date/time
-      // Also trigger if we have preselected resource from QR code
-      setTimeout(() => {
-        if (!hasAutoChecked.current && !searchParams?.get("booking")) {
-          hasAutoChecked.current = true
-          handleCheckAvailabilityRef.current()
-        }
-      }, 150)
-    }
-  }, [searchParams, router, preselectedSeatId, preselectedTableId])
+    setTimeout(() => {
+      if (!hasAutoChecked.current) {
+        hasAutoChecked.current = true
+        handleCheckAvailabilityRef.current()
+      }
+    }, 150)
+  }, [venueId, showToast])
 
   // Group available and unavailable seats by table
   const seatsByTable = useMemo(() => {
@@ -464,26 +460,7 @@ export function VenueBookingWidget({
     return 0
   }, [selectedSeatId, selectedSeatIds, selectedGroupTableId, durationHours, availableSeats, availableGroupTables, seatCount])
 
-  // Callback URL for sign-in so user returns to this exact booking (date, time, seats, seat/table)
-  const signInCallbackUrl = useMemo(() => {
-    const params = new URLSearchParams()
-    params.set("seats", String(seatCount))
-    const booking: Record<string, unknown> = {
-      date,
-      duration: durationHours,
-    }
-    if (startTime) {
-      const [h, m] = startTime.split(":").map((part) => parseInt(part, 10))
-      if (!Number.isNaN(h) && !Number.isNaN(m)) {
-        booking.startTime = h * 100 + m
-      }
-    }
-    if (selectedSeatId) booking.seatId = selectedSeatId
-    if (selectedGroupTableId) booking.tableId = selectedGroupTableId
-    params.set("booking", encodeURIComponent(JSON.stringify(booking)))
-    const q = params.toString()
-    return pathname + (q ? `?${q}` : "")
-  }, [pathname, date, startTime, durationHours, seatCount, selectedSeatId, selectedGroupTableId])
+  const signInCallbackUrl = pathname
 
   const canCheckAvailability = date && startTime && !isLoadingAvailability;
 
@@ -582,11 +559,34 @@ export function VenueBookingWidget({
 
       if (!response.ok) {
         if (response.status === 401) {
+          storePendingReservation({
+            venueId,
+            startAt: requestBody.startAt,
+            endAt: requestBody.endAt,
+            seatId: requestBody.seatId,
+            tableId: requestBody.tableId,
+            seatCount: requestBody.seatCount,
+          })
+          storeBookingUIState({
+            venueId,
+            date,
+            startTime,
+            durationHours,
+            seatCount,
+            selectedSeatId,
+            selectedSeatIds,
+            selectedGroupTableId,
+            availableSeats,
+            unavailableSeats,
+            availableSeatGroups,
+            availableGroupTables,
+            unavailableGroupTables,
+            unavailableSeatIds: Array.from(unavailableSeatIds),
+          })
           pendingReservationPayloadRef.current = requestBody
           setShowSignInModal(true)
           return
         }
-        // Handle PAST_TIME error code specifically
         if (data?.code === "PAST_TIME") {
           setError(data.error || "This date/time is in the past. Please select a current or future time.")
         } else {
@@ -616,36 +616,59 @@ export function VenueBookingWidget({
     setIsSubmitting(true)
     setError(null)
     try {
-      const response = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const result = await recoverPendingReservation({
+        venueId: payload.venueId,
+        startAt: payload.startAt,
+        endAt: payload.endAt,
+        seatId: payload.seatId,
+        tableId: payload.tableId,
+        seatCount: payload.seatCount,
       })
-      const data = await response.json().catch(() => null)
-      if (!response.ok) {
-        if (data?.code === "PAST_TIME") {
-          setError(data.error || "This date/time is in the past. Please select a current or future time.")
-        } else {
-          setError(data?.error || "Failed to create reservation. Please try again.")
-        }
+
+      if (!result.success) {
+        setError(result.error || "Failed to recover reservation. Please try again.")
         pendingReservationPayloadRef.current = null
+        clearPendingReservation()
         return
       }
-      pendingReservationPayloadRef.current = null
-      if (!data?.url) {
+
+      if (!result.checkoutUrl) {
         setError("Unable to start checkout. Please try again.")
+        pendingReservationPayloadRef.current = null
+        clearPendingReservation()
         return
       }
-      showToast("Redirecting to secure checkout...", "success")
-      window.location.assign(data.url)
-    } catch (err) {
-      console.error("Error creating reservation:", err)
-      setError("Something went wrong while creating your reservation.")
+
+      clearPendingReservation()
+      clearBookingUIState()
       pendingReservationPayloadRef.current = null
+      showToast("Redirecting to secure checkout...", "success")
+      window.location.assign(result.checkoutUrl)
+    } catch (err) {
+      console.error("Error recovering reservation:", err)
+      setError("Something went wrong while recovering your reservation.")
+      pendingReservationPayloadRef.current = null
+      clearPendingReservation()
+      clearBookingUIState()
     } finally {
       setIsSubmitting(false)
     }
-  }, [pathname, showToast])
+  }, [showToast])
+
+  useEffect(() => {
+    const pending = getPendingReservation()
+    if (pending && pending.venueId === venueId) {
+      pendingReservationPayloadRef.current = {
+        venueId: pending.venueId,
+        startAt: pending.startAt,
+        endAt: pending.endAt,
+        seatId: pending.seatId,
+        tableId: pending.tableId,
+        seatCount: pending.seatCount,
+      }
+      retryReservation()
+    }
+  }, [venueId, retryReservation])
 
   // Helper function to render single seat selection
   const renderSingleSeatSelection = () => {
@@ -699,6 +722,7 @@ export function VenueBookingWidget({
                           openImageModal(table.imageUrls, 0)
                         }}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -785,6 +809,7 @@ export function VenueBookingWidget({
                   >
                     {table.imageUrls.length > 0 && (
                       <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -867,6 +892,7 @@ export function VenueBookingWidget({
                             openImageModal(table.imageUrls as string[], 0)
                           }}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                           <img
                             src={table.imageUrls[0]}
                             alt={table.name || "Table"}
@@ -1038,6 +1064,7 @@ export function VenueBookingWidget({
                           openImageModal(table.imageUrls, 0)
                         }}
                       >
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -1124,6 +1151,7 @@ export function VenueBookingWidget({
                   >
                     {table.imageUrls.length > 0 && (
                       <div className="mb-2 aspect-video w-full overflow-hidden rounded-md">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                         <img
                           src={table.imageUrls[0]}
                           alt={table.name || "Table"}
@@ -1202,6 +1230,7 @@ export function VenueBookingWidget({
                               openImageModal(table.imageUrls as string[], 0)
                             }}
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic table image URL */}
                             <img
                               src={table.imageUrls[0]}
                               alt={table.name || "Table"}
@@ -1308,15 +1337,20 @@ export function VenueBookingWidget({
               <span>${totalPrice.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                Processing fee
-                <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
-              </span>
-              <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+              <span>Processing fee</span>
+              <span>+${(
+                totalPrice > 0
+                  ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100).toFixed(2)
+                  : "0.00"
+              )}</span>
             </div>
             <div className="flex items-center justify-between border-t pt-1.5">
               <span className="text-xs font-semibold">Total</span>
-              <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+              <span className="text-sm font-bold">${(
+                totalPrice > 0
+                  ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100).toFixed(2)
+                  : "0.00"
+              )}</span>
             </div>
           </div>
           <Button
@@ -1329,7 +1363,7 @@ export function VenueBookingWidget({
             {isSubmitting ? "Starting checkout..." : "Proceed to checkout"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            You'll complete payment securely before the booking is confirmed.
+            You&apos;ll complete payment securely before the booking is confirmed.
           </p>
         </div>
       </div>
@@ -1484,35 +1518,6 @@ export function VenueBookingWidget({
             </h3>
 
             {renderSeatSelection()}
-            {/* Price estimate */}
-            {((seatCount === 1 && (selectedSeatId || selectedGroupTableId)) ||
-              (seatCount > 1 && (selectedSeatIds.length > 0 || selectedGroupTableId))) && (
-                <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Subtotal ({durationHours}h)</span>
-                    <span>${totalPrice.toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      Processing fee
-                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">Stripe</span>
-                    </span>
-                    <span>+${(
-                      totalPrice > 0
-                        ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100)
-                        : 0
-                    ).toFixed(2)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-1.5">
-                    <span className="text-xs font-semibold">Total</span>
-                    <span className="text-sm font-bold">${(
-                      totalPrice > 0
-                        ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100)
-                        : 0
-                    ).toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
           </div>
         )}
 
@@ -1520,7 +1525,7 @@ export function VenueBookingWidget({
 
         {!hasAvailabilityData && (
           <p className="text-xs text-muted-foreground">
-            Select a date and time, then click "Check availability" to see available seats.
+            Select a date and time, then click &quot;Check availability&quot; to see available seats.
           </p>
         )}
 
@@ -1534,15 +1539,20 @@ export function VenueBookingWidget({
                   <span>${totalPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    Processing fee
-                    <span className="rounded bg-muted px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider">3%</span>
-                  </span>
-                  <span>+${(totalPrice * 0.03).toFixed(2)}</span>
+                  <span>Processing fee</span>
+                  <span>+${(
+                    totalPrice > 0
+                      ? ((Math.round((Math.round(totalPrice * 100) + 30) / 0.971) - Math.round(totalPrice * 100)) / 100).toFixed(2)
+                      : "0.00"
+                  )}</span>
                 </div>
                 <div className="flex items-center justify-between border-t pt-1.5">
                   <span className="text-xs font-semibold">Total</span>
-                  <span className="text-sm font-bold">${(totalPrice * 1.03).toFixed(2)}</span>
+                  <span className="text-sm font-bold">${(
+                    totalPrice > 0
+                      ? (Math.round((Math.round(totalPrice * 100) + 30) / 0.971) / 100).toFixed(2)
+                      : "0.00"
+                  )}</span>
                 </div>
               </div>
               <Button
@@ -1575,8 +1585,9 @@ export function VenueBookingWidget({
           if (!open) pendingReservationPayloadRef.current = null
         }}
         onSignInSuccess={retryReservation}
+        hasPendingReservation={pendingReservationPayloadRef.current !== null}
         description="Sign in to complete your reservation."
-        callbackUrl={signInCallbackUrl}
+        callbackUrl={signInCallbackUrl ?? undefined}
       />
 
       <EmbeddedCheckoutModal

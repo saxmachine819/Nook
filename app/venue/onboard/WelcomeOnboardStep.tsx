@@ -44,7 +44,7 @@ export function WelcomeOnboardStep() {
           Welcome to Nooc
         </h2>
         <p className="mt-1.5 text-muted-foreground">
-          Let's get your space ready for reservations.
+          Let&apos;s get your space ready for reservations.
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export function WelcomeOnboardStep() {
           <p className="text-sm text-muted-foreground">
             Nooc helps people reserve a seat or table to work — and helps venues
             earn passive, predictable revenue. The setup takes just a
-            few minutes. We'll guide you step by step.
+            few minutes. We&apos;ll guide you step by step.
           </p>
         </CardContent>
       </Card>

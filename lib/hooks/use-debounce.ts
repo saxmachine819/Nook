@@ -19,17 +19,18 @@ export function useDebounce<T extends (...args: Parameters<T>) => void>(
     }
   }, [])
 
-  return useCallback(
-    ((...args: Parameters<T>) => {
+  const fn = useCallback(
+    (...args: Parameters<T>) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
       }
       timeoutRef.current = setTimeout(() => {
         callbackRef.current(...args)
       }, delay)
-    }) as T,
+    },
     [delay]
   )
+  return fn as T
 }
 
 export function useDebouncedValue<T>(value: T, delay: number): T {
