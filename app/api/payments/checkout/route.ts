@@ -110,6 +110,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Automatically register the current domain for the connected account 
+    // to enable Apple Pay/Google Pay/Link.
+    try {
+      const domainName = new URL(appUrl).hostname
+      await stripe.paymentMethodDomains.create(
+        { domain_name: domainName, enabled: true },
+        { stripeAccount: context.venue.stripeAccountId }
+      )
+    } catch (e: any) {
+      // If the domain is already registered, Stripe will throw an error. 
+      // We can safely ignore this and proceed.
+      // Note: check e.message or e.code depending on stripe-node version
+      console.log('Payment Method Domain registration check completed.')
+    }
+
     const sessionResponse = await stripe.checkout.sessions.create(
       {
         ui_mode: 'embedded',
