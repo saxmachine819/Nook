@@ -14,6 +14,7 @@ import { roundUpToNext15Minutes, getLocalDateString, computeAvailabilityLabel } 
 import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
 import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
+import { storeEmbeddedCheckout } from "@/lib/checkout-session-storage"
 import {
   storePendingReservation,
   getPendingReservation,
@@ -620,6 +621,16 @@ export function VenueBookingWidget({
 
       if (!data?.clientSecret) {
         setError("Unable to start checkout. Please try again.")
+        return
+      }
+
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        storeEmbeddedCheckout({
+          clientSecret: data.clientSecret,
+          stripeAccountId: data.stripeAccountId ?? null,
+          returnTo: window.location.pathname + window.location.search,
+        })
+        router.push("/checkout")
         return
       }
 
