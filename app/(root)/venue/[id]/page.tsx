@@ -261,24 +261,24 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                 openStatus={openStatus}
                 weeklyFormatted={weeklyFormatted}
               />
-              {(venue.tags ?? []).length > 0 && (
-                <div className="absolute top-6 right-6 z-10 flex flex-wrap gap-2 justify-end max-w-[60%]">
-                  {(venue.tags ?? []).map((tag: string) => (
-                    <span
-                      key={tag}
-                      className="rounded-full glass px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
               <div
                 id="venue-hero-cta-portal"
                 className="absolute inset-0 hidden items-end justify-start pointer-events-none lg:flex p-6"
                 aria-hidden="true"
               />
             </div>
+            {(venue.tags ?? []).length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+                {(venue.tags ?? []).map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="rounded-full border border-primary/10 bg-primary/5 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary/70"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-6 lg:row-start-2 lg:col-start-2 lg:min-h-0 lg:overflow-hidden lg:rounded-3xl lg:flex lg:flex-col">
@@ -361,7 +361,19 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
           </div>
 
           {/* Rules: row 3, below hero and Reserve */}
-          <div className="space-y-6 pt-2 lg:row-start-3 lg:col-start-1">
+          <div className="space-y-6 pt-0 lg:row-start-3 lg:col-start-1 lg:-mt-4">
+              {(venue.tags ?? []).length > 0 && (
+                <div className="hidden flex-wrap gap-2 lg:flex">
+                  {(venue.tags ?? []).map((tag: string) => (
+                    <span
+                      key={tag}
+                      className="rounded-full border border-primary/10 bg-primary/5 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary/70"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="h-px w-full bg-border/50" />
               {venue.rulesText && (
                 <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">

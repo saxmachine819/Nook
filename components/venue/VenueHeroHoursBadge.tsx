@@ -21,9 +21,9 @@ export function VenueHeroHoursBadge({
   }
 
   return (
-    <div className="absolute top-6 left-6 z-10">
+    <div className="absolute top-3 left-3 z-10 sm:top-6 sm:left-6">
       <details className="group relative">
-        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full glass px-4 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg transition-opacity hover:opacity-90 [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-full glass px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-primary shadow-lg transition-opacity hover:opacity-90 sm:px-4 sm:py-2 [&::-webkit-details-marker]:hidden">
           <span>{statusLabel ?? "Hours"}</span>
           {hasHours && (
             <span className="flex-shrink-0 transition-transform duration-200 group-open:rotate-180">
