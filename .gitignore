@@ -38,7 +38,7 @@ next-env.d.ts
 # prisma
 /prisma/migrations
 
-# large demo asset (optional: host on CDN for production)
+# large Resolve export (use public/demo-video.mp4 web encode instead)
 public/demo-video.mov
 # Environment files with secrets
 .env.bak

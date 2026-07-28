@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import {
-  getDefaultDemoVideoUrl,
+  DEFAULT_DEMO_VIDEO_URL,
   resolveDemoVideoUrl,
 } from "@/lib/demo-video"
 
@@ -18,10 +18,8 @@ export async function GET() {
   const raw =
     process.env.DEMO_VIDEO_URL ?? process.env.NEXT_PUBLIC_DEMO_VIDEO_URL
   const url = resolveDemoVideoUrl(raw)
-  const defaultUrl = getDefaultDemoVideoUrl()
   return NextResponse.json({
-    url: url || null,
-    // Helpful when diagnosing stale Vercel env still pointing at .mov
-    usingDefault: Boolean(url) && url === defaultUrl,
+    url,
+    usingDefault: url === DEFAULT_DEMO_VIDEO_URL,
   })
 }

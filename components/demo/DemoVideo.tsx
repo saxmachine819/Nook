@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import {
-  getDefaultDemoVideoUrl,
+  DEFAULT_DEMO_VIDEO_URL,
   resolveDemoVideoUrl,
 } from "@/lib/demo-video"
 
@@ -20,13 +20,9 @@ export function DemoVideo() {
         return res.json() as Promise<{ url: string | null }>
       })
       .then((data) => {
-        const resolved = resolveDemoVideoUrl(data?.url)
-        setUrl(resolved || null)
+        setUrl(resolveDemoVideoUrl(data?.url))
       })
-      .catch(() => {
-        const fallback = getDefaultDemoVideoUrl()
-        setUrl(fallback || null)
-      })
+      .catch(() => setUrl(DEFAULT_DEMO_VIDEO_URL))
       .finally(() => setLoading(false))
   }, [])
 

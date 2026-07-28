@@ -1,11 +1,15 @@
 # Demo video on production (/demo)
 
-**Current default:** a web-friendly H.264/AAC **MP4** hosted on Supabase Storage at
-`{NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/public-assets/demo/nooc-demo.mp4`.
+**Current default:** `public/demo-video.mp4` — a web-friendly H.264/AAC MP4 with
+`faststart`, served same-origin at `/demo-video.mp4`.
 
-The app (`lib/demo-video.ts`) builds that URL unless `DEMO_VIDEO_URL` / `NEXT_PUBLIC_DEMO_VIDEO_URL` points at another **non-`.mov`** HTTPS URL. Legacy QuickTime `.mov` env values are ignored (they often fail in Chrome/Firefox on the hosted site).
+The app (`lib/demo-video.ts`) uses that path unless `DEMO_VIDEO_URL` /
+`NEXT_PUBLIC_DEMO_VIDEO_URL` points at another **non-`.mov`** HTTPS URL. Legacy
+QuickTime `.mov` env values are ignored (they often fail in Chrome/Firefox on
+the hosted site).
 
-The original Resolve export is ~62MB and is **gitignored** (`public/demo-video.mov`), so it does not get deployed with the app. Use one of the options below if you need to replace the asset.
+The original Resolve export is ~62MB and is **gitignored** (`public/demo-video.mov`).
+Use one of the options below if you need to replace the asset or host on a CDN.
 
 ---
 
