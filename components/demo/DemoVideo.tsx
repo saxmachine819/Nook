@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-
-const FALLBACK_DEMO_VIDEO_URL =
-  "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/2026-03-05_NoocDemo.mov"
+import {
+  getDefaultDemoVideoUrl,
+  resolveDemoVideoUrl,
+} from "@/lib/demo-video"
 
 const DEMO_VIDEO_POSTER_URL =
   "https://ustnxz2u6doufmes.public.blob.vercel-storage.com/Nooc_1080.png"
@@ -15,24 +16,17 @@ export function DemoVideo() {
   useEffect(() => {
     fetch("/api/demo-video-url")
       .then((res) => {
-        if (!res.ok) return { url: null }
+        if (!res.ok) return { url: null as string | null }
         return res.json() as Promise<{ url: string | null }>
       })
       .then((data) => {
-        const apiUrl = data?.url ?? null
-        if (apiUrl) {
-          setUrl(apiUrl)
-          return
-        }
-        // Local dev: fallback to file in public/ when API returns no URL
-        if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-          setUrl("/demo-video.mov")
-        } else {
-          // Staging/production: use known blob URL when API returns null (env not in runtime)
-          setUrl(FALLBACK_DEMO_VIDEO_URL)
-        }
+        const resolved = resolveDemoVideoUrl(data?.url)
+        setUrl(resolved || null)
       })
-      .catch(() => setUrl(null))
+      .catch(() => {
+        const fallback = getDefaultDemoVideoUrl()
+        setUrl(fallback || null)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -61,6 +55,7 @@ export function DemoVideo() {
       poster={DEMO_VIDEO_POSTER_URL}
       src={url}
     >
+      <source src={url} type="video/mp4" />
       Your browser does not support the video tag.
     </video>
   )
