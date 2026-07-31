@@ -139,12 +139,6 @@ export function VenueBookingWidget({
   const resourceTypeFromUrl = searchParams?.get("resourceType")
   const resourceIdFromUrl = searchParams?.get("resourceId")
 
-  // #region agent log
-  useEffect(() => {
-    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:mount", message: "URL params for preselection", data: { resourceTypeFromUrl, resourceIdFromUrl, fullUrl: typeof window !== "undefined" ? window.location.href : "" }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2" }) }).catch(() => { })
-  }, [resourceTypeFromUrl, resourceIdFromUrl])
-  // #endregion
-
   const [date, setDate] = useState<string>("")
   const [startTime, setStartTime] = useState<string>("")
   const [durationHours, setDurationHours] = useState<number>(2)
@@ -295,9 +289,6 @@ export function VenueBookingWidget({
       // Auto-select preselected seat/table if available
       if (preselectedSeatId) {
         const preselectedSeat = (data.availableSeats || []).find((s: AvailableSeat) => s.id === preselectedSeatId)
-        // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectSeat", message: "Preselection seat result", data: { preselectedSeatId, foundSeat: !!preselectedSeat, availableSeatIds: (data.availableSeats || []).map((s: AvailableSeat) => s.id).slice(0, 5) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => { })
-        // #endregion
         if (preselectedSeat) {
           setSelectedSeatId(preselectedSeatId)
           setSeatCount(1) // Individual seat selection
@@ -306,9 +297,6 @@ export function VenueBookingWidget({
       } else if (preselectedTableId) {
         const availableGroupTables = data.availableGroupTables || []
         const preselectedTable = availableGroupTables.find((t: AvailableGroupTable) => t.id === preselectedTableId)
-        // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "VenueBookingWidget:preselectTable", message: "Preselection table result", data: { preselectedTableId, foundTable: !!preselectedTable, availableGroupTablesCount: availableGroupTables.length, availableTableIds: availableGroupTables.map((t: AvailableGroupTable) => t.id).slice(0, 8), note: !preselectedTable ? "Table not in availableGroupTables (may be individual booking mode)" : null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => { })
-        // #endregion
         if (preselectedTable) {
           setSelectedGroupTableId(preselectedTableId)
           setSeatCount(preselectedTable.seatCount)
