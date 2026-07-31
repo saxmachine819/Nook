@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nooc",
+      "url": "http://localhost:3000"
+    },
+    {
+      "name": "nooc-email",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "email:dev"],
+      "port": 3001
+    }
+  ]
+}
