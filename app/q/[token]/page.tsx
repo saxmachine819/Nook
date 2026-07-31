@@ -50,9 +50,6 @@ export default async function QRScanPage({ params }: QRScanPageProps) {
       sessionId,
       userAgent,
     })
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "app/q/[token]/page.tsx:lookup", message: "QR lookup threw", data: { token: token?.slice(0, 8), err: String((error as Error)?.message) }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H4" }) }).catch(() => {})
-    // #endregion
     return <InvalidQRCodePage />
   }
 
@@ -65,9 +62,6 @@ export default async function QRScanPage({ params }: QRScanPageProps) {
       sessionId,
       userAgent,
     })
-    // #region agent log
-    fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "app/q/[token]/page.tsx:notFound", message: "QR asset not found", data: { tokenPrefix: token?.slice(0, 8), tokenLength: token?.length ?? 0 }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H4" }) }).catch(() => {})
-    // #endregion
     return <InvalidQRCodePage />
   }
 
@@ -96,10 +90,6 @@ export default async function QRScanPage({ params }: QRScanPageProps) {
     }
 
     case "ACTIVE": {
-      // #region agent log
-      fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "app/q/[token]/page.tsx:ACTIVE", message: "QR ACTIVE before redirect", data: { token: token?.slice(0, 8), status: qrAsset.status, venueId: qrAsset.venueId ?? null, resourceType: qrAsset.resourceType ?? null, resourceId: qrAsset.resourceId ?? null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1_H5" }) }).catch(() => {})
-      // #endregion
-
       // Check if user is venue admin for this QR's venue
       let showAdminPanel = false
       
@@ -127,10 +117,6 @@ export default async function QRScanPage({ params }: QRScanPageProps) {
         const redirectUrl = queryString
           ? `/venue/${qrAsset.venueId}?${queryString}`
           : `/venue/${qrAsset.venueId}`
-
-        // #region agent log
-        fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "app/q/[token]/page.tsx:redirectUrl", message: "Redirect URL built", data: { redirectUrl, hasResourceParams: !!(qrAsset.resourceType && qrAsset.resourceId), resourceType: qrAsset.resourceType ?? null, resourceId: qrAsset.resourceId ?? null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H1" }) }).catch(() => {})
-        // #endregion
 
         // If user is venue admin, show admin panel before redirect
         if (showAdminPanel) {
