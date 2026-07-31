@@ -5,6 +5,8 @@ import {
   ensureWalletDomainsCached,
   isApplePayReady,
   probeDomainAssociation,
+  requestHost,
+  resolveRequestDomains,
   resolveWalletDomains,
   summarizeWalletDomainReport,
 } from '@/lib/stripe-payment-method-domains'
@@ -111,6 +113,63 @@ describe('resolveWalletDomains', () => {
     } as any)
 
     expect(result.domains).toEqual(['www.nooc.io'])
+  })
+})
+
+describe('resolveRequestDomains', () => {
+  it('trusts a host that matches the configured domains', () => {
+    const domains = resolveRequestDomains('staging.nooc.io', {
+      STRIPE_PAYMENT_METHOD_DOMAINS: 'staging.nooc.io',
+    } as any)
+
+    expect(domains).toEqual(['staging.nooc.io'])
+  })
+
+  it('trusts the real host even when the configured app url is stale', () => {
+    const domains = resolveRequestDomains('www.nooc.io', {
+      NEXT_PUBLIC_APP_URL: 'https://nooc.io',
+    } as any)
+
+    expect(domains).toEqual(['www.nooc.io'])
+  })
+
+  it('rejects a host from another registrable domain', () => {
+    const domains = resolveRequestDomains('attacker.example.com', {
+      NEXT_PUBLIC_APP_URL: 'https://www.nooc.io',
+    } as any)
+
+    expect(domains).toEqual([])
+  })
+
+  it('rejects hosts Apple cannot verify', () => {
+    const domains = resolveRequestDomains('localhost:3000', {
+      NEXT_PUBLIC_APP_URL: 'https://www.nooc.io',
+    } as any)
+
+    expect(domains).toEqual([])
+  })
+
+  it('rejects any host when nothing is configured to compare against', () => {
+    const domains = resolveRequestDomains('www.nooc.io', {} as any)
+
+    expect(domains).toEqual([])
+  })
+})
+
+describe('requestHost', () => {
+  it('prefers the proxy header over the raw host', () => {
+    const headers = new Headers({
+      host: 'nook.vercel.app',
+      'x-forwarded-host': 'www.nooc.io',
+    })
+
+    expect(requestHost({ headers })).toBe('www.nooc.io')
+  })
+
+  it('falls back to the host header', () => {
+    const headers = new Headers({ host: 'staging.nooc.io' })
+
+    expect(requestHost({ headers })).toBe('staging.nooc.io')
   })
 })
 
@@ -279,6 +338,7 @@ describe('ensureWalletDomainsCached', () => {
     process.env.STRIPE_PAYMENT_METHOD_DOMAINS = 'www.nooc.io'
     clearWalletDomainCache()
     vi.mocked(stripe.paymentMethodDomains.list).mockReset()
+    vi.mocked(stripe.paymentMethodDomains.create).mockReset()
     vi.mocked(stripe.paymentMethodDomains.validate).mockReset()
   })
 
@@ -289,6 +349,55 @@ describe('ensureWalletDomainsCached', () => {
       process.env.STRIPE_PAYMENT_METHOD_DOMAINS = previous
     }
     clearWalletDomainCache()
+  })
+
+  it('registers the host serving the request rather than the configured domain', async () => {
+    process.env.STRIPE_PAYMENT_METHOD_DOMAINS = 'nook-ruddy.vercel.app'
+    vi.mocked(stripe.paymentMethodDomains.list).mockResolvedValue({ data: [] } as any)
+    vi.mocked(stripe.paymentMethodDomains.create).mockResolvedValue(
+      domainRecord({ domain_name: 'preview.vercel.app' }) as any
+    )
+
+    const report = await ensureWalletDomainsCached('acct_1', {
+      host: 'preview.vercel.app',
+    })
+
+    expect(stripe.paymentMethodDomains.create).toHaveBeenCalledWith(
+      { domain_name: 'preview.vercel.app', enabled: true },
+      { stripeAccount: 'acct_1' }
+    )
+    expect(report.domains.map((entry) => entry.domain)).toEqual(['preview.vercel.app'])
+  })
+
+  it('caches per host so two domains do not share a result', async () => {
+    process.env.STRIPE_PAYMENT_METHOD_DOMAINS = 'www.nooc.io,staging.nooc.io'
+    vi.mocked(stripe.paymentMethodDomains.list).mockResolvedValue({
+      data: [domainRecord({ domain_name: 'www.nooc.io' })],
+    } as any)
+
+    await ensureWalletDomainsCached('acct_1', { host: 'www.nooc.io' })
+    await ensureWalletDomainsCached('acct_1', { host: 'www.nooc.io' })
+    await ensureWalletDomainsCached('acct_1', { host: 'staging.nooc.io' })
+
+    expect(stripe.paymentMethodDomains.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('makes no Stripe calls for a host Apple cannot verify', async () => {
+    delete process.env.STRIPE_PAYMENT_METHOD_DOMAINS
+    const previousAppUrl = process.env.NEXT_PUBLIC_APP_URL
+    const previousAuthUrl = process.env.NEXTAUTH_URL
+    delete process.env.NEXT_PUBLIC_APP_URL
+    delete process.env.NEXTAUTH_URL
+
+    try {
+      const report = await ensureWalletDomainsCached('acct_1', { host: 'localhost:3000' })
+
+      expect(stripe.paymentMethodDomains.list).not.toHaveBeenCalled()
+      expect(report.domains).toEqual([])
+    } finally {
+      process.env.NEXT_PUBLIC_APP_URL = previousAppUrl
+      process.env.NEXTAUTH_URL = previousAuthUrl
+    }
   })
 
   it('skips the Stripe round trip once the account is verified', async () => {

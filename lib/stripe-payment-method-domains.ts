@@ -121,6 +121,41 @@ export function resolveWalletDomains(
   }
 }
 
+function registrableSuffix(host: string): string {
+  return host.split(".").slice(-2).join(".")
+}
+
+/**
+ * The domain a customer is actually on is the one Apple has to know about, and it beats
+ * the environment variables: a stale NEXT_PUBLIC_APP_URL is what left every account
+ * registered against an old preview URL instead of the real site.
+ *
+ * Only hosts sharing a registrable suffix with the configured URLs are accepted, so a
+ * forged Host header can't add arbitrary domains to a venue's Stripe account.
+ */
+export function resolveRequestDomains(
+  host: string | null | undefined,
+  env: NodeJS.ProcessEnv = process.env
+): string[] {
+  const requestHost = host ? normalizeHost(host) : null
+  if (!requestHost || !isVerifiableHost(requestHost)) return []
+
+  const configured = resolveWalletDomains(env).domains
+  if (configured.includes(requestHost)) return [requestHost]
+
+  const trusted = configured.some(
+    (domain) => registrableSuffix(domain) === registrableSuffix(requestHost)
+  )
+  return trusted ? [requestHost] : []
+}
+
+/** Reads the customer-facing host from a request, honouring the Vercel proxy header. */
+export function requestHost(request: {
+  headers: { get(name: string): string | null }
+}): string | null {
+  return request.headers.get("x-forwarded-host") ?? request.headers.get("host")
+}
+
 function toResult(
   domain: string,
   record: Stripe.PaymentMethodDomain,
@@ -218,25 +253,29 @@ const READY_CACHE_TTL_MS = 30 * 60 * 1000
 const readyCache = new Map<string, { report: WalletDomainReport; expiresAt: number }>()
 
 /**
- * Same as `ensureWalletDomains`, but skips the Stripe round trip when this instance
- * already saw the account fully verified. Checkout is latency sensitive and the venue
- * status route is polled, so only failures are retried.
+ * Same as `ensureWalletDomains`, but scoped to the host serving the request and skipping
+ * the Stripe round trip when this instance already saw that host verified. Checkout is
+ * latency sensitive and the venue status route is polled, so only failures are retried.
  */
 export async function ensureWalletDomainsCached(
   stripeAccountId: string,
-  options: { now?: number } = {}
+  options: { host?: string | null; now?: number } = {}
 ): Promise<WalletDomainReport> {
   const now = options.now ?? Date.now()
-  const cached = readyCache.get(stripeAccountId)
+  const requested = resolveRequestDomains(options.host)
+  const domains = requested.length > 0 ? requested : resolveWalletDomains().domains
+  const cacheKey = `${stripeAccountId}:${domains.join(",")}`
+
+  const cached = readyCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
     return cached.report
   }
 
-  const report = await ensureWalletDomains(stripeAccountId)
+  const report = await ensureWalletDomains(stripeAccountId, { domains })
   if (isApplePayReady(report)) {
-    readyCache.set(stripeAccountId, { report, expiresAt: now + READY_CACHE_TTL_MS })
+    readyCache.set(cacheKey, { report, expiresAt: now + READY_CACHE_TTL_MS })
   } else {
-    readyCache.delete(stripeAccountId)
+    readyCache.delete(cacheKey)
   }
 
   return report

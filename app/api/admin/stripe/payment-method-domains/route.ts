@@ -6,8 +6,9 @@ import { stripe } from "@/lib/stripe"
 import {
   DOMAIN_ASSOCIATION_PATH,
   ensureWalletDomains,
-  isApplePayReady,
   probeDomainAssociation,
+  requestHost,
+  resolveRequestDomains,
   resolveWalletDomains,
   type WalletDomainResult,
 } from "@/lib/stripe-payment-method-domains"
@@ -49,21 +50,52 @@ function connectedVenues() {
   })
 }
 
-async function domainAssociationProbes() {
-  const { domains } = resolveWalletDomains()
-  return Promise.all(domains.map(probeDomainAssociation))
+/**
+ * The host being audited comes first: environment variables go stale, and a domain whose
+ * association file isn't served can never verify, so it's reported but not counted.
+ */
+async function domainContext(request: Request) {
+  const configured = resolveWalletDomains()
+  const domains = Array.from(
+    new Set([...resolveRequestDomains(requestHost(request)), ...configured.domains])
+  )
+  const probes = await Promise.all(domains.map(probeDomainAssociation))
+  const verifiable = probes.filter((probe) => probe.ok).map((probe) => probe.domain)
+
+  return { domains, probes, verifiable, skipped: configured.skipped }
+}
+
+function readiness(domains: WalletDomainResult[], verifiable: string[]): boolean {
+  const relevant = domains.filter((entry) => verifiable.includes(entry.domain))
+  return relevant.length > 0 && relevant.every((entry) => entry.applePay === "active")
+}
+
+function payload(
+  context: Awaited<ReturnType<typeof domainContext>>,
+  rows: VenueRow[]
+) {
+  return {
+    expectedDomains: context.domains,
+    verifiableDomains: context.verifiable,
+    skippedHosts: context.skipped,
+    domainAssociationPath: DOMAIN_ASSOCIATION_PATH,
+    domainAssociationProbes: context.probes,
+    venuesReady: rows.filter((row) => row.applePayReady).length,
+    venuesTotal: rows.length,
+    venues: rows,
+  }
 }
 
 /**
  * Reports what Apple currently thinks of each venue's domains. Read-only, and the only
  * way to see live-mode status without Dashboard access.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const denied = await guard()
   if (denied) return denied
 
   try {
-    const { domains: expectedDomains, skipped } = resolveWalletDomains()
+    const context = await domainContext(request)
     const venues = await connectedVenues()
 
     const rows: VenueRow[] = await Promise.all(
@@ -75,7 +107,7 @@ export async function GET() {
             { stripeAccount: stripeAccountId }
           )
 
-          const domains: WalletDomainResult[] = expectedDomains.map((domain) => {
+          const domains: WalletDomainResult[] = context.domains.map((domain) => {
             const record = list.data.find((entry) => entry.domain_name === domain)
             if (!record) {
               return {
@@ -105,8 +137,7 @@ export async function GET() {
             venueName: venue.name,
             stripeAccountId,
             domains,
-            applePayReady:
-              domains.length > 0 && domains.every((entry) => entry.applePay === "active"),
+            applePayReady: readiness(domains, context.verifiable),
           }
         } catch (error) {
           return {
@@ -121,15 +152,7 @@ export async function GET() {
       })
     )
 
-    return NextResponse.json({
-      expectedDomains,
-      skippedHosts: skipped,
-      domainAssociationPath: DOMAIN_ASSOCIATION_PATH,
-      domainAssociationProbes: await domainAssociationProbes(),
-      venuesReady: rows.filter((row) => row.applePayReady).length,
-      venuesTotal: rows.length,
-      venues: rows,
-    })
+    return NextResponse.json(payload(context, rows))
   } catch (error) {
     console.error("GET /api/admin/stripe/payment-method-domains:", error)
     return NextResponse.json(
@@ -140,36 +163,31 @@ export async function GET() {
 }
 
 /** Registers and re-verifies the domains on every connected venue. */
-export async function POST() {
+export async function POST(request: Request) {
   const denied = await guard()
   if (denied) return denied
 
   try {
-    const { domains: expectedDomains, skipped } = resolveWalletDomains()
+    const context = await domainContext(request)
     const venues = await connectedVenues()
 
     const rows: VenueRow[] = []
     for (const venue of venues) {
       const stripeAccountId = venue.stripeAccountId as string
-      const report = await ensureWalletDomains(stripeAccountId)
+      const report = await ensureWalletDomains(stripeAccountId, {
+        domains: context.verifiable,
+      })
       rows.push({
         venueId: venue.id,
         venueName: venue.name,
         stripeAccountId,
         domains: report.domains,
-        applePayReady: isApplePayReady(report),
+        applePayReady: readiness(report.domains, context.verifiable),
         ...(report.errorMessage ? { errorMessage: report.errorMessage } : {}),
       })
     }
 
-    return NextResponse.json({
-      expectedDomains,
-      skippedHosts: skipped,
-      domainAssociationProbes: await domainAssociationProbes(),
-      venuesReady: rows.filter((row) => row.applePayReady).length,
-      venuesTotal: rows.length,
-      venues: rows,
-    })
+    return NextResponse.json(payload(context, rows))
   } catch (error) {
     console.error("POST /api/admin/stripe/payment-method-domains:", error)
     return NextResponse.json(

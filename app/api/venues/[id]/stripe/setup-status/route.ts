@@ -6,6 +6,7 @@ import { stripe } from "@/lib/stripe"
 import {
   ensureWalletDomainsCached,
   isApplePayReady,
+  requestHost,
   summarizeWalletDomainReport,
 } from "@/lib/stripe-payment-method-domains"
 
@@ -37,7 +38,7 @@ function sanitizeError(
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -79,7 +80,9 @@ export async function GET(
     // Get the venue's wallet domains verified as soon as it can take charges, so the
     // first customer sees Apple Pay instead of waiting on the checkout-time registration.
     if (account.charges_enabled) {
-      const walletDomains = await ensureWalletDomainsCached(venue.stripeAccountId)
+      const walletDomains = await ensureWalletDomainsCached(venue.stripeAccountId, {
+        host: requestHost(request),
+      })
       if (!isApplePayReady(walletDomains)) {
         console.warn(
           "Apple Pay is not active for this venue:",
