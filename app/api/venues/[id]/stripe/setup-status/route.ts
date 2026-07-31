@@ -3,6 +3,11 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { requireVenueAdminOrOwner } from "@/lib/venue-members"
 import { stripe } from "@/lib/stripe"
+import {
+  ensureWalletDomainsCached,
+  isApplePayReady,
+  summarizeWalletDomainReport,
+} from "@/lib/stripe-payment-method-domains"
 
 export const runtime = "nodejs"
 
@@ -70,6 +75,18 @@ export async function GET(
     const currentDeadline = requirements?.current_deadline ?? null
     const rawErrors = requirements?.errors ?? []
     const errors = rawErrors.map((e) => sanitizeError(e as { code?: string; reason?: string; requirement?: string }))
+
+    // Get the venue's wallet domains verified as soon as it can take charges, so the
+    // first customer sees Apple Pay instead of waiting on the checkout-time registration.
+    if (account.charges_enabled) {
+      const walletDomains = await ensureWalletDomainsCached(venue.stripeAccountId)
+      if (!isApplePayReady(walletDomains)) {
+        console.warn(
+          "Apple Pay is not active for this venue:",
+          summarizeWalletDomainReport(walletDomains)
+        )
+      }
+    }
 
     const connected: StripeSetupStatus = {
       status: "connected",
