@@ -61,6 +61,9 @@ export async function GET(
           orderBy: { createdAt: "desc" },
           take: 1
         },
+        review: {
+          select: { id: true, rating: true },
+        },
       },
     })
 

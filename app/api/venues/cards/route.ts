@@ -285,6 +285,19 @@ export async function GET(request: Request) {
 
     const venueIds = venues.map((v) => v.id);
 
+    // Batched rating aggregate for all venues in this page, same pattern as batchGetCanonicalVenueHours below
+    const ratingGroups = venueIds.length
+      ? await prisma.review.groupBy({
+          by: ["venueId"],
+          where: { venueId: { in: venueIds } },
+          _avg: { rating: true },
+          _count: true,
+        })
+      : [];
+    const ratingsByVenue = new Map(
+      ratingGroups.map((g) => [g.venueId, { avgRating: g._avg.rating, reviewCount: g._count }]),
+    );
+
     // Reservations fetch in parallel with hours processing (which is now sync thanks to eager loading)
     const reservations = venueIds.length
       ? await prisma.reservation.findMany({
@@ -463,6 +476,8 @@ export async function GET(request: Request) {
           };
         }
 
+        const rating = ratingsByVenue.get(venue.id);
+
         return {
           id: venue.id,
           name: venue.name,
@@ -484,6 +499,8 @@ export async function GET(request: Request) {
               }
             : null,
           dealBadge,
+          avgRating: rating?.avgRating ?? null,
+          reviewCount: rating?.reviewCount ?? 0,
         };
       });
 

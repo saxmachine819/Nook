@@ -24,6 +24,8 @@ export interface ExploreVenue {
     type: string
     summary: string
   } | null
+  avgRating?: number | null
+  reviewCount?: number
 }
 
 export function venueCardToExploreVenue(card: VenueCard): ExploreVenue {
@@ -49,6 +51,8 @@ export function venueCardToExploreVenue(card: VenueCard): ExploreVenue {
           : undefined,
     hourlySeatPrice: card.minPrice,
     dealBadge: card.dealBadge,
+    avgRating: card.avgRating,
+    reviewCount: card.reviewCount,
   }
 }
 

@@ -142,6 +142,7 @@ model Venue {
   qrAssets             QRAsset[]
   signageOrders        SignageOrder[]
   signageOrderItems    SignageOrderItem[]
+  reviews              Review[]
   // Hours: canonical source and timezone (see docs/HOURS_AUDIT.md)
   timezone             String?
   hoursSource          String? // "google" | "manual"; null = use google
@@ -251,6 +252,7 @@ model Reservation {
   dealRedemptions    DealRedemption[]
   payments           Payment[]
   refundRequests     RefundRequest[]
+  review             Review?
 
   @@map("reservations")
 }
@@ -402,6 +404,7 @@ model User {
   refundRequestsProcessed RefundRequest[]  @relation("RefundProcessedBy")
   venueMemberships        VenueMember[]
   signageOrdersCreated    SignageOrder[]
+  reviews                 Review[]
 
   @@index([status])
   @@map("users")
@@ -682,4 +685,22 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 
   @@map("site_settings")
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  venueId       String
+  userId        String
+  reservationId String      @unique
+  rating        Int
+  comment       String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  venue         Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([venueId])
+  @@index([userId])
+  @@map("reviews")
 }

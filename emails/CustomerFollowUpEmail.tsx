@@ -17,16 +17,18 @@ export interface CustomerFollowUpEmailProps {
   venueName?: string
   rebookUrl?: string
   exploreUrl?: string
+  reviewUrl?: string
 }
 
 const defaultProps: Required<CustomerFollowUpEmailProps> = {
   venueName: "The Quiet Room",
   rebookUrl: "https://nooc.io/venue/example",
   exploreUrl: "https://nooc.io",
+  reviewUrl: "https://nooc.io/reservations/example",
 }
 
 export default function CustomerFollowUpEmail(props: CustomerFollowUpEmailProps) {
-  const { venueName, rebookUrl, exploreUrl } = { ...defaultProps, ...props }
+  const { venueName, rebookUrl, exploreUrl, reviewUrl } = { ...defaultProps, ...props }
   const displayVenueName = venueName?.trim() || defaultProps.venueName
   const s = emailStyles
 
@@ -53,6 +55,10 @@ export default function CustomerFollowUpEmail(props: CustomerFollowUpEmailProps)
               venues nearby.
             </Text>
             <Text style={s.text}>
+              Got a minute? Leaving a quick review helps other people find{" "}
+              <span style={s.highlight}>{displayVenueName}</span> and other calm spaces on Nooc.
+            </Text>
+            <Text style={s.text}>
               Nooc is still growing, and right now it works best as a way for regular customers to
               reserve seats at places they already love. Over time, we're excited for more people to
               discover great spaces through Nooc — and for venues like{" "}
@@ -63,6 +69,9 @@ export default function CustomerFollowUpEmail(props: CustomerFollowUpEmailProps)
             </Text>
             <Link href={rebookUrl} style={s.button}>
               Rebook a seat
+            </Link>{" "}
+            <Link href={reviewUrl} style={s.secondaryButton}>
+              Leave a review
             </Link>
             <Text style={{ ...s.text, marginTop: "16px", marginBottom: "8px" }}>
               <Link href={exploreUrl} style={{ ...s.highlight, textDecoration: "underline" }}>

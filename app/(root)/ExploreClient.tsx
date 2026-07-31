@@ -57,6 +57,8 @@ function venueCardToExploreVenue(card: VenueCard): ExploreVenue {
           : undefined,
     hourlySeatPrice: card.minPrice,
     dealBadge: card.dealBadge,
+    avgRating: card.avgRating,
+    reviewCount: card.reviewCount,
   };
 }
 

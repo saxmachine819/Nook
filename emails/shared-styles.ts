@@ -80,6 +80,19 @@ export const emailStyles = {
     display: "inline-block",
   } as React.CSSProperties,
 
+  /** Secondary CTA, e.g. alongside a primary button */
+  secondaryButton: {
+    backgroundColor: "transparent",
+    color: "#0F5132",
+    fontSize: "16px",
+    fontWeight: "600",
+    padding: "12px 24px",
+    borderRadius: "8px",
+    border: "1px solid #0F5132",
+    textDecoration: "none",
+    display: "inline-block",
+  } as React.CSSProperties,
+
   hr: {
     borderColor: "#e5e5e0",
     margin: "24px 0",

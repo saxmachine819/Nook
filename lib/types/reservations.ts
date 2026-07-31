@@ -51,6 +51,10 @@ export interface ReservationListItem {
       createdAt: Date | string
     }>
   } | null
+  review?: {
+    id: string
+    rating: number
+  } | null
 }
 
 export interface ReservationDetail extends ReservationListItem {

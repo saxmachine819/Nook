@@ -13,6 +13,7 @@ import { BookingConfirmationModal } from "@/components/reservation/BookingConfir
 import { SignInModal } from "@/components/auth/SignInModal"
 import { VenueImageCarousel } from "./VenueImageCarousel"
 import { FavoriteButton } from "./FavoriteButton"
+import { VenueRatingBadge } from "./VenueRatingBadge"
 import { getLocalDateString } from "@/lib/availability-utils"
 
 interface VenueCardProps {
@@ -46,6 +47,8 @@ interface VenueCardProps {
   initialSeatCount?: number
   /** When set, venue page X button will navigate back here (e.g. /search or /?view=map). */
   returnTo?: string
+  avgRating?: number | null
+  reviewCount?: number
 }
 
 interface Slot {
@@ -80,6 +83,8 @@ export function VenueCard({
   dealBadge,
   initialSeatCount,
   returnTo,
+  avgRating,
+  reviewCount = 0,
 }: VenueCardProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -301,9 +306,12 @@ export function VenueCard({
           {/* Text Content Below Image */}
           <CardContent className={cn("p-4 space-y-1.5", isDeemphasized ? "pb-3" : "")}>
             <div className="flex justify-between items-start gap-2">
-              <h3 className={cn("font-bold tracking-tight text-foreground/90 transition-colors group-hover:text-primary", isDeemphasized ? "text-base" : "text-lg")}>
-                {name}
-              </h3>
+              <div className="min-w-0">
+                <h3 className={cn("font-bold tracking-tight text-foreground/90 transition-colors group-hover:text-primary", isDeemphasized ? "text-base" : "text-lg")}>
+                  {name}
+                </h3>
+                <VenueRatingBadge avgRating={avgRating ?? null} reviewCount={reviewCount} className="mt-0.5" />
+              </div>
               <div className="shrink-0 flex flex-col items-end">
                 <p className="text-sm font-bold text-primary">
                   ${minPrice.toFixed(0)}

@@ -23,9 +23,12 @@ import {
   X,
   ArrowLeft,
   Receipt,
+  Star,
 } from "lucide-react"
 import { ReservationDetail } from "@/lib/types/reservations"
-import { useReservationDetail } from "@/lib/hooks"
+import { useReservationDetail, useReviewSubmit } from "@/lib/hooks"
+import { isReservationReviewable } from "@/lib/review-eligibility"
+import { ReviewFormModal } from "@/components/venue/ReviewFormModal"
 
 interface ReservationDetailClientProps {
   reservation: ReservationDetail
@@ -36,8 +39,10 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
   const { showToast, ToastComponent } = useToast()
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
 
   const { data: fullReservation, isLoading: isHydrating } = useReservationDetail(serverReservation.id)
+  const { removeReview } = useReviewSubmit({ reservationId: serverReservation.id })
 
   const reservation = useMemo(() => ({
     ...serverReservation,
@@ -383,10 +388,32 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
                     Get directions
                   </Button>
                   {isPast ? (
-                    <Button onClick={handleViewReceipt} variant="outline" className="w-full">
-                      <Receipt className="mr-2 h-4 w-4" />
-                      View receipt
-                    </Button>
+                    <>
+                      <Button onClick={handleViewReceipt} variant="outline" className="w-full">
+                        <Receipt className="mr-2 h-4 w-4" />
+                        View receipt
+                      </Button>
+                      {isReservationReviewable(reservation) && (
+                        reservation.review ? (
+                          <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+                            <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                            <span>You rated this {reservation.review.rating}/5</span>
+                            <button
+                              type="button"
+                              onClick={() => removeReview(reservation.review!.id)}
+                              className="text-xs font-bold uppercase tracking-wide text-muted-foreground/50 hover:text-destructive transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : (
+                          <Button onClick={() => setShowReviewModal(true)} variant="outline" className="w-full">
+                            <Star className="mr-2 h-4 w-4" />
+                            Leave a review
+                          </Button>
+                        )
+                      )}
+                    </>
                   ) : (
                     <Button
                       onClick={() => setShowCancelConfirm(true)}
@@ -429,6 +456,13 @@ export function ReservationDetailClient({ reservation: serverReservation }: Rese
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReviewFormModal
+        open={showReviewModal}
+        onOpenChange={setShowReviewModal}
+        reservationId={reservation.id}
+        venueName={reservation.venue.name}
+      />
 
     </div>
   )

@@ -175,6 +175,19 @@ export async function GET(request: Request) {
       }
     }
 
+    const availableVenueIds = availableVenues.map(({ venue }) => venue.id)
+    const ratingGroups = availableVenueIds.length
+      ? await prisma.review.groupBy({
+          by: ["venueId"],
+          where: { venueId: { in: availableVenueIds } },
+          _avg: { rating: true },
+          _count: true,
+        })
+      : []
+    const ratingsByVenue = new Map(
+      ratingGroups.map((g) => [g.venueId, { avgRating: g._avg.rating, reviewCount: g._count }])
+    )
+
     function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
       const R = 6371
       const dLat = ((lat2 - lat1) * Math.PI) / 180
@@ -230,6 +243,8 @@ export async function GET(request: Request) {
         distanceKm = haversineKm(lat, lng, venue.latitude, venue.longitude)
       }
 
+      const rating = ratingsByVenue.get(venue.id)
+
       return {
         id: venue.id,
         name: venue.name,
@@ -245,6 +260,8 @@ export async function GET(request: Request) {
         imageUrls: imageUrls.slice(0, 1),
         distanceKm,
         timezone,
+        avgRating: rating?.avgRating ?? null,
+        reviewCount: rating?.reviewCount ?? 0,
       }
     })
 

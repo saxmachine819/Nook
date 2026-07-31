@@ -53,6 +53,8 @@ export interface VenueCard {
   availabilityLabel: string
   openStatus: VenueOpenStatus | null
   dealBadge: VenueDealBadge | null
+  avgRating: number | null
+  reviewCount: number
 }
 
 /**

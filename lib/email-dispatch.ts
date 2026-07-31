@@ -123,6 +123,7 @@ const REGISTRY: Record<string, Handler> = {
       React.createElement(CustomerFollowUpEmail, {
         venueName: p.venueName as string | undefined,
         rebookUrl: p.rebookUrl as string | undefined,
+        reviewUrl: p.reviewUrl as string | undefined,
         exploreUrl: "https://nooc.io",
       }),
   },

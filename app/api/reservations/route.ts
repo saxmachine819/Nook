@@ -68,6 +68,9 @@ export async function GET(request: Request) {
           orderBy: { createdAt: "desc" },
           take: 1
         },
+        review: {
+          select: { id: true, rating: true },
+        },
       },
       orderBy: {
         startAt: tab === "upcoming" ? "asc" : "desc",

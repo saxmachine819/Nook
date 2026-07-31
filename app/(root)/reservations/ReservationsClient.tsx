@@ -23,8 +23,11 @@ import {
   X,
   ChevronRight,
   Receipt,
+  Star,
 } from "lucide-react"
 import { cn, isBlobSupported } from "@/lib/utils"
+import { ReviewFormModal } from "@/components/venue/ReviewFormModal"
+import { useReviewSubmit } from "@/lib/hooks"
 
 type TabType = "upcoming" | "past" | "cancelled"
 
@@ -76,6 +79,10 @@ interface Reservation {
       requestedAmount: number
       approvedAmount: number | null
     }>
+  } | null
+  review?: {
+    id: string
+    rating: number
   } | null
 }
 
@@ -608,6 +615,9 @@ function PastReservationCard({
   formatDateTimeRange: (start: Date, end: Date) => string
   getSeatInfo: (r: Reservation) => string
 }) {
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const { removeReview } = useReviewSubmit({ reservationId: reservation.id })
+
   return (
     <div
       className="group flex items-center justify-between p-5 rounded-[2rem] border border-white bg-white/40 shadow-sm transition-all duration-300 hover:bg-white/80 hover:premium-shadow active:scale-[0.99] cursor-pointer"
@@ -621,9 +631,40 @@ function PastReservationCard({
         </div>
         <div className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-tighter">{getSeatInfo(reservation)}</div>
       </div>
-      <div className="flex items-center">
+      <div
+        className="flex items-center gap-3"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {reservation.review ? (
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest">
+            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+            <span className="text-muted-foreground/60">{reservation.review.rating}</span>
+            <button
+              type="button"
+              onClick={() => removeReview(reservation.review!.id)}
+              className="text-muted-foreground/40 hover:text-destructive transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setReviewModalOpen(true)}
+            className="rounded-full bg-primary/5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/10 transition-colors"
+          >
+            Leave a review
+          </button>
+        )}
         <ChevronRight size={18} className="text-muted-foreground/20 group-hover:text-foreground/40 transition-colors" />
       </div>
+      <ReviewFormModal
+        open={reviewModalOpen}
+        onOpenChange={setReviewModalOpen}
+        reservationId={reservation.id}
+        venueName={reservation.venue.name}
+      />
     </div>
   )
 }

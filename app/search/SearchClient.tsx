@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { MapPin, Search, Navigation, Map, X } from "lucide-react"
 import Image from "next/image"
 import { roundUpToNext15Minutes, getLocalDateString } from "@/lib/availability-utils"
+import { VenueRatingBadge } from "@/components/venue/VenueRatingBadge"
 
 interface SearchResult {
   id: string
@@ -26,6 +27,8 @@ interface SearchResult {
   availableSeats: number
   imageUrls: string[]
   distanceKm: number | null
+  avgRating: number | null
+  reviewCount: number
 }
 
 export function SearchClient() {
@@ -316,6 +319,7 @@ export function SearchClient() {
                               ${venue.minPrice.toFixed(0)}<span className="text-[10px] text-muted-foreground font-semibold">/hr</span>
                             </p>
                           </div>
+                          <VenueRatingBadge avgRating={venue.avgRating} reviewCount={venue.reviewCount} className="mt-0.5" />
                           {(venue.neighborhood || venue.address) && (
                             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                               {venue.neighborhood || venue.address}

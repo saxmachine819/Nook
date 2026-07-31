@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { FavoriteButton } from "@/components/venue/FavoriteButton"
+import { VenueRatingBadge } from "@/components/venue/VenueRatingBadge"
 import { Button } from "@/components/ui/button"
 
 export interface ResultsDrawerVenue {
@@ -18,6 +19,8 @@ export interface ResultsDrawerVenue {
   tags: string[]
   availabilityLabel?: string
   imageUrls?: string[]
+  avgRating?: number | null
+  reviewCount?: number
 }
 
 interface ResultsDrawerProps {
@@ -378,6 +381,7 @@ export function ResultsDrawer({
                               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter opacity-50">/ hr</span>
                             </p>
                           </div>
+                          <VenueRatingBadge avgRating={venue.avgRating ?? null} reviewCount={venue.reviewCount ?? 0} className="mt-0.5" />
                           {(venue.address || (venue.city && venue.state)) && (
                             <p className="mt-0.5 text-xs font-medium text-muted-foreground/70 truncate flex items-center gap-1">
                               <span className="shrink-0 font-bold opacity-30">·</span> {venue.address || `${venue.city}, ${venue.state}`}

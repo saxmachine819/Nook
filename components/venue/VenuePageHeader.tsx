@@ -6,6 +6,7 @@ import { X, Navigation } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
 import { FavoriteButton } from "./FavoriteButton"
+import { VenueRatingBadge } from "./VenueRatingBadge"
 
 interface VenuePageHeaderProps {
   name: string
@@ -14,6 +15,8 @@ interface VenuePageHeaderProps {
   isFavorited?: boolean
   venueId?: string
   googleMapsHref?: string | null
+  avgRating?: number | null
+  reviewCount?: number
   deal?: {
     title: string
     description?: string | null
@@ -22,7 +25,7 @@ interface VenuePageHeaderProps {
   } | null
 }
 
-export function VenuePageHeader({ name, address, returnTo, isFavorited = false, venueId, googleMapsHref, deal }: VenuePageHeaderProps) {
+export function VenuePageHeader({ name, address, returnTo, isFavorited = false, venueId, googleMapsHref, avgRating, reviewCount = 0, deal }: VenuePageHeaderProps) {
   const router = useRouter()
 
   const eligibility = deal?.eligibilityJson || {}
@@ -36,6 +39,11 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
           <h1 className="text-4xl font-black tracking-tight text-foreground/90 sm:text-5xl lg:text-6xl">
             {name}
           </h1>
+          {!!avgRating && reviewCount > 0 && (
+            <a href="#reviews" className="inline-block">
+              <VenueRatingBadge avgRating={avgRating} reviewCount={reviewCount} />
+            </a>
+          )}
           {address && (
             <p className="text-base font-medium text-muted-foreground/80 sm:text-lg">
               {address}

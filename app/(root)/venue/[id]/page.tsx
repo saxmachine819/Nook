@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { VenueBookingWidget } from "@/components/venue/VenueBookingWidget"
 import { VenueImageCarousel } from "@/components/venue/VenueImageCarousel"
 import { VenuePageHeader } from "@/components/venue/VenuePageHeader"
+import { VenueReviewsSection } from "@/components/venue/VenueReviewsSection"
 import { VenueHeroHoursBadge } from "@/components/venue/VenueHeroHoursBadge"
 import { computeAvailabilityLabel } from "@/lib/availability-utils"
 import {
@@ -37,7 +38,7 @@ interface VenuePageProps {
 
 export default async function VenuePage({ params, searchParams }: VenuePageProps) {
   // Fetch venue data in parallel with other essential checks
-  const [venue, session, canonicalHours] = await Promise.all([
+  const [venue, session, canonicalHours, reviews, reviewAggregate] = await Promise.all([
     prisma.venue.findUnique({
       where: { id: params.id },
       include: {
@@ -63,6 +64,24 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
     }),
     auth(),
     getCanonicalVenueHours(params.id),
+    prisma.review.findMany({
+      where: { venueId: params.id },
+      orderBy: { createdAt: "desc" },
+      take: 11,
+      select: {
+        id: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        createdAt: true,
+        user: { select: { name: true } },
+      },
+    }),
+    prisma.review.aggregate({
+      where: { venueId: params.id },
+      _avg: { rating: true },
+      _count: true,
+    }),
   ])
 
   if (!venue) {
@@ -239,6 +258,8 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               isFavorited={favoriteStates.venue}
               venueId={venue.id}
               googleMapsHref={googleMapsHref}
+              avgRating={reviewAggregate._avg.rating}
+              reviewCount={reviewAggregate._count}
               deal={(() => {
                 const primaryDeal = (venue as any).deals && Array.isArray((venue as any).deals) && (venue as any).deals.length > 0
                   ? (venue as any).deals[0]
@@ -387,6 +408,15 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
           </div>
         </div>
+
+        <VenueReviewsSection
+          venueId={venue.id}
+          reviews={reviews.slice(0, 10)}
+          hasMore={reviews.length > 10}
+          avgRating={reviewAggregate._avg.rating}
+          reviewCount={reviewAggregate._count}
+          currentUserId={session?.user?.id ?? null}
+        />
 
         <div className="h-24 lg:hidden" />
       </div>

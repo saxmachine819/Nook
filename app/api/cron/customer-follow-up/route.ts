@@ -94,6 +94,7 @@ export async function GET(request: Request) {
 
       try {
         const rebookUrl = baseUrl ? `${baseUrl}/venue/${venue.id}` : ""
+        const reviewUrl = baseUrl ? `${baseUrl}/reservations/${reservation.id}` : ""
         const result = await enqueueNotification({
           type: "customer_follow_up",
           dedupeKey: `customer_follow_up:${reservation.id}`,
@@ -106,6 +107,7 @@ export async function GET(request: Request) {
             venueId: venue.id,
             venueName: venue.name ?? "",
             rebookUrl,
+            reviewUrl,
           },
         })
         if (result.created) {

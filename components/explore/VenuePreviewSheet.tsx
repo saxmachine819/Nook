@@ -28,6 +28,8 @@ export interface VenuePreviewSheetVenue {
     type: string
     summary: string
   } | null
+  avgRating?: number | null
+  reviewCount?: number
 }
 
 interface VenuePreviewSheetProps {
@@ -277,6 +279,8 @@ export function VenuePreviewSheet({
               dealBadge={venue.dealBadge}
               initialSeatCount={initialSeatCount}
               returnTo="/?view=map"
+              avgRating={venue.avgRating}
+              reviewCount={venue.reviewCount}
             />
           )}
         </div>
