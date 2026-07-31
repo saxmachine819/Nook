@@ -44,6 +44,7 @@ async function main() {
   }
 
   console.log("\nApple domain association file:")
+  const verifiable: string[] = []
   for (const domain of domains) {
     const probe = await probeDomainAssociation(domain)
     const detail = probe.redirectedTo
@@ -52,6 +53,15 @@ async function main() {
         ? ` (${probe.errorMessage})`
         : ""
     console.log(`  ${probe.ok ? "OK " : "BAD"} ${probe.url} [${probe.status}]${detail}`)
+    if (probe.ok) verifiable.push(domain)
+  }
+
+  if (verifiable.length === 0) {
+    console.error(
+      "\nNone of these domains serve the association file, so Apple cannot verify them. Nothing to do."
+    )
+    process.exitCode = 1
+    return
   }
 
   const venues = await prisma.venue.findMany({
@@ -74,7 +84,9 @@ async function main() {
 
   let ready = 0
   for (const venue of venues) {
-    const report = await ensureWalletDomains(venue.stripeAccountId as string)
+    const report = await ensureWalletDomains(venue.stripeAccountId as string, {
+      domains: verifiable,
+    })
     if (isApplePayReady(report)) ready++
     console.log(`  ${venue.name} — ${summarizeWalletDomainReport(report)}`)
   }

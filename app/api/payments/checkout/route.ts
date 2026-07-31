@@ -6,6 +6,7 @@ import { stripe } from '@/lib/stripe'
 import {
   ensureWalletDomainsCached,
   isApplePayReady,
+  requestHost,
   summarizeWalletDomainReport,
 } from '@/lib/stripe-payment-method-domains'
 
@@ -117,7 +118,9 @@ export async function POST(request: NextRequest) {
 
     // Register the customer-facing domains on the connected account so Apple Pay,
     // Google Pay and Link can render in embedded Checkout. Idempotent and non-throwing.
-    const walletDomains = await ensureWalletDomainsCached(context.venue.stripeAccountId)
+    const walletDomains = await ensureWalletDomainsCached(context.venue.stripeAccountId, {
+      host: requestHost(request),
+    })
     if (!isApplePayReady(walletDomains)) {
       console.warn(
         'Apple Pay is not active for this account:',
