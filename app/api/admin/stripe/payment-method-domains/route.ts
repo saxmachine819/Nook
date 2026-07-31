@@ -25,7 +25,18 @@ interface VenueRow {
   errorMessage?: string
 }
 
-async function guard() {
+/**
+ * An admin session, or the same `Bearer CRON_SECRET` the cron routes use so this can be
+ * audited and repaired from a script or scheduler without a browser session.
+ */
+async function guard(request: Request) {
+  const cronSecret = process.env.CRON_SECRET
+  const header = request.headers.get("Authorization")?.trim() ?? ""
+  const token = header.startsWith("Bearer ") ? header.slice(7) : ""
+  if (cronSecret && token === cronSecret) {
+    return null
+  }
+
   const session = await auth()
 
   if (!session?.user?.id) {
@@ -91,7 +102,7 @@ function payload(
  * way to see live-mode status without Dashboard access.
  */
 export async function GET(request: Request) {
-  const denied = await guard()
+  const denied = await guard(request)
   if (denied) return denied
 
   try {
@@ -164,7 +175,7 @@ export async function GET(request: Request) {
 
 /** Registers and re-verifies the domains on every connected venue. */
 export async function POST(request: Request) {
-  const denied = await guard()
+  const denied = await guard(request)
   if (denied) return denied
 
   try {
