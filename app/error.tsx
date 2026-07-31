@@ -2,23 +2,6 @@
 
 import { useEffect } from "react"
 
-// #region agent log
-function logError(location: string, message: string, data: Record<string, unknown>) {
-  fetch("http://127.0.0.1:7242/ingest/b5111244-c4ed-4ea6-9398-28181fe79047", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-      sessionId: "debug-session",
-      hypothesisId: "H1-H2",
-    }),
-  }).catch(() => {})
-}
-// #endregion
-
 export default function Error({
   error,
   reset,
@@ -27,14 +10,7 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    // #region agent log
-    logError("app/error.tsx:render", "Error boundary caught", {
-      errorMessage: error?.message,
-      errorName: error?.name,
-      digest: error?.digest,
-      stack: error?.stack?.slice(0, 500),
-    })
-    // #endregion
+    console.error("Error boundary caught:", error)
   }, [error])
 
   return (
