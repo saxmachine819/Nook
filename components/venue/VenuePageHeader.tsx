@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { X, Navigation } from "lucide-react"
+import { X, Navigation, Share2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEligibilitySummary, generateDescription } from "@/lib/deal-utils"
 import { FavoriteButton } from "./FavoriteButton"
 import { VenueRatingBadge } from "./VenueRatingBadge"
+import { nativeShare } from "@/lib/native-actions"
 
 interface VenuePageHeaderProps {
   name: string
@@ -61,6 +62,27 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
             >
               <Navigation size={20} strokeWidth={2.5} />
             </Link>
+          )}
+          {venueId && (
+            <button
+              type="button"
+              onClick={() => {
+                const url =
+                  typeof window !== "undefined"
+                    ? `${window.location.origin}/venue/${venueId}`
+                    : `https://nooc.io/venue/${venueId}`
+                void nativeShare({
+                  title: name,
+                  text: `Reserve a workspace at ${name} on Nooc`,
+                  url,
+                  dialogTitle: "Share venue",
+                })
+              }}
+              className="rounded-full glass p-2.5 text-muted-foreground hover:bg-black/5 hover:text-foreground transition-all duration-300 active:scale-90 shadow-lg"
+              aria-label="Share venue"
+            >
+              <Share2 size={20} strokeWidth={2.5} />
+            </button>
           )}
           {venueId && (
             <FavoriteButton

@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "YOUR_APPLE_TEAM_ID.io.nooc.app",
+        "paths": [
+          "/",
+          "/reservations*",
+          "/profile*",
+          "/venue/*",
+          "/r/*",
+          "/privacy",
+          "/terms",
+          "/support"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["YOUR_APPLE_TEAM_ID.io.nooc.app"]
+  }
+}

@@ -405,9 +405,25 @@ model User {
   venueMemberships        VenueMember[]
   signageOrdersCreated    SignageOrder[]
   reviews                 Review[]
+  devicePushTokens        DevicePushToken[]
 
   @@index([status])
   @@map("users")
+}
+
+model DevicePushToken {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String
+  platform   String // ios | android
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("device_push_tokens")
 }
 
 model VerificationToken {

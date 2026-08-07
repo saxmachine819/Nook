@@ -1,10 +1,12 @@
 import NextAuth from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import GoogleProvider from "next-auth/providers/google";
+import AppleProvider from "next-auth/providers/apple";
 import EmailProvider from "next-auth/providers/email";
 import { prisma } from "@/lib/prisma";
 import { enqueueNotification } from "@/lib/notification-queue";
 import { claimVenueMembershipForUser } from "@/lib/venue-members";
+import { isAppleSignInConfigured } from "@/lib/apple-auth";
 
 // Local dev only: force OAuth callbacks to localhost so sign-in works without .env.local override.
 // Production (NODE_ENV=production on Vercel) is never touched.
@@ -31,26 +33,48 @@ if (!process.env.NEXTAUTH_URL) {
   );
 }
 
+function buildProviders() {
+  const providers: any[] = [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  ];
+
+  // Sign in with Apple — required by App Store Guideline 4.8 when Google is offered.
+  // Prefer APPLE_SECRET (JWT). See lib/apple-auth.ts to generate from .p8 key material.
+  if (process.env.APPLE_ID && process.env.APPLE_SECRET) {
+    providers.push(
+      AppleProvider({
+        clientId: process.env.APPLE_ID,
+        clientSecret: process.env.APPLE_SECRET,
+      })
+    );
+  } else if (isAppleSignInConfigured()) {
+    console.warn(
+      "⚠️ Apple Sign In key material is set but APPLE_SECRET is missing. " +
+        "Run: npx tsx scripts/generate-apple-client-secret.ts"
+    );
+  }
+
+  if (process.env.EMAIL_SERVER && process.env.EMAIL_FROM) {
+    providers.push(
+      EmailProvider({
+        server: process.env.EMAIL_SERVER,
+        from: process.env.EMAIL_FROM,
+      })
+    );
+  }
+
+  return providers;
+}
+
 export const authOptions = {
   debug: true,
   trustHost: true, // Required for NextAuth v5
   useSecureCookies: process.env.NODE_ENV === "production",
   adapter: PrismaAdapter(prisma) as any,
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    // Only enable EmailProvider if EMAIL_SERVER is configured
-    ...(process.env.EMAIL_SERVER && process.env.EMAIL_FROM
-      ? [
-          EmailProvider({
-            server: process.env.EMAIL_SERVER,
-            from: process.env.EMAIL_FROM,
-          }),
-        ]
-      : []),
-  ],
+  providers: buildProviders(),
   pages: {
     signIn: "/profile",
     verifyRequest: "/profile",

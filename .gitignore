@@ -43,3 +43,13 @@ public/demo-video.mov
 # Environment files with secrets
 .env.bak
 ENV_SETUP.txt
+
+# Capacitor mobile
+/mobile/node_modules
+/mobile/.capacitor
+/mobile/android/.gradle
+/mobile/android/app/build
+/mobile/android/build
+/mobile/android/capacitor-cordova-android-plugins/build
+/mobile/ios/App/Pods
+/mobile/ios/DerivedData

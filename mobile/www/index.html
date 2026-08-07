@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <title>Nooc</title>
+    <style>
+      :root {
+        --bg: #0b1f1a;
+        --fg: #f4f7f5;
+        --muted: rgba(244, 247, 245, 0.65);
+        --accent: #3d8b6e;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+        background: radial-gradient(120% 80% at 50% 0%, #14352c 0%, var(--bg) 55%);
+        color: var(--fg);
+      }
+      .wrap {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+        text-align: center;
+      }
+      .logo {
+        width: 88px;
+        height: 88px;
+        border-radius: 24px;
+        object-fit: contain;
+        background: rgba(255, 255, 255, 0.06);
+        padding: 12px;
+        margin-bottom: 1.5rem;
+      }
+      h1 {
+        font-size: 2rem;
+        letter-spacing: -0.03em;
+        margin: 0 0 0.5rem;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 18rem;
+        line-height: 1.45;
+      }
+      .actions {
+        margin-top: 1.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        width: min(100%, 280px);
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.9rem 1.25rem;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      .primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .ghost {
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      .hint {
+        margin-top: 1.25rem;
+        font-size: 0.75rem;
+        color: rgba(244, 247, 245, 0.45);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap" id="offline-root">
+      <img class="logo" src="./assets/nooc-logo.png" alt="Nooc" />
+      <h1>Nooc</h1>
+      <p id="message">
+        You&rsquo;re offline. Your upcoming reservations are still available below
+        when previously cached.
+      </p>
+      <div class="actions">
+        <button class="primary" id="retry" type="button">Try again</button>
+        <button class="ghost" id="cached" type="button">View cached bookings</button>
+      </div>
+      <p class="hint" id="cache-status">No cached bookings on this device yet.</p>
+      <ul
+        id="cache-list"
+        hidden
+        style="
+          list-style: none;
+          padding: 0;
+          margin: 1.5rem 0 0;
+          width: min(100%, 320px);
+          text-align: left;
+        "
+      ></ul>
+    </main>
+    <script src="./js/offline.js"></script>
+  </body>
+</html>

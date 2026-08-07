@@ -1,0 +1,15 @@
+{
+  "appName": "Nooc",
+  "bundleId": "io.nooc.app",
+  "androidApplicationId": "io.nooc.app",
+  "urlScheme": "nooc",
+  "productionUrl": "https://nooc.io",
+  "stagingUrl": "https://staging.nooc.io",
+  "supportUrl": "https://nooc.io/support",
+  "supportEmail": "support@nooc.io",
+  "privacyPolicyUrl": "https://nooc.io/privacy",
+  "termsUrl": "https://nooc.io/terms",
+  "teamIdPlaceholder": "YOUR_APPLE_TEAM_ID",
+  "appleAppIdPlaceholder": "YOUR_APPLE_APP_ID_NUMERIC",
+  "sha256CertFingerprintPlaceholder": "YOUR_ANDROID_SHA256_CERT_FINGERPRINT"
+}

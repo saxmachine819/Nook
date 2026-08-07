@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Nooc — Native shell preview</title>
+    <style>
+      :root {
+        --frame: #111;
+        --bg: #f3efe6;
+        --ink: #12201b;
+        --muted: #5c6b64;
+        --accent: #2f6f57;
+        --tab: #ffffffee;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(160deg, #1a332b, #0b1f1a 60%);
+        font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+        color: var(--ink);
+        padding: 2rem 1rem;
+      }
+      .phone {
+        width: min(100%, 390px);
+        height: 780px;
+        border-radius: 42px;
+        background: var(--frame);
+        padding: 14px;
+        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.45);
+        position: relative;
+      }
+      .notch {
+        position: absolute;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 126px;
+        height: 28px;
+        background: #000;
+        border-radius: 20px;
+        z-index: 5;
+      }
+      .screen {
+        height: 100%;
+        border-radius: 30px;
+        overflow: hidden;
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+      .status {
+        height: 54px;
+        padding: 18px 22px 0;
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .hero {
+        flex: 1;
+        position: relative;
+        background:
+          linear-gradient(180deg, rgba(11, 31, 26, 0.15), rgba(11, 31, 26, 0.72)),
+          url("./assets/nooc-logo.png") center 42% / 42% no-repeat,
+          radial-gradient(120% 80% at 50% 20%, #3d8b6e, #0b1f1a);
+        color: #f4f7f5;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 1.5rem 1.25rem 1.25rem;
+      }
+      .brand {
+        font-size: 2.4rem;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        margin: 0 0 0.35rem;
+      }
+      .sub {
+        margin: 0;
+        opacity: 0.85;
+        max-width: 16rem;
+        line-height: 1.4;
+      }
+      .cta {
+        margin-top: 1rem;
+        align-self: flex-start;
+        background: #fff;
+        color: var(--accent);
+        border: 0;
+        border-radius: 999px;
+        padding: 0.75rem 1.1rem;
+        font-weight: 800;
+      }
+      .native-badge {
+        position: absolute;
+        top: 64px;
+        right: 14px;
+        background: rgba(255, 255, 255, 0.16);
+        backdrop-filter: blur(8px);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.4rem 0.6rem;
+        border-radius: 999px;
+      }
+      .tabs {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.25rem;
+        background: var(--tab);
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        padding: 0.55rem 0.4rem calc(0.7rem + env(safe-area-inset-bottom));
+      }
+      .tab {
+        text-align: center;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 0.35rem 0;
+      }
+      .tab.active {
+        color: var(--accent);
+      }
+      .tab span {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 0.15rem;
+      }
+      .label {
+        margin-top: 1rem;
+        color: rgba(244, 247, 245, 0.7);
+        font-size: 0.85rem;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="phone" aria-label="Nooc native shell preview">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="status"><span>9:41</span><span>Nooc</span></div>
+          <div class="hero">
+            <div class="native-badge">Native shell</div>
+            <h1 class="brand">Nooc</h1>
+            <p class="sub">
+              Reserve calm workspaces by the hour — same product as the web, with
+              push, offline bookings, and Sign in with Apple.
+            </p>
+            <button class="cta" type="button">Explore nearby</button>
+          </div>
+          <nav class="tabs" aria-label="Native tabs">
+            <div class="tab active"><span>□</span>Explore</div>
+            <div class="tab"><span>☰</span>Bookings</div>
+            <div class="tab"><span>○</span>Profile</div>
+            <div class="tab"><span>▦</span>Manage</div>
+          </nav>
+        </div>
+      </div>
+      <p class="label">Phase 1 visual — Capacitor chrome + shared web content</p>
+    </div>
+  </body>
+</html>

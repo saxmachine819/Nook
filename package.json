@@ -18,7 +18,11 @@
     "db:seed-signage": "tsx scripts/seed-signage-templates.ts",
     "resync-hours": "tsx scripts/resync-venue-hours.ts",
     "email:dev": "PORT=3001 npx react-email dev",
-    "email:export": "npx react-email export"
+    "email:export": "npx react-email export",
+    "mobile:install": "npm install --prefix mobile",
+    "mobile:sync": "npm run cap:sync --prefix mobile",
+    "mobile:preview": "npm run preview:shell --prefix mobile",
+    "apple:secret": "tsx scripts/generate-apple-client-secret.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

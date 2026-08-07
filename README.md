@@ -90,6 +90,15 @@ prisma/
 - `npm run lint` - Run ESLint
 - `npm run db:studio` - Open Prisma Studio
 
+## Mobile app (Capacitor)
+
+iOS/Android shell that loads the same website + database. See [docs/mobile/README.md](docs/mobile/README.md) and [mobile/README.md](mobile/README.md).
+
+```bash
+npm run mobile:install
+npm run mobile:preview   # shell + offline UI at :4173
+```
+
 ## Sentry (error monitoring)
 
 Error monitoring is wired via `@sentry/nextjs`. If `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` are not set, Sentry no-ops (local dev does not crash). See `.env.example` for all Sentry env vars.
