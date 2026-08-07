@@ -22,12 +22,18 @@ MOBILE_SERVER_URL=https://staging.nooc.io npm run cap:sync
 
 ## Visual preview (no Xcode)
 
+The app UI **is** the mobile website (Capacitor `server.url` → `https://nooc.io`).
+Previews only frame that same UI — they do not invent a second design.
+
 ```bash
 cd mobile
 npm run preview:shell
-# open http://localhost:4173/shell-preview.html
-# offline fallback: http://localhost:4173/
+# http://127.0.0.1:4173/shell-preview.html?src=http://127.0.0.1:3000/
+# (or omit ?src= to load https://nooc.io — same mobile UI)
+# http://127.0.0.1:4173/  → offline-only fallback (site tokens)
 ```
+
+Also: `/app-shell-preview` on the Next.js app (iframes `/`).
 
 ## Native capabilities (App Store 4.2)
 

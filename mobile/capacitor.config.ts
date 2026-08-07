@@ -29,7 +29,8 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 1200,
-      backgroundColor: "#0B1F1A",
+      // Match website warm background (HSL 30 20% 98%)
+      backgroundColor: "#FAF8F5",
       showSpinner: false,
       launchAutoHide: true,
     },
@@ -37,8 +38,8 @@ const config: CapacitorConfig = {
       presentationOptions: ["badge", "sound", "alert"],
     },
     StatusBar: {
-      style: "DARK",
-      backgroundColor: "#0B1F1A",
+      style: "LIGHT",
+      backgroundColor: "#FAF8F5",
     },
   },
   ios: {
@@ -48,7 +49,7 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
-    backgroundColor: "#0B1F1A",
+    backgroundColor: "#FAF8F5",
   },
 }
 
