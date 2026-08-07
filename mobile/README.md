@@ -51,3 +51,11 @@ Also: `/app-shell-preview` on the Next.js app (iframes `/`).
 
 - [Phase 0 prerequisites](../docs/mobile/phase-0-prerequisites.md)
 - [App Store submission](../docs/mobile/app-store-submission.md)
+- [iOS on macOS](./ios/README.md)
+
+## Next steps (human)
+
+1. Add `APPLE_*` / `APNS_*` / `FCM_*` to Vercel (see root `.env.example`).
+2. Replace `YOUR_APPLE_TEAM_ID` and Android SHA-256 in `public/.well-known/`.
+3. On macOS: follow [ios/README.md](./ios/README.md) → TestFlight.
+4. Android Studio: open `mobile/android`, sign, upload internal track AAB.
