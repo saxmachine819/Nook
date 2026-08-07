@@ -53,3 +53,4 @@ ENV_SETUP.txt
 /mobile/android/capacitor-cordova-android-plugins/build
 /mobile/ios/App/Pods
 /mobile/ios/DerivedData
+artifacts/
