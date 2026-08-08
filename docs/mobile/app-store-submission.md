@@ -25,9 +25,12 @@ Payments: Stripe Checkout for physical seat reservations (real-world service).
 Apple Pay is supported via Stripe Payment Method Domains. These are not digital
 goods and are not subject to IAP.
 
-Demo accounts:
-- Customer: [FILL_CUSTOMER_EMAIL] / use Sign in with Apple or Google as provided
-- Venue: [FILL_VENUE_EMAIL] — after sign-in, open Manage tab → venue dashboard
+Demo account (same account covers both roles):
+- Sign in with Google using nooc.demo@gmail.com (password in App Review notes /
+  private credential store — this account has no separate app password).
+- Customer role: has an upcoming reservation visible immediately after sign-in.
+- Venue role: open the Manage tab to reach the "Nooc Demo Café" venue dashboard
+  (seats, bookings) — this account is an admin member of that venue.
 
 Privacy: https://nooc.io/privacy
 Terms: https://nooc.io/terms
@@ -65,12 +68,14 @@ Support: https://nooc.io/support · support@nooc.io
 
 ## Demo accounts
 
-Create before submission and document credentials in a private 1Password note + App Review notes:
+Single Google account, seeded with both roles in the production database:
 
-| Role | Email | Notes |
-|---|---|---|
-| Customer | demo-customer@nooc.io | At least one upcoming reservation |
-| Venue | demo-venue@nooc.io | Owns an approved venue with seats |
+| Email | Notes |
+|---|---|
+| nooc.demo@gmail.com | Customer: 1 upcoming reservation. Venue: admin member of "Nooc Demo Café" (approved, 1 table/seat). |
+
+Google account password stored in 1Password (not in this repo) — paste it into
+the App Store Connect review notes field alongside the block above before submitting.
 
 ## Binary update cadence
 
