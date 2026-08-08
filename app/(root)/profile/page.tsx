@@ -18,7 +18,12 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield, Trash2, HelpCircle } from "lucide-react"
+import { User, LogOut, LogIn, LayoutDashboard, Plus, Shield, Trash2, HelpCircle, Fingerprint } from "lucide-react"
+import {
+  getBiometricUnlockEnabled,
+  setBiometricUnlockEnabled,
+} from "@/lib/native-actions"
+import { isNativeApp } from "@/lib/native-app"
 
 function initialsFromName(name?: string | null) {
   const trimmed = (name || "").trim()
@@ -50,6 +55,14 @@ function ProfileContent() {
   const [deleteReason, setDeleteReason] = useState("")
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [biometricEnabled, setBiometricEnabled] = useState(false)
+  const [showBiometricToggle, setShowBiometricToggle] = useState(false)
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+    setShowBiometricToggle(true)
+    void getBiometricUnlockEnabled().then(setBiometricEnabled)
+  }, [])
 
   // Redirect to callbackUrl after successful sign-in (defer to avoid setState-during-render)
   useEffect(() => {
@@ -101,12 +114,19 @@ function ProfileContent() {
   }
 
   if (!session) {
-    const handleSignIn = () => {
+    const relativeCallbackUrl = (() => {
       const redirectUrl = callbackUrl || "/"
-      const relativeCallbackUrl = redirectUrl.startsWith("http")
+      return redirectUrl.startsWith("http")
         ? new URL(redirectUrl).pathname + new URL(redirectUrl).search
         : redirectUrl
+    })()
+
+    const handleGoogleSignIn = () => {
       signIn("google", { callbackUrl: relativeCallbackUrl })
+    }
+
+    const handleAppleSignIn = () => {
+      signIn("apple", { callbackUrl: relativeCallbackUrl })
     }
 
     return (
@@ -124,13 +144,29 @@ function ProfileContent() {
             </div>
 
             <Card className="w-full border-none bg-white shadow-lg rounded-[2.5rem] p-8">
-              <CardContent className="p-0 space-y-6">
-                <Button onClick={handleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-md shadow-primary/10">
+              <CardContent className="p-0 space-y-3">
+                <Button
+                  onClick={handleAppleSignIn}
+                  size="lg"
+                  variant="outline"
+                  className="w-full h-14 rounded-2xl font-black text-lg border-black/10 bg-black text-white hover:bg-black/90 hover:text-white"
+                >
+                  Continue with Apple
+                </Button>
+                <Button onClick={handleGoogleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-md shadow-primary/10">
                   <LogIn className="mr-3 h-5 w-5" />
                   Continue with Google
                 </Button>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40">
-                  By continuing, you agree to our Terms and Privacy Policy.
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/40 pt-3">
+                  By continuing, you agree to our{" "}
+                  <Link href="/terms" className="underline underline-offset-2">
+                    Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="underline underline-offset-2">
+                    Privacy Policy
+                  </Link>
+                  .
                 </p>
               </CardContent>
             </Card>
@@ -188,6 +224,26 @@ function ProfileContent() {
                 <CardTitle className="text-xl font-black tracking-tight">Security & Privacy</CardTitle>
               </CardHeader>
               <CardContent className="p-6 pt-0 space-y-3">
+                {showBiometricToggle && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 rounded-2xl font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all justify-between px-4"
+                    onClick={async () => {
+                      const next = !biometricEnabled
+                      setBiometricEnabled(next)
+                      await setBiometricUnlockEnabled(next)
+                    }}
+                  >
+                    <span className="flex items-center">
+                      <Fingerprint className="mr-2 h-4 w-4 opacity-50" />
+                      Face ID / biometric unlock
+                    </span>
+                    <span className="text-xs uppercase tracking-widest opacity-60">
+                      {biometricEnabled ? "On" : "Off"}
+                    </span>
+                  </Button>
+                )}
                 <Button
                   onClick={() => signOut()}
                   variant="outline"

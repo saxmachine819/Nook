@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import { ClientErrorBoundary } from "@/components/auth/ClientErrorBoundary";
 import { TermsGate } from "@/components/auth/TermsGate";
 import { Providers } from "@/app/providers";
+import { NativeAppBootstrap } from "@/components/native/NativeAppBootstrap";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,6 +41,7 @@ export default async function RootLayout({
         <ClientErrorBoundary>
           <Providers>
             <AuthProvider session={session}>
+              <NativeAppBootstrap />
               <TermsGate>{children}</TermsGate>
             </AuthProvider>
           </Providers>

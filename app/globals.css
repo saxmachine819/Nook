@@ -100,3 +100,12 @@
   font-size: 10px;
   opacity: 0.6;
 }
+
+/* Capacitor native shell: extra safe-area padding for home indicator */
+html[data-native-app="true"] body {
+  padding-top: env(safe-area-inset-top);
+}
+
+html[data-native-app="true"] nav.fixed.bottom-0 {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

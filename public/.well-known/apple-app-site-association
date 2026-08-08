@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "6MW73SC9AF.io.nooc.app",
+        "paths": [
+          "/",
+          "/reservations*",
+          "/profile*",
+          "/venue/*",
+          "/r/*",
+          "/privacy",
+          "/terms",
+          "/support"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["6MW73SC9AF.io.nooc.app"]
+  }
+}

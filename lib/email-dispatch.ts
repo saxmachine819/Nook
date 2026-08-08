@@ -2,6 +2,7 @@ import React from "react"
 import { Resend } from "resend"
 import { prisma } from "@/lib/prisma"
 import { validateEmailEnv, getFromAddress } from "@/lib/email-send"
+import { maybeSendPushForNotificationEvent } from "@/lib/push"
 import WelcomeEmail from "@/emails/WelcomeEmail"
 import BookingConfirmationEmail from "@/emails/BookingConfirmationEmail"
 import BookingCanceledEmail from "@/emails/BookingCanceledEmail"
@@ -200,6 +201,12 @@ export async function runDispatcher(): Promise<DispatchResult> {
         data: { status: "SENT", sentAt: new Date(), error: null },
       })
       sent++
+      // Mirror email events to device push when the user has registered tokens.
+      void maybeSendPushForNotificationEvent({
+        type: event.type,
+        userId: event.userId,
+        payload: { ...payload, bookingId: event.bookingId ?? undefined },
+      })
     }
   }
 

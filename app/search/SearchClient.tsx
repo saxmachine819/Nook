@@ -205,14 +205,14 @@ export function SearchClient() {
               <Label className="text-xs font-medium text-muted-foreground">Location</Label>
 
               {locationMode === "auto" && locationStatus === "granted" && userLocation ? (
-                <div className="flex items-center justify-between gap-2 rounded-md bg-primary/5 px-3 py-2 text-sm text-primary">
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 rounded-md bg-primary/5 px-3 py-2.5 text-sm text-primary sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Navigation className="h-4 w-4 shrink-0" />
-                    <span className="font-medium">Using your location</span>
+                    <span className="font-medium truncate">Using your location</span>
                   </div>
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    className="text-left text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground sm:shrink-0"
                     onClick={() => { setLocationMode("text"); setUserLocation(null) }}
                   >
                     Search a location instead
@@ -247,25 +247,25 @@ export function SearchClient() {
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 justify-start gap-2"
+                    className="h-11 w-full justify-center gap-2 px-3"
                     onClick={requestLocation}
                     loading={locationStatus === "requesting"}
                   >
-                    <Navigation className="h-4 w-4" />
-                    Use my location
+                    <Navigation className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Use my location</span>
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 justify-start gap-2"
+                    className="h-11 w-full justify-center gap-2 px-3"
                     onClick={() => setLocationMode("text")}
                   >
-                    <MapPin className="h-4 w-4" />
-                    Search a location
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span className="truncate">Search a location</span>
                   </Button>
                 </div>
               )}
