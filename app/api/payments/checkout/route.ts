@@ -3,6 +3,12 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildBookingContext, computeBookingPrice } from '@/lib/booking'
 import { stripe } from '@/lib/stripe'
+import {
+  ensureWalletDomainsCached,
+  isApplePayReady,
+  requestHost,
+  summarizeWalletDomainReport,
+} from '@/lib/stripe-payment-method-domains'
 
 export const runtime = 'nodejs'
 
@@ -110,19 +116,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Automatically register the current domain for the connected account 
-    // to enable Apple Pay/Google Pay/Link.
-    try {
-      const domainName = new URL(appUrl).hostname
-      await stripe.paymentMethodDomains.create(
-        { domain_name: domainName, enabled: true },
-        { stripeAccount: context.venue.stripeAccountId }
+    // Register the customer-facing domains on the connected account so Apple Pay,
+    // Google Pay and Link can render in embedded Checkout. Idempotent and non-throwing.
+    const walletDomains = await ensureWalletDomainsCached(context.venue.stripeAccountId, {
+      host: requestHost(request),
+    })
+    if (!isApplePayReady(walletDomains)) {
+      console.warn(
+        'Apple Pay is not active for this account:',
+        summarizeWalletDomainReport(walletDomains)
       )
-    } catch (e: any) {
-      // If the domain is already registered, Stripe will throw an error. 
-      // We can safely ignore this and proceed.
-      // Note: check e.message or e.code depending on stripe-node version
-      console.log('Payment Method Domain registration check completed.')
     }
 
     const sessionResponse = await stripe.checkout.sessions.create(
