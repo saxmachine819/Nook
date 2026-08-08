@@ -1,15 +1,13 @@
 # Demo accounts for App Review
 
-Fill these before TestFlight / Play submission and paste into App Review notes ([app-store-submission.md](./app-store-submission.md)).
+See [app-store-submission.md](./app-store-submission.md) for the actual review-notes text.
 
-| Role | Suggested email | Setup steps |
-|---|---|---|
-| Customer | `demo-customer@nooc.io` | Sign in (Apple or Google). Create ≥1 upcoming reservation at an approved venue. |
-| Venue | `demo-venue@nooc.io` | Own an approved venue with seats/tables. Confirm Manage tab opens the dashboard. |
+One Google account covers both roles: `nooc.demo@gmail.com`, seeded directly in
+production with an upcoming reservation (customer) and admin membership on the
+"Nooc Demo Café" venue (venue operator, Manage tab). Password stored in a
+private vault, not in git.
 
-Store credentials in a private vault. Do **not** commit passwords to git.
-
-## Manual verify checklist (this PR)
+## Manual verify checklist
 
 - [x] `/privacy`, `/terms`, `/support` render
 - [x] `/profile` shows Continue with Apple + Continue with Google
@@ -18,8 +16,8 @@ Store credentials in a private vault. Do **not** commit passwords to git.
 - [x] Push token API unit tests pass
 - [x] Vercel preview builds succeed (deploy fix landed)
 - [x] `npx cap sync android` succeeds on Linux
-- [ ] Apple Developer / Play Console accounts (human)
-- [ ] APNs + FCM + APPLE_SECRET in Vercel (human)
-- [ ] Replace Team ID / SHA-256 in `.well-known` association files (human)
-- [ ] `npx cap add ios` on macOS + TestFlight upload (human)
-- [ ] Demo customer + venue accounts created + passwords vaulted (human)
+- [x] Apple Developer / Play Console accounts (human)
+- [x] APNs + FCM + APPLE_SECRET in Vercel (Apple done; FCM/Android still pending)
+- [x] Replace Team ID / SHA-256 in `.well-known` association files (Team ID done; Android SHA-256 still pending)
+- [x] `npx cap add ios` on macOS + TestFlight upload (human)
+- [x] Demo account created + password vaulted (human)
