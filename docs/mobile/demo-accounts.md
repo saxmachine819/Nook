@@ -16,6 +16,10 @@ Store credentials in a private vault. Do **not** commit passwords to git.
 - [x] `/app-shell-preview` shows native shell chrome
 - [x] `mobile/www` offline + shell preview serve on :4173
 - [x] Push token API unit tests pass
+- [x] Vercel preview builds succeed (deploy fix landed)
+- [x] `npx cap sync android` succeeds on Linux
 - [ ] Apple Developer / Play Console accounts (human)
 - [ ] APNs + FCM + APPLE_SECRET in Vercel (human)
+- [ ] Replace Team ID / SHA-256 in `.well-known` association files (human)
 - [ ] `npx cap add ios` on macOS + TestFlight upload (human)
+- [ ] Demo customer + venue accounts created + passwords vaulted (human)

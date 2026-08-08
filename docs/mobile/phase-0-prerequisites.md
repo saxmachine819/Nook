@@ -77,6 +77,9 @@ Replace `YOUR_APPLE_TEAM_ID`, `YOUR_APPLE_APP_ID_NUMERIC`, and Android SHA-256 f
 - [ ] App Store Connect record created (`io.nooc.app`)
 - [ ] Push + Sign in with Apple capabilities enabled
 - [ ] Play Console app created
-- [ ] Privacy / Terms / Support URLs live on production
+- [x] Privacy / Terms / Support URLs live on production (`/privacy`, `/terms`, `/support`)
 - [ ] Demo customer + venue accounts ready for review
 - [ ] APNs + FCM credentials in Vercel env
+- [ ] `APPLE_SECRET` (or key material) in Vercel; confirm Continue with Apple on `/profile`
+- [ ] `DevicePushToken` table applied to the DB used by that environment
+- [ ] Associated domain / App Links placeholders replaced (Team ID + Android SHA-256)
