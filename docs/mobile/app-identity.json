@@ -9,7 +9,7 @@
   "supportEmail": "support@nooc.io",
   "privacyPolicyUrl": "https://nooc.io/privacy",
   "termsUrl": "https://nooc.io/terms",
-  "teamIdPlaceholder": "YOUR_APPLE_TEAM_ID",
+  "teamIdPlaceholder": "6MW73SC9AF",
   "appleAppIdPlaceholder": "YOUR_APPLE_APP_ID_NUMERIC",
   "sha256CertFingerprintPlaceholder": "YOUR_ANDROID_SHA256_CERT_FINGERPRINT"
 }
