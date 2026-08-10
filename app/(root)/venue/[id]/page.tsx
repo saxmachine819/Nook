@@ -289,7 +289,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               />
             </div>
             {(venue.tags ?? []).length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
+              <div className="mt-3 flex flex-wrap justify-center gap-2 lg:hidden">
                 {(venue.tags ?? []).map((tag: string) => (
                   <span
                     key={tag}
