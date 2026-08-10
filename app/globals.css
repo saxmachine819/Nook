@@ -101,9 +101,18 @@
   opacity: 0.6;
 }
 
-/* Capacitor native shell: extra safe-area padding for home indicator */
-html[data-native-app="true"] body {
-  padding-top: env(safe-area-inset-top);
+/* Capacitor native shell.
+   Note: contentInset "automatic" (capacitor.config.ts) already insets the
+   WKWebView's content below the status bar, so no extra top padding is
+   needed here — adding one double-counts the inset and shows as a stray
+   band of body background above fixed-position content (e.g. the map). */
+:root {
+  --bottom-nav-height: 4.25rem;
+}
+
+html[data-native-app="true"] {
+  --bottom-nav-height: calc(4.25rem + env(safe-area-inset-bottom));
+  overscroll-behavior-y: none;
 }
 
 html[data-native-app="true"] nav.fixed.bottom-0 {

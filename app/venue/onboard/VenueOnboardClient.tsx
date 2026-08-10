@@ -1632,8 +1632,8 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
         </DialogContent>
       </Dialog>
 
-      {/* Sticky Back / Next — above bottom nav (bottom-20) */}
-      <div className="fixed bottom-20 left-0 right-0 z-10 border-t bg-background p-4 sm:px-6">
+      {/* Sticky Back / Next — sits directly above the bottom nav, whatever its actual height is */}
+      <div className="fixed left-0 right-0 z-10 border-t bg-background p-4 sm:px-6" style={{ bottom: "var(--bottom-nav-height)" }}>
         <div className="container mx-auto flex items-center justify-between gap-4">
           <Button
             type="button"

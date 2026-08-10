@@ -84,7 +84,7 @@ export function ExploreWelcomeBanner({
             </svg>
           </div>
           <h2 className="text-xl font-bold tracking-tight text-foreground/90">
-            Find your perfect nook
+            Find your perfect nooc
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed px-2">
             Discover nearby cafés and workspaces. Book a spot in seconds and get focused.

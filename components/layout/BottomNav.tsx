@@ -34,7 +34,7 @@ export function BottomNav() {
   const navItems = manageItem ? [...baseNavItems, manageItem] : baseNavItems;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/20 pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/20">
       <div className="mx-auto flex max-w-screen-md items-center justify-around px-2 py-3">
         {navItems.map((item) => {
           const Icon = item.icon;

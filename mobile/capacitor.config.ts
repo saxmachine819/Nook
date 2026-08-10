@@ -9,6 +9,10 @@ const config: CapacitorConfig = {
   appId: "io.nooc.app",
   appName: "Nooc",
   webDir: "www",
+  // Matches --background (HSL 30 20% 98%) so the native WebView's own
+  // background doesn't show through as a white seam under the status bar
+  // before content paints or around fixed-position full-bleed content.
+  backgroundColor: "#FAF8F5",
   server: {
     // Shared product UI: load the live Next.js site so web + app stay one codebase.
     // Local www/ is used for splash/offline fallback and shell preview.
