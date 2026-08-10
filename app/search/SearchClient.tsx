@@ -137,7 +137,7 @@ export function SearchClient() {
     "rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
       {/* Top-left: Map icon → full map view */}
       <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-10">
         <Link

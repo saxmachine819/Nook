@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { auth } from "@/lib/auth";
@@ -27,6 +27,15 @@ export const metadata: Metadata = {
   title: "Nooc - Reserve calm workspaces by the hour",
   description:
     "Reserve a seat by the hour in calm, professional public environments.",
+};
+
+// viewport-fit=cover is required for env(safe-area-inset-*) to resolve to
+// anything other than 0 — without it, the native shell's notch/home-indicator
+// spacing (bottom nav, full-bleed map, etc.) silently has no effect at all.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({

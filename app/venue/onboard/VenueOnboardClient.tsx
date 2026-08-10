@@ -555,7 +555,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
     }
 
     if (!googlePlaceId) {
-      showToast("Please search and select your venue from Google first", "error")
+      showToast("Please search and select your venue first", "error")
       return false
     }
 
@@ -689,7 +689,7 @@ export function VenueOnboardClient({ initialOwnerName }: VenueOnboardClientProps
 
   const validateStep1 = (): boolean => {
     if (!googlePlaceId) {
-      showToast("Please search and select your venue from Google first", "error")
+      showToast("Please search and select your venue first", "error")
       return false
     }
     if (!name.trim()) {
