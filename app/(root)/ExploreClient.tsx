@@ -317,13 +317,13 @@ export function ExploreClient({
   const isInitialLoad = isPinsSearching && pins.length === 0 && !hasFilters;
 
   return (
-    <div className="fixed inset-0 flex flex-col">
+    <div className="fixed left-0 right-0 bottom-0 safe-area-top flex flex-col">
       {venueLoadingOverlay && (
         <LoadingOverlay zIndex={40} className="pointer-events-none" />
       )}
       {/* Initial loading overlay */}
       {isClient && mapReady && isInitialLoad && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-background/50 backdrop-blur-[1px] pointer-events-none">
+        <div className="fixed left-0 right-0 bottom-0 safe-area-top z-30 flex items-center justify-center bg-background/50 backdrop-blur-[1px] pointer-events-none">
           <div className="flex items-center gap-2 rounded-full px-4 py-2">
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <span className="text-sm font-medium text-foreground">
@@ -333,7 +333,7 @@ export function ExploreClient({
         </div>
       )}
       {isClient && !mapReady && (
-        <div className="fixed inset-0 z-0 flex items-center justify-center bg-background">
+        <div className="fixed left-0 right-0 bottom-0 safe-area-top z-0 flex items-center justify-center bg-background">
           <p className="text-sm text-muted-foreground">Loading map...</p>
         </div>
       )}
@@ -384,7 +384,7 @@ export function ExploreClient({
               </div>
             )}
           </div>
-          <div className="fixed left-0 right-0 top-0 z-10 flex flex-col gap-2">
+          <div className="fixed left-0 right-0 safe-area-top z-10 flex flex-col gap-2">
             <ExploreWelcomeBanner
               onUseLocation={requestLocation}
               locationState={locationState}

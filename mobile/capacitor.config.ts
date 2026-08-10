@@ -47,7 +47,15 @@ const config: CapacitorConfig = {
     },
   },
   ios: {
-    contentInset: "automatic",
+    // "never" is required for position:fixed to actually stay fixed. With
+    // "automatic", iOS gives the WebView's scroll view top/bottom safe-area
+    // content insets, and that inset region is genuinely scrollable range
+    // beyond the content — scroll into it and WebKit shifts fixed elements
+    // (the bottom nav visibly lifts ~45pt off the bottom at the end of a
+    // scroll). bounces=false doesn't prevent it because it isn't bounce.
+    // Trade-off: the WebView now spans the full screen, so safe-area spacing
+    // becomes our job in CSS (see globals.css).
+    contentInset: "never",
     scheme: "Nooc",
     limitsNavigationsToAppBoundDomains: false,
   },

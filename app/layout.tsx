@@ -47,6 +47,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased bg-background`}>
+        <div aria-hidden className="status-bar-scrim" />
         <ClientErrorBoundary>
           <Providers>
             <AuthProvider session={session}>
