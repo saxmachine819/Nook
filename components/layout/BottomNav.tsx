@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -33,8 +33,31 @@ export function BottomNav() {
 
   const navItems = manageItem ? [...baseNavItems, manageItem] : baseNavItems;
 
+  // Publish the nav's real rendered height as --bottom-nav-height so layouts and
+  // sticky action bars reserve exactly the right amount of space. A hardcoded
+  // estimate is always slightly off (safe-area inset, font metrics, item count),
+  // and being off by even a pixel clips whatever sits directly above the nav.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const publishHeight = () => {
+      document.documentElement.style.setProperty(
+        "--bottom-nav-height",
+        `${el.offsetHeight}px`
+      );
+    };
+    publishHeight();
+    const observer = new ResizeObserver(publishHeight);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/20">
+    <nav
+      ref={navRef}
+      className="fixed bottom-0 left-0 right-0 z-50 glass border-t border-white/20"
+    >
       <div className="mx-auto flex max-w-screen-md items-center justify-around px-2 py-3">
         {navItems.map((item) => {
           const Icon = item.icon;

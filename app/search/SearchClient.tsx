@@ -137,7 +137,10 @@ export function SearchClient() {
     "rounded-md border border-muted/60 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-0 ring-offset-0 focus:border-primary focus:ring-1 focus:ring-primary"
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div
+      className="flex flex-col bg-background"
+      style={{ minHeight: "calc(100dvh - var(--bottom-nav-height))" }}
+    >
       {/* Top-left: Map icon → full map view */}
       <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-10">
         <Link
@@ -353,7 +356,7 @@ export function SearchClient() {
       )}
 
       {/* Footer: Contact + Add your venue */}
-      <footer className="mt-auto px-4 py-8 pb-24 border-t border-border/50">
+      <footer className="mt-auto px-4 pt-8 pb-6 border-t border-border/50">
         <div className="mx-auto max-w-lg flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <a
             href="mailto:Jordan@nooc.io"

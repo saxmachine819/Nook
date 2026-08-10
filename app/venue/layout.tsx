@@ -15,7 +15,12 @@ export default function VenueLayout({
 }) {
   return (
     <div className="flex min-h-dvh flex-col">
-      <main className="flex-1 pb-20">{children}</main>
+      <main
+        className="flex-1"
+        style={{ paddingBottom: "var(--bottom-nav-height)" }}
+      >
+        {children}
+      </main>
       <BottomNav />
     </div>
   )

@@ -77,7 +77,7 @@ export function MapView({
 
   if (!hasMapboxToken) {
     return (
-      <div className="fixed left-0 right-0 bottom-0 bleed-top z-0 flex items-center justify-center bg-muted/50">
+      <div className="fixed inset-0 z-0 flex items-center justify-center bg-muted/50">
         <div className="text-center px-6">
           <p className="text-sm text-muted-foreground">
             Map view unavailable. Mapbox access token not configured.
@@ -92,7 +92,7 @@ export function MapView({
 
   if (blobOk === false) {
     return (
-      <div className="fixed left-0 right-0 bottom-0 bleed-top z-0 flex items-center justify-center bg-muted/50">
+      <div className="fixed inset-0 z-0 flex items-center justify-center bg-muted/50">
         <div className="text-center px-6">
           <p className="text-sm text-muted-foreground">
             Map is not supported in this browser. You can still browse the list below.
@@ -104,14 +104,14 @@ export function MapView({
 
   if (blobOk === null) {
     return (
-      <div className="fixed left-0 right-0 bottom-0 bleed-top z-0 flex items-center justify-center bg-background">
+      <div className="fixed inset-0 z-0 flex items-center justify-center bg-background">
         <p className="text-sm text-muted-foreground">Loading map…</p>
       </div>
     )
   }
 
   return (
-    <div className="fixed left-0 right-0 bottom-0 bleed-top z-0">
+    <div className="fixed inset-0 z-0">
       <MapboxMap
         venues={venues}
         onSelectVenue={onSelectVenue}

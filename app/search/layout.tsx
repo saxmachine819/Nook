@@ -10,8 +10,13 @@ const BottomNav = dynamic(
 
 export default function SearchLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <main className="flex-1 pb-20">{children}</main>
+    <div className="flex min-h-dvh flex-col">
+      <main
+        className="flex-1"
+        style={{ paddingBottom: "var(--bottom-nav-height)" }}
+      >
+        {children}
+      </main>
       <BottomNav />
     </div>
   )

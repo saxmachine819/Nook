@@ -118,11 +118,3 @@ html[data-native-app="true"] {
 html[data-native-app="true"] nav.fixed.bottom-0 {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
-
-/* Lets full-bleed backgrounds (e.g. the map) extend under the status bar
-   instead of stopping at the WKWebView's auto-inset top edge. Safe to use
-   anywhere: env() falls back to 0px on web/non-notched devices, so this
-   is a no-op (identical to top: 0) outside the native shell. */
-.bleed-top {
-  top: calc(-1 * env(safe-area-inset-top, 0px));
-}
