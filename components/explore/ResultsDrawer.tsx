@@ -140,7 +140,10 @@ export function ResultsDrawer({
 
   const showLoadingContent = isLoading || isInitialLoading
 
-  const COLLAPSED_HEIGHT = 48
+  // Tall enough for the handle pill + label ("X locations in this area")
+  // to render fully — at 48 the label's bottom edge was clipped by this
+  // container's overflow-hidden.
+  const COLLAPSED_HEIGHT = 56
   const EXPANDED_HEIGHT_PERCENT = 60
   const DRAG_THRESHOLD = 50
 
