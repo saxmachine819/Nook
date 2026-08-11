@@ -36,7 +36,11 @@ export function TopOverlayControls({
     <>
       <div
         className={cn(
-          "relative z-10 px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-4",
+          // Safe-area top spacing already comes from the ExploreClient
+          // wrapper (.safe-area-top) this renders inside of — adding it
+          // again here double-offsets the row and pushes it into the
+          // map's own "Center on me" button below.
+          "relative z-10 px-4 pt-4 pb-4",
           className
         )}
       >

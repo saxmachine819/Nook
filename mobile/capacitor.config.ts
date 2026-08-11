@@ -33,8 +33,9 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchShowDuration: 1200,
-      // Match website warm background (HSL 30 20% 98%)
-      backgroundColor: "#FAF8F5",
+      // Matches the Splash.imageset artwork's own background so there's no
+      // color seam between it and this native-drawn backdrop.
+      backgroundColor: "#052A10",
       showSpinner: false,
       launchAutoHide: true,
     },

@@ -267,7 +267,7 @@ export function ResultsDrawer({
             }
           }}
         >
-          <div className="h-1.5 w-12 shrink-0 rounded-full bg-primary/20 backdrop-blur-sm" aria-hidden />
+          <div className="h-2.5 w-12 shrink-0 rounded-full bg-primary/20 backdrop-blur-sm" aria-hidden />
           <span className="text-[11px] font-bold uppercase tracking-wider text-primary/70 touch-manipulation">
             {label}
           </span>
