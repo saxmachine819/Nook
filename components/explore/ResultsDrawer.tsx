@@ -141,9 +141,13 @@ export function ResultsDrawer({
   const showLoadingContent = isLoading || isInitialLoading
 
   // Tall enough for the handle pill + label ("X locations in this area")
-  // to render fully — at 48 the label's bottom edge was clipped by this
-  // container's overflow-hidden.
-  const COLLAPSED_HEIGHT = 56
+  // to render fully without this container's overflow-hidden clipping it.
+  // Was 48, then 56 — both still clipped the label's bottom edge because
+  // the actual content (pt-2 + pill + gap-2 + label line-height + pb-3)
+  // runs closer to 60px than the eyeballed estimate suggested. Padding
+  // this well past that measured minimum rather than nudging by a few px
+  // again.
+  const COLLAPSED_HEIGHT = 68
   const EXPANDED_HEIGHT_PERCENT = 60
   const DRAG_THRESHOLD = 50
 
