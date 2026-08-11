@@ -142,7 +142,7 @@ export function SearchClient() {
       style={{ minHeight: "calc(100dvh - var(--bottom-nav-height))" }}
     >
       {/* Top-left: Map icon → full map view */}
-      <div className="fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-10">
+      <div className="fixed left-4 top-[max(1rem,var(--safe-area-top))] z-10">
         <Link
           href="/?view=map"
           className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"

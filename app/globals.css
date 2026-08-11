@@ -106,24 +106,32 @@
    stay put (see capacitor.config.ts), which means the WebView spans the whole
    screen and safe-area spacing is ours to apply. In-flow content gets it from
    body padding; viewport-anchored (fixed) elements can't inherit that, so they
-   offset themselves with top: env(safe-area-inset-top) — see .safe-area-top. */
+   offset themselves with top: var(--safe-area-top) — see .safe-area-top. */
 :root {
   --bottom-nav-height: 4.25rem;
+  --safe-area-top: 0px;
 }
 
 html[data-native-app="true"] body {
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-area-top);
 }
 
 html[data-native-app="true"] {
   --bottom-nav-height: calc(4.25rem + env(safe-area-inset-bottom));
+  /* iOS reports env(safe-area-inset-top) as the device's resting Dynamic
+     Island / notch height, but that cluster renders taller than that while
+     showing a transient system indicator (e.g. the location-in-use arrow,
+     which this app's own "Use my location" triggers). +10px is a cheap
+     buffer against content crowding that expanded state — not a real
+     measurement of it, since CSS has no way to detect it. */
+  --safe-area-top: calc(env(safe-area-inset-top) + 10px);
 }
 
 /* For full-bleed fixed elements that must start below the status bar.
-   env() is 0px on the web and on devices without insets, so this is
-   equivalent to top: 0 outside the native shell. */
+   0px on the web and on devices without insets, so this is equivalent to
+   top: 0 outside the native shell. */
 .safe-area-top {
-  top: env(safe-area-inset-top, 0px);
+  top: var(--safe-area-top);
 }
 
 html[data-native-app="true"] nav.fixed.bottom-0 {
@@ -143,7 +151,7 @@ html[data-native-app="true"] .status-bar-scrim {
   top: 0;
   left: 0;
   right: 0;
-  height: env(safe-area-inset-top);
+  height: var(--safe-area-top);
   background-color: hsl(var(--background));
   /* Above the bottom nav (z-50) and page content, below modal layers. */
   z-index: 60;
