@@ -41,6 +41,48 @@ export function NativeAppBootstrap() {
     if (!isNativeApp()) return
     document.documentElement.dataset.nativeApp = "true"
     document.documentElement.dataset.nativePlatform = getNativePlatform()
+
+    // WKWebView doesn't always have its real safeAreaInsets established by
+    // the time this page first paints — measured (via a debug overlay) at
+    // 0 immediately on launch, then correctly non-zero ~500ms later with no
+    // app code involved. CSS depending on env(safe-area-inset-*) (body's
+    // padding-top, the bottom nav, full-bleed map containers) resolves once
+    // at style-computation time and does NOT appear to auto-recompute when
+    // the underlying native value later changes — a plain forced reflow
+    // (reading offsetHeight) wasn't sufficient to un-stick it either.
+    // What reliably works: creating a fresh element whose inline style
+    // reads env(safe-area-inset-top) and measuring it, which forces WebKit
+    // to resolve that value from scratch. Poll with that technique for the
+    // first two seconds; once it returns a real value, force one global
+    // style recalculation (toggling a class) so already-painted elements
+    // pick it up, then stop.
+    let cancelled = false
+    const probeSafeArea = (): number => {
+      const probe = document.createElement("div")
+      probe.style.cssText =
+        "position:fixed;top:env(safe-area-inset-top,-1px);height:0;width:0;pointer-events:none;"
+      document.body.appendChild(probe)
+      const top = probe.getBoundingClientRect().top
+      probe.remove()
+      return top
+    }
+    const attempts = [0, 50, 100, 200, 400, 700, 1100, 1600, 2200]
+    const timers = attempts.map((delay) =>
+      setTimeout(() => {
+        if (cancelled) return
+        if (probeSafeArea() > 0) {
+          // Force every env()-dependent rule to recompute against the now-
+          // available value by briefly toggling the attribute they key off.
+          document.documentElement.dataset.nativeApp = "false"
+          void document.documentElement.offsetHeight
+          document.documentElement.dataset.nativeApp = "true"
+        }
+      }, delay)
+    )
+    return () => {
+      cancelled = true
+      timers.forEach(clearTimeout)
+    }
   }, [])
 
   useEffect(() => {
