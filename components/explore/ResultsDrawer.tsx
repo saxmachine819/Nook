@@ -242,11 +242,17 @@ export function ResultsDrawer({
       ref={containerRef}
       className={cn(
         "fixed left-0 right-0 flex flex-col rounded-t-[2.5rem] glass shadow-2xl overflow-hidden px-1",
-        "bottom-[5.5rem]",
         isDragging && "transition-none",
         !isDragging && "transition-[height] duration-500 ease-smooth-out"
       )}
       style={{
+        // Was a hardcoded bottom-[5.5rem] (88px) — on devices where the
+        // measured nav (see BottomNav's ResizeObserver) is taller than
+        // that due to home-indicator safe-area padding, the drawer's
+        // bottom edge sat behind the nav instead of above it, pushing its
+        // label down into/behind the nav bar. Same bug, same fix, as the
+        // venue-onboarding action bar.
+        bottom: "var(--bottom-nav-height)",
         zIndex: 100,
         pointerEvents: "auto",
         height: currentHeight !== undefined ? `${currentHeight}px` : undefined,
