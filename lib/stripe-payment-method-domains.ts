@@ -95,8 +95,12 @@ function withWwwCounterpart(host: string): string[] {
  * The domains customers can see the payment form on.
  *
  * `STRIPE_PAYMENT_METHOD_DOMAINS` (comma separated) wins when set and is used verbatim,
- * which is how an environment opts out of a host that can't pass verification — the
- * nooc.io apex redirects to www, and Apple rejects redirects.
+ * which is how an environment opts out of a host that can't pass verification. Production
+ * sets it to just `nooc.io`: nooc.io is the canonical domain (www redirects to it, not the
+ * other way around), and Apple rejects redirects during verification, so letting
+ * `withWwwCounterpart` add `www.nooc.io` here would just create a permanently-inactive
+ * entry in Stripe for a host no real customer ever lands on — it always resolves to
+ * nooc.io before any page renders.
  */
 export function resolveWalletDomains(
   env: NodeJS.ProcessEnv = process.env
