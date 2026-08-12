@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { COMMISSION_RATE } from "@/lib/commission"
 import { prisma } from "@/lib/prisma"
 import { canEditVenue } from "@/lib/venue-auth"
 import { stripe } from "@/lib/stripe"
-
-const COMMISSION_RATE = 0.2
 
 export async function POST(
   request: Request,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildBookingContext, computeBookingPrice } from '@/lib/booking'
+import { COMMISSION_RATE } from '@/lib/commission'
 import { stripe } from '@/lib/stripe'
 import {
   ensureWalletDomainsCached,
@@ -11,9 +12,6 @@ import {
 } from '@/lib/stripe-payment-method-domains'
 
 export const runtime = 'nodejs'
-
-/** Nook's platform commission: 20% of the booking subtotal */
-const COMMISSION_RATE = 0.2
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,10 +68,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Application fee = Nooc's 20% commission on the subtotal only.
+    // Application fee = Nooc's 30% commission on the subtotal only.
     // The customer pays subtotal + processing fee; the full charge goes to the venue's Stripe account.
-    // Stripe deducts their fee from the venue's side; we take only 20% so the venue keeps 80% of the subtotal.
-    // Example: $3 subtotal → customer pays $3.40 → Stripe deducts ~$0.40 → venue has $3.00 → we take $0.60 → venue gets $2.40 (80%).
+    // Stripe deducts their fee from the venue's side; we take only 30% so the venue keeps 70% of the subtotal.
+    // Example: $3 subtotal → customer pays $3.40 → Stripe deducts ~$0.40 → venue has $3.00 → we take $0.90 → venue gets $2.10 (70%).
     const nookCommission = Math.round(pricing.subtotalCents * COMMISSION_RATE)
     const applicationFeeAmount = Math.max(0, Math.min(pricing.amountCents, nookCommission))
 

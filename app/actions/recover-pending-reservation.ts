@@ -1,6 +1,7 @@
 'use server'
 
 import { auth } from '@/lib/auth'
+import { COMMISSION_RATE } from '@/lib/commission'
 import { prisma } from '@/lib/prisma'
 
 interface RecoverPendingReservationResult {
@@ -89,7 +90,6 @@ export async function recoverPendingReservation(pendingData: {
 
     // Create Stripe checkout session
     const { stripe } = await import('@/lib/stripe')
-    const COMMISSION_RATE = 0.2
 
     // Get venue for pricing
     const venueWithTables = await prisma.venue.findUnique({
