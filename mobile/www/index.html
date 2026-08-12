@@ -35,7 +35,13 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+        /* This is a standalone page (no access to the app's --safe-area-top
+           var), and it's served full-bleed under the status bar just like
+           the rest of the app now is (ios.contentInset "never" in
+           capacitor.config.ts), so it needs its own top inset too — not
+           just bottom. */
+        padding: calc(2rem + env(safe-area-inset-top)) 1.5rem
+          calc(2rem + env(safe-area-inset-bottom));
         text-align: center;
       }
       .logo {

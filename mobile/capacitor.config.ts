@@ -17,6 +17,15 @@ const config: CapacitorConfig = {
     // Shared product UI: load the live Next.js site so web + app stay one codebase.
     // Local www/ is used for splash/offline fallback and shell preview.
     url: APP_URL,
+    // Wires up Capacitor's built-in fallback: on any navigation failure
+    // (no network, DNS failure, timeout, unreachable host — see
+    // WebViewDelegationHandler's didFail/didFailProvisionalNavigation in
+    // @capacitor/ios), it loads this path from the bundled www/ instead of
+    // leaving WKWebView's own blank error page up. Cross-platform: Android
+    // honors the same key. www/index.html reads localStorage for cached
+    // upcoming reservations and reloads the live site on "Try again" or
+    // the browser's "online" event.
+    errorPath: "index.html",
     cleartext: false,
     allowNavigation: [
       "nooc.io",
