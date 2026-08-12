@@ -47,6 +47,21 @@ describe('BottomNav', () => {
     })
   })
 
+  it('publishes its rendered height as --bottom-nav-height for other layouts to reserve space against', () => {
+    mockUseSession.mockReturnValue({ data: null, status: 'unauthenticated' })
+    mockUseVenueSummary.mockReturnValue({ data: undefined, isLoading: false })
+
+    document.documentElement.style.removeProperty('--bottom-nav-height')
+
+    render(<BottomNav />)
+
+    // jsdom never lays out real pixel heights (offsetHeight is always 0 there), so this
+    // can't assert the real-world value — that needs an actual browser. What it does
+    // prove is the wiring: the ResizeObserver callback fired and the effect set the CSS
+    // var from the nav's measured height, instead of silently no-oping.
+    expect(document.documentElement.style.getPropertyValue('--bottom-nav-height')).toBe('0px')
+  })
+
   describe('when user is signed in', () => {
     const baseUser = { id: 'user-1', name: 'Test', email: 'test@example.com' }
 

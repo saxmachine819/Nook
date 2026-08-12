@@ -67,6 +67,9 @@ export function createMockPrisma() {
       create: vi.fn(),
       findMany: vi.fn(),
     },
+    review: {
+      groupBy: vi.fn().mockResolvedValue([]),
+    },
     favoriteVenue: {
       findUnique: vi.fn(),
       findMany: vi.fn(),

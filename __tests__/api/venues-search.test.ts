@@ -169,6 +169,30 @@ describe("GET /api/venues/search", () => {
       expect(data.venues[0].maxPrice).toBe(40);
     });
 
+    it("attaches aggregated rating and review count from prisma.review.groupBy", async () => {
+      const venues = [
+        createTestVenue({ id: "v1", tables: [] }),
+        createTestVenue({ id: "v2", tables: [] }),
+      ];
+      vi.mocked(mockPrisma.venue.findMany).mockResolvedValue(venues as any);
+      vi.mocked(mockPrisma.review.groupBy).mockResolvedValue([
+        { venueId: "v1", _avg: { rating: 4.5 }, _count: 3 },
+      ] as any);
+
+      const request = new Request("http://localhost/api/venues/search?q=test");
+      const response = await GET(request);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+
+      const v1 = data.venues.find((v: any) => v.id === "v1");
+      const v2 = data.venues.find((v: any) => v.id === "v2");
+      expect(v1.avgRating).toBe(4.5);
+      expect(v1.reviewCount).toBe(3);
+      // v2 has no rows in the groupBy result: falls back to "no reviews yet", not a crash.
+      expect(v2.avgRating).toBeNull();
+      expect(v2.reviewCount).toBe(0);
+    });
+
     it('filters by "Available Now" correctly', async () => {
       // Mocking "now" to 10:00 AM
       const now = new Date("2024-01-22T10:00:00Z");

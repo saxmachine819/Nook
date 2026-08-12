@@ -37,6 +37,12 @@ vi.mock('@/lib/stripe', () => ({
     paymentIntents: {
       retrieve: vi.fn(),
     },
+    refunds: {
+      create: vi.fn(),
+    },
+    applicationFees: {
+      createRefund: vi.fn(),
+    },
   },
 }))
 
@@ -81,6 +87,7 @@ describe('Stripe Webhook Fixes', () => {
     vi.mocked(prisma.reservation.findUnique).mockResolvedValue({
       id: 'res_123',
       venueId: 'venue_123',
+      status: 'pending',
     } as any)
 
     const request = new NextRequest('http://localhost/api/stripe/webhook', {
@@ -101,6 +108,113 @@ describe('Stripe Webhook Fixes', () => {
     )
     const { createReservationFromContext } = await import('@/lib/booking')
     expect(createReservationFromContext).not.toHaveBeenCalled()
+  })
+
+  describe('refund-safety branches when the reservation is not in a bookable state', () => {
+    const mockEvent = {
+      id: 'evt_refund_safety',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: 'cs_refund_safety',
+          metadata: { paymentId: 'pay_refund_safety' },
+          payment_intent: 'pi_refund_safety',
+        },
+      },
+    }
+
+    beforeEach(() => {
+      vi.mocked(stripe.webhooks.constructEvent).mockReturnValue(mockEvent as any)
+      vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValue(null)
+      vi.mocked(prisma.payment.findUnique).mockResolvedValue({
+        id: 'pay_refund_safety',
+        userId: 'user_123',
+        reservationId: 'res_refund_safety',
+        amount: 1000,
+        bookingPayload: {},
+        stripeAccountId: 'acct_123',
+      } as any)
+      vi.mocked(stripe.paymentIntents.retrieve).mockResolvedValue({
+        latest_charge: { id: 'ch_123', application_fee: 'fee_123' },
+      } as any)
+    })
+
+    async function postEvent() {
+      const request = new NextRequest('http://localhost/api/stripe/webhook', {
+        method: 'POST',
+        headers: { 'stripe-signature': 'sig_refund_safety' },
+        body: JSON.stringify(mockEvent),
+      })
+      return POST(request)
+    }
+
+    it('refunds instead of finalizing when the reservation no longer exists', async () => {
+      vi.mocked(prisma.reservation.findUnique).mockResolvedValue(null)
+
+      const response = await postEvent()
+      expect(response.status).toBe(200)
+
+      expect(stripe.refunds.create).toHaveBeenCalledWith(
+        { payment_intent: 'pi_refund_safety' },
+        { stripeAccount: 'acct_123' }
+      )
+      expect(stripe.applicationFees.createRefund).toHaveBeenCalledWith('fee_123')
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay_refund_safety' },
+          data: { status: 'REFUNDED' },
+        })
+      )
+      expect(prisma.reservation.update).not.toHaveBeenCalled()
+    })
+
+    it('refunds instead of finalizing when the reservation was cancelled', async () => {
+      vi.mocked(prisma.reservation.findUnique).mockResolvedValue({
+        id: 'res_refund_safety',
+        status: 'cancelled',
+      } as any)
+
+      const response = await postEvent()
+      expect(response.status).toBe(200)
+
+      expect(stripe.refunds.create).toHaveBeenCalledWith(
+        { payment_intent: 'pi_refund_safety' },
+        { stripeAccount: 'acct_123' }
+      )
+      expect(stripe.applicationFees.createRefund).toHaveBeenCalledWith('fee_123')
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay_refund_safety' },
+          data: { status: 'REFUNDED' },
+        })
+      )
+      expect(prisma.reservation.update).not.toHaveBeenCalled()
+    })
+
+    it('refunds instead of finalizing when the reservation is in an unexpected status', async () => {
+      // Neither 'pending'/'active' (finalize) nor 'cancelled' (missing-reservation path) —
+      // e.g. already 'completed' by some other process.
+      vi.mocked(prisma.reservation.findUnique).mockResolvedValue({
+        id: 'res_refund_safety',
+        status: 'completed',
+      } as any)
+
+      const response = await postEvent()
+      expect(response.status).toBe(200)
+
+      expect(stripe.refunds.create).toHaveBeenCalledWith(
+        { payment_intent: 'pi_refund_safety' },
+        { stripeAccount: 'acct_123' }
+      )
+      expect(stripe.applicationFees.createRefund).toHaveBeenCalledWith('fee_123')
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'pay_refund_safety' },
+          data: { status: 'REFUNDED' },
+        })
+      )
+      expect(prisma.reservation.update).not.toHaveBeenCalled()
+    })
   })
 
   it('should cancel payment on checkout.session.expired', async () => {

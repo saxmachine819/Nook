@@ -121,6 +121,30 @@ describe("GET /api/venues/cards", () => {
     expect(data.venues[0].imageUrls).toHaveLength(3);
   });
 
+  it("attaches aggregated rating and review count from prisma.review.groupBy", async () => {
+    const venues = [
+      createTestVenue({ id: "v1", latitude: 10, longitude: 10, tables: [] }),
+      createTestVenue({ id: "v2", latitude: 10, longitude: 10, tables: [] }),
+    ];
+    vi.mocked(mockPrisma.venue.findMany).mockResolvedValue(venues as any);
+    vi.mocked(mockPrisma.review.groupBy).mockResolvedValue([
+      { venueId: "v1", _avg: { rating: 4.5 }, _count: 3 },
+    ] as any);
+
+    const request = new Request("http://localhost/api/venues/cards?ids=v1,v2");
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+    const data = await response.json();
+
+    const v1 = data.venues.find((v: any) => v.id === "v1");
+    const v2 = data.venues.find((v: any) => v.id === "v2");
+    expect(v1.avgRating).toBe(4.5);
+    expect(v1.reviewCount).toBe(3);
+    // v2 has no rows in the groupBy result: falls back to "no reviews yet", not a crash.
+    expect(v2.avgRating).toBeNull();
+    expect(v2.reviewCount).toBe(0);
+  });
+
   it("returns 400 for incomplete map bounds", async () => {
     const request = new Request(
       "http://localhost/api/venues/cards?north=10&south=5",
