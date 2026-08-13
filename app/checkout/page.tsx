@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { EmbeddedCheckoutView } from "@/components/venue/EmbeddedCheckoutView"
+import { ExpressCheckoutView } from "@/components/venue/ExpressCheckoutView"
 import {
   clearEmbeddedCheckout,
   readEmbeddedCheckout,
@@ -63,10 +64,21 @@ export default function CheckoutPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 min-h-[400px]">
-        <EmbeddedCheckoutView
-          clientSecret={payload.clientSecret}
-          stripeAccountId={payload.stripeAccountId}
-        />
+        {payload.mode === "express" && payload.paymentId ? (
+          <ExpressCheckoutView
+            clientSecret={payload.clientSecret}
+            paymentId={payload.paymentId}
+            stripeAccountId={payload.stripeAccountId}
+            amountCents={payload.amountCents ?? 0}
+            venueName={payload.venueName}
+            onCancel={handleClose}
+          />
+        ) : (
+          <EmbeddedCheckoutView
+            clientSecret={payload.clientSecret}
+            stripeAccountId={payload.stripeAccountId}
+          />
+        )}
       </div>
     </div>
   )

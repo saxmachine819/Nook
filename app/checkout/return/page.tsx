@@ -10,10 +10,59 @@ export default function CheckoutReturnPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const sessionId = searchParams?.get("session_id")
+  // Express checkout redirects here with a payment_id instead of a Checkout session id.
+  // Only redirect-based payment methods land here at all; wallets resolve in place.
+  const paymentId = searchParams?.get("payment_id")
   const [status, setStatus] = useState<"loading" | "complete" | "open" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
+    if (paymentId) {
+      const checkExpressStatus = async () => {
+        const deadline = Date.now() + 30_000
+
+        while (Date.now() < deadline) {
+          try {
+            const response = await fetch(
+              `/api/payments/express/status?payment_id=${encodeURIComponent(paymentId)}`
+            )
+            const data = await response.json().catch(() => null)
+
+            if (data?.status === "paid" && data.reservationId) {
+              setStatus("complete")
+              router.replace(`/reservations/${data.reservationId}`)
+              return
+            }
+
+            if (data?.status === "refunded") {
+              setStatus("error")
+              setErrorMessage(
+                "That seat was no longer available, so your payment was refunded."
+              )
+              return
+            }
+
+            if (data?.status === "failed") {
+              setStatus("error")
+              setErrorMessage("The payment did not complete.")
+              return
+            }
+          } catch (err) {
+            console.error("Error checking express payment status:", err)
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+
+        // Paid but not yet confirmed on our side — send them somewhere useful rather
+        // than telling them the payment failed.
+        setStatus("open")
+      }
+
+      checkExpressStatus()
+      return
+    }
+
     if (!sessionId) {
       setStatus("error")
       setErrorMessage("No session ID found in the URL.")
@@ -48,7 +97,7 @@ export default function CheckoutReturnPage() {
     }
 
     checkStatus()
-  }, [sessionId, router])
+  }, [sessionId, paymentId, router])
 
   if (status === "error") {
     return (
