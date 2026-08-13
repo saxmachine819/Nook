@@ -41,6 +41,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}))
 
+    // Mobile asks for `express`, which swaps embedded Checkout for a bare PaymentIntent
+    // so the client can render Apple Pay / Google Pay as a one-tap button. Everything
+    // that determines what the customer is charged is shared with the default path
+    // below — only the final Stripe call differs.
+    const isExpress = body?.mode === 'express'
+
     let context: Awaited<ReturnType<typeof buildBookingContext>>
     try {
       context = await buildBookingContext(body, session.user.id)
@@ -126,6 +132,53 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (isExpress) {
+      const paymentIntent = await stripe.paymentIntents.create(
+        {
+          amount: pricing.amountCents,
+          currency: 'usd',
+          application_fee_amount: applicationFeeAmount,
+          // Deliberately narrower than the embedded flow's dashboard config, which also
+          // offers Bank / Cash App / Klarna / Link. Apple Pay and Google Pay are card
+          // wallets, so `card` alone still surfaces them as one-tap buttons in the
+          // Express Checkout Element, while the fallback stays bare card fields.
+          // Verified against /v1/elements/sessions: this yields ordered_payment_method_types
+          // of exactly ['card']. Adding 'link' here brings back a Bank tab and an inline
+          // "save my info" email + phone signup block, which is the clutter we removed.
+          payment_method_types: ['card'],
+          description: `Reservation at ${context.venue?.name ?? 'Venue'}`,
+          receipt_email: userRecord.email ?? undefined,
+          metadata: {
+            paymentId: payment.id,
+            venueId: context.venueId,
+            userId: session.user.id,
+            // The webhook keys off this to know the payment is ours to finalize;
+            // PaymentIntents behind embedded Checkout deliberately do not carry it.
+            flow: 'express',
+          },
+        },
+        {
+          stripeAccount: context.venue?.stripeAccountId ?? undefined,
+        }
+      )
+
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { stripePaymentIntentId: paymentIntent.id },
+      })
+
+      return NextResponse.json({
+        mode: 'express',
+        clientSecret: paymentIntent.client_secret,
+        stripeAccountId: context.venue?.stripeAccountId,
+        paymentId: payment.id,
+        amountCents: pricing.amountCents,
+        subtotalCents: pricing.subtotalCents,
+        processingFeeCents: pricing.processingFeeCents,
+        venueName: context.venue?.name ?? 'Venue',
+      })
+    }
+
     const sessionResponse = await stripe.checkout.sessions.create(
       {
         ui_mode: 'embedded',
@@ -172,6 +225,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
+      mode: 'embedded',
       clientSecret: sessionResponse.client_secret,
       stripeAccountId: context.venue?.stripeAccountId,
     })

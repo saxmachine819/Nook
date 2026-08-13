@@ -15,6 +15,7 @@ import { useVenueFavorites } from "@/lib/hooks"
 import { type CanonicalVenueHours, dateAtTimeInTimezone } from "@/lib/hours"
 import { EmbeddedCheckoutModal } from "./EmbeddedCheckoutModal"
 import { storeEmbeddedCheckout } from "@/lib/checkout-session-storage"
+import { shouldUseExpressCheckout } from "@/lib/checkout-surface"
 import {
   storePendingReservation,
   getPendingReservation,
@@ -559,12 +560,16 @@ export function VenueBookingWidget({
         requestBody.seatIds = seatIds
       }
 
+      // Decided before the request because it changes what the server creates:
+      // a PaymentIntent for express, or an embedded Checkout Session otherwise.
+      const useExpress = shouldUseExpressCheckout()
+
       const response = await fetch("/api/payments/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(useExpress ? { ...requestBody, mode: "express" } : requestBody),
       })
 
       const data = await response.json().catch(() => null)
@@ -612,10 +617,14 @@ export function VenueBookingWidget({
         return
       }
 
-      if (window.matchMedia("(max-width: 768px)").matches) {
+      if (useExpress) {
         storeEmbeddedCheckout({
+          mode: "express",
           clientSecret: data.clientSecret,
           stripeAccountId: data.stripeAccountId ?? null,
+          paymentId: data.paymentId,
+          amountCents: data.amountCents,
+          venueName: data.venueName,
           returnTo: window.location.pathname + window.location.search,
         })
         router.push("/checkout")

@@ -4,6 +4,16 @@ export interface EmbeddedCheckoutPayload {
   clientSecret: string
   stripeAccountId?: string | null
   returnTo: string
+  /**
+   * `embedded` is Stripe's hosted Checkout form. `express` is the PaymentIntent-backed
+   * Apple Pay / Google Pay flow. Absent on payloads written before express existed,
+   * which are treated as `embedded`.
+   */
+  mode?: "embedded" | "express"
+  /** Express only — needed to poll for confirmation and to build the return URL. */
+  paymentId?: string
+  amountCents?: number
+  venueName?: string
 }
 
 export function storeEmbeddedCheckout(payload: EmbeddedCheckoutPayload): void {
@@ -22,6 +32,11 @@ export function readEmbeddedCheckout(): EmbeddedCheckoutPayload | null {
     if (!stored) return null
     const parsed = JSON.parse(stored) as EmbeddedCheckoutPayload
     if (typeof parsed.clientSecret !== "string" || !parsed.clientSecret) {
+      return null
+    }
+    // Express needs a paymentId to confirm against; without one we can't complete the
+    // booking, so fall back rather than render a dead end.
+    if (parsed.mode === "express" && typeof parsed.paymentId !== "string") {
       return null
     }
     return parsed

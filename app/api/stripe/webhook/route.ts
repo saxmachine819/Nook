@@ -8,6 +8,7 @@ import {
   createReservationFromContext,
 } from '@/lib/booking'
 import { enqueueNotification } from '@/lib/notification-queue'
+import { finalizeExpressPayment } from '@/lib/express-payment'
 import type { Prisma } from '@prisma/client'
 
 export const runtime = 'nodejs'
@@ -388,6 +389,35 @@ export async function POST(request: NextRequest) {
           data: { status: 'CANCELED' },
         })
         await markEventProcessed(event.id)
+        break
+      }
+      case 'payment_intent.succeeded': {
+        const intent = event.data.object as Stripe.PaymentIntent
+
+        // Embedded Checkout also produces a PaymentIntent, and that one is finalized by
+        // the `checkout.session.completed` case above. Only intents the express route
+        // created carry this tag, so desktop checkout behaviour is unchanged.
+        if (intent.metadata?.flow !== 'express') {
+          await markEventProcessed(event.id, 'Not an express payment; no action taken')
+          break
+        }
+
+        const paymentId = intent.metadata?.paymentId
+        if (!paymentId) {
+          await markEventProcessed(event.id, 'Missing paymentId in metadata')
+          break
+        }
+
+        const result = await finalizeExpressPayment({
+          paymentId,
+          paymentIntent: intent,
+          stripeAccount: event.account,
+        })
+
+        await markEventProcessed(
+          event.id,
+          result.status === 'finalized' ? undefined : `Express finalize: ${result.status}`
+        )
         break
       }
       case 'payment_intent.payment_failed': {
