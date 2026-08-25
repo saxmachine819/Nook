@@ -241,7 +241,7 @@ export function ResultsDrawer({
     <div
       ref={containerRef}
       className={cn(
-        "fixed left-0 right-0 flex flex-col rounded-t-[2.5rem] glass shadow-2xl overflow-hidden px-1",
+        "fixed left-0 right-0 flex flex-col rounded-t-4xl glass shadow-2xl overflow-hidden px-1",
         isDragging && "transition-none",
         !isDragging && "transition-[height] duration-500 ease-smooth-out"
       )}
@@ -318,7 +318,7 @@ export function ResultsDrawer({
               <Button
                 variant="outline"
                 onClick={onClearFavoritesFilter}
-                className="rounded-2xl font-bold px-8 border-none bg-primary/5 text-primary hover:bg-primary/10"
+                className="rounded-lg font-bold px-8 border-none bg-primary/5 text-primary hover:bg-primary/10"
               >
                 Start Exploring
               </Button>
@@ -340,7 +340,7 @@ export function ResultsDrawer({
               const isFavorited = favoritedVenueIds.has(venue.id)
               return (
                 <li key={venue.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both" style={{ animationDelay: `${venues.indexOf(venue) * 50}ms` }}>
-                  <div className="relative group rounded-3xl border border-white/40 bg-white/40 p-3.5 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98]">
+                  <div className="relative group rounded-2xl border border-white/40 bg-white/40 p-3.5 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98]">
                     {/* Heart - absolutely positioned so it always receives clicks and is never overlapped by the tap area */}
                     <div
                       className="absolute top-3 right-3 z-20 touch-manipulation"
@@ -375,7 +375,7 @@ export function ResultsDrawer({
                       className="flex w-full gap-4 text-left min-w-0 cursor-pointer pr-10"
                     >
                       {venue.imageUrls && venue.imageUrls.length > 0 && (
-                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl">
+                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg">
                           {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue image URL */}
                           <img
                             src={venue.imageUrls[0]}

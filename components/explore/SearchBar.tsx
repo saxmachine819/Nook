@@ -46,13 +46,13 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
       {searchIconHref ? (
         <Link
           href={searchIconHref}
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
           aria-label="Go to search"
         >
           <Search size={20} strokeWidth={2.5} className="text-primary/70" />
         </Link>
       ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold premium-shadow">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-none bg-white font-bold premium-shadow">
           <Search size={20} strokeWidth={2.5} className="text-primary/70" />
         </div>
       )}
@@ -78,7 +78,7 @@ export function SearchBar({ onSearch, placeholder = "Search cafés, hotel lobbie
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-2xl border-none bg-white py-3.5 pl-12 pr-12 text-base font-medium premium-shadow ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all duration-300"
+          className="w-full rounded-lg border-none bg-white py-3.5 pl-12 pr-12 text-base font-medium premium-shadow ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-all duration-300"
         />
 
         {query.length > 0 && (

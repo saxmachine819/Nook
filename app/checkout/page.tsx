@@ -42,7 +42,7 @@ export default function CheckoutPage() {
         <p className="text-sm font-medium text-muted-foreground">
           No active checkout session. Please start your reservation again.
         </p>
-        <Button className="mt-6 rounded-2xl" onClick={() => router.push("/")}>
+        <Button className="mt-6 rounded-lg" onClick={() => router.push("/")}>
           Return home
         </Button>
       </div>

@@ -27,7 +27,7 @@ export default function SupportPage() {
         <div className="space-y-4">
           <a
             href="mailto:support@nooc.io"
-            className="flex items-center gap-4 rounded-[1.5rem] bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
+            className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
           >
             <Mail className="h-6 w-6 text-primary" />
             <div>
@@ -38,7 +38,7 @@ export default function SupportPage() {
 
           <Link
             href="/privacy"
-            className="flex items-center gap-4 rounded-[1.5rem] bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
+            className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
           >
             <Shield className="h-6 w-6 text-primary" />
             <div>
@@ -51,7 +51,7 @@ export default function SupportPage() {
 
           <Link
             href="/profile"
-            className="flex items-center gap-4 rounded-[1.5rem] bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
+            className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-md ring-1 ring-black/5 transition hover:shadow-lg"
           >
             <Trash2 className="h-6 w-6 text-primary" />
             <div>

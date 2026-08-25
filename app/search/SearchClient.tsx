@@ -145,7 +145,7 @@ export function SearchClient() {
       <div className="fixed left-4 top-[max(1rem,var(--safe-area-top))] z-10">
         <Link
           href="/?view=map"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
           aria-label="View on map"
         >
           <Map size={20} strokeWidth={2.5} className="text-primary/70" />
@@ -156,7 +156,7 @@ export function SearchClient() {
       <div className="px-4 pt-10 pb-6 sm:pt-14 sm:pb-8">
         <div className="mx-auto max-w-lg text-center">
           <div className="mb-3 flex items-center justify-center">
-            <Image src="/nooc-logo.png" alt="Nooc" width={44} height={44} className="rounded-xl" />
+            <Image src="/nooc-logo.png" alt="Nooc" width={44} height={44} className="rounded-sm" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Find a Nooc

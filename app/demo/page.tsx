@@ -31,7 +31,7 @@ export default function DemoPage() {
 
         {/* Demo video — URL fetched at request time via /api/demo-video-url so env works without rebuild */}
         <section className="mb-14">
-          <div className="aspect-video w-full max-w-3xl mx-auto rounded-2xl overflow-hidden border border-border bg-black">
+          <div className="aspect-video w-full max-w-3xl mx-auto rounded-lg overflow-hidden border border-border bg-black">
             <DemoVideo />
           </div>
         </section>
@@ -44,7 +44,7 @@ export default function DemoPage() {
               <Calendar className="h-5 w-5 text-primary" />
               Schedule a call
             </h2>
-            <div className="rounded-2xl overflow-hidden border border-border bg-card shadow-lg min-h-[380px] w-full">
+            <div className="rounded-lg overflow-hidden border border-border bg-card shadow-lg min-h-[380px] w-full">
               <iframe
                 title="Schedule a meeting with Jordan"
                 src={CAL_EMBED_URL}
@@ -57,7 +57,7 @@ export default function DemoPage() {
           <section className="flex justify-center">
             <Button
               size="lg"
-              className="w-full sm:w-auto h-14 rounded-2xl font-black px-8 shadow-lg shadow-primary/20"
+              className="w-full sm:w-auto h-14 rounded-lg font-black px-8 shadow-lg shadow-primary/20"
               asChild
             >
               <Link href="/venue/onboard">

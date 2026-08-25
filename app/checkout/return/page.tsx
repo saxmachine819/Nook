@@ -102,7 +102,7 @@ export default function CheckoutReturnPage() {
   if (status === "error") {
     return (
       <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
-        <Card className="w-full max-w-md border-red-200 shadow-2xl rounded-3xl overflow-hidden">
+        <Card className="w-full max-w-md border-red-200 shadow-2xl rounded-2xl overflow-hidden">
           <div className="h-2 bg-red-500" />
           <CardHeader className="pt-8 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600 mb-4">
@@ -114,7 +114,7 @@ export default function CheckoutReturnPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-0 space-y-4">
-            <Button className="w-full rounded-2xl h-12 font-semibold shadow-lg shadow-primary/10" onClick={() => router.push("/")}>
+            <Button className="w-full rounded-lg h-12 font-semibold shadow-lg shadow-primary/10" onClick={() => router.push("/")}>
               Return to Home
             </Button>
             <p className="text-center text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ export default function CheckoutReturnPage() {
   if (status === "open") {
     return (
       <div className="flex min-h-screen items-center justify-center p-4 bg-slate-50">
-        <Card className="w-full max-w-md border-amber-200 shadow-2xl rounded-3xl overflow-hidden">
+        <Card className="w-full max-w-md border-amber-200 shadow-2xl rounded-2xl overflow-hidden">
           <div className="h-2 bg-amber-500" />
           <CardHeader className="pt-8 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-600 mb-4">
@@ -141,7 +141,7 @@ export default function CheckoutReturnPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-8 pt-0 space-y-4">
-            <Button className="w-full rounded-2xl h-12 font-semibold" onClick={() => router.push("/reservations")}>
+            <Button className="w-full rounded-lg h-12 font-semibold" onClick={() => router.push("/reservations")}>
               View My Reservations
             </Button>
           </CardContent>

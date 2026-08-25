@@ -270,14 +270,14 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
           </div>
 
           {/* Hero: row 2, same height as Reserve so bottoms align */}
-          <div className="lg:row-start-2 lg:col-start-1 lg:min-h-0 lg:overflow-hidden lg:rounded-[2.5rem]">
-            <div className="relative overflow-hidden rounded-[2.5rem] bg-muted shadow-lg h-[300px] sm:h-[450px] lg:h-[550px] xl:h-[600px] 2xl:h-[650px]">
+          <div className="lg:row-start-2 lg:col-start-1 lg:min-h-0 lg:overflow-hidden lg:rounded-4xl">
+            <div className="relative overflow-hidden rounded-4xl bg-muted shadow-lg h-[300px] sm:h-[450px] lg:h-[550px] xl:h-[600px] 2xl:h-[650px]">
               <VenueImageCarousel
                 images={venueHeroImages}
                 className="h-full w-full"
                 objectFit="contain"
               />
-              <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] ring-1 ring-inset ring-black/5" />
+              <div className="pointer-events-none absolute inset-0 rounded-4xl ring-1 ring-inset ring-black/5" />
               <VenueHeroHoursBadge
                 openStatus={openStatus}
                 weeklyFormatted={weeklyFormatted}
@@ -302,7 +302,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
             )}
           </div>
 
-          <div className="space-y-6 lg:row-start-2 lg:col-start-2 lg:min-h-0 lg:overflow-hidden lg:rounded-3xl lg:flex lg:flex-col">
+          <div className="space-y-6 lg:row-start-2 lg:col-start-2 lg:min-h-0 lg:overflow-hidden lg:rounded-2xl lg:flex lg:flex-col">
             {(venue as any).deals?.[0] && (() => {
               const primaryDeal = (venue as any).deals[0]
               const eligibility = primaryDeal.eligibilityJson || {}
@@ -310,7 +310,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               const dealDescription = generateDescription(primaryDeal.type, eligibility)
               return (
                 <div className="hidden lg:block">
-                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-md shadow-emerald-500/5 rounded-3xl">
+                  <Card className="overflow-hidden border-none bg-emerald-500 shadow-md shadow-emerald-500/5 rounded-2xl">
                     <CardContent className="p-6">
                       <div className="space-y-4">
                         <div className="flex items-center gap-3">
@@ -328,7 +328,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
                             </p>
                           )}
                         </div>
-                        <div className="rounded-2xl bg-white/10 p-4">
+                        <div className="rounded-lg bg-white/10 p-4">
                           <p className="text-xs font-medium leading-relaxed text-white/90">
                             {primaryDeal.description || dealDescription}
                           </p>
@@ -340,7 +340,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )
             })()}
 
-            <Card className="overflow-hidden border-none bg-white shadow-lg rounded-3xl lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+            <Card className="overflow-hidden border-none bg-white shadow-lg rounded-2xl lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
               <CardHeader className="p-8 pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
@@ -397,7 +397,7 @@ export default async function VenuePage({ params, searchParams }: VenuePageProps
               )}
               <div className="h-px w-full bg-border/50" />
               {venue.rulesText && (
-                <div className="rounded-2xl border-none bg-primary/[0.03] p-8 space-y-4">
+                <div className="rounded-lg border-none bg-primary/[0.03] p-8 space-y-4">
                   <div className="text-[10px] font-bold uppercase tracking-widest text-primary/40">
                     House rules
                   </div>

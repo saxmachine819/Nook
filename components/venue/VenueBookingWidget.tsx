@@ -1360,7 +1360,7 @@ export function VenueBookingWidget({
   const overlayContent =
     showCta &&
     ((
-      <div className="pointer-events-auto z-10 w-full max-w-sm rounded-2xl border bg-white p-6 shadow-xl shrink-0">
+      <div className="pointer-events-auto z-10 w-full max-w-sm rounded-lg border bg-white p-6 shadow-xl shrink-0">
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -1562,7 +1562,7 @@ export function VenueBookingWidget({
 
         {/* Only show reserve button after a selection is made. On lg with CTA_OVER_HERO, CTA is portaled to hero instead. */}
         {showCta && !useOverlay && (
-          <div className="mt-8 space-y-4 lg:sticky lg:bottom-1 lg:z-10 lg:bg-white lg:pt-1 lg:-mx-8 lg:px-8 lg:pb-3 lg:rounded-b-3xl lg:border-t lg:border-border/50">
+          <div className="mt-8 space-y-4 lg:sticky lg:bottom-1 lg:z-10 lg:bg-white lg:pt-1 lg:-mx-8 lg:px-8 lg:pb-3 lg:rounded-b-2xl lg:border-t lg:border-border/50">
             <div className="space-y-4 lg:scale-[0.9] lg:origin-bottom">
               <div className="rounded-md border bg-muted/30 px-3 py-2.5 space-y-1.5">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">

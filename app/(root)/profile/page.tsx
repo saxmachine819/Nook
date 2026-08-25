@@ -133,7 +133,7 @@ function ProfileContent() {
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-16 max-w-xl">
           <div className="flex flex-col items-center text-center space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <div className="flex h-24 w-24 items-center justify-center rounded-[2.5rem] bg-white shadow-lg ring-1 ring-black/5">
+            <div className="flex h-24 w-24 items-center justify-center rounded-4xl bg-white shadow-lg ring-1 ring-black/5">
               <User className="h-10 w-10 text-primary/40" />
             </div>
             <div className="space-y-2">
@@ -143,17 +143,17 @@ function ProfileContent() {
               </p>
             </div>
 
-            <Card className="w-full border-none bg-white shadow-lg rounded-[2.5rem] p-8">
+            <Card className="w-full border-none bg-white shadow-lg rounded-4xl p-8">
               <CardContent className="p-0 space-y-3">
                 <Button
                   onClick={handleAppleSignIn}
                   size="lg"
                   variant="outline"
-                  className="w-full h-14 rounded-2xl font-black text-lg border-black/10 bg-black text-white hover:bg-black/90 hover:text-white"
+                  className="w-full h-14 rounded-lg font-black text-lg border-black/10 bg-black text-white hover:bg-black/90 hover:text-white"
                 >
                   Continue with Apple
                 </Button>
-                <Button onClick={handleGoogleSignIn} size="lg" className="w-full h-14 rounded-2xl font-black text-lg shadow-md shadow-primary/10">
+                <Button onClick={handleGoogleSignIn} size="lg" className="w-full h-14 rounded-lg font-black text-lg shadow-md shadow-primary/10">
                   <LogIn className="mr-3 h-5 w-5" />
                   Continue with Google
                 </Button>
@@ -180,7 +180,7 @@ function ProfileContent() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="mb-12 flex items-center gap-6 px-1 animate-in fade-in duration-700">
-          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-[2rem] bg-white shadow-lg ring-1 ring-black/5">
+          <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-lg ring-1 ring-black/5">
             <div className="flex h-full w-full items-center justify-center text-xl font-black text-primary/40">
               {initialsFromName(session.user?.name) ? (
                 initialsFromName(session.user?.name)
@@ -198,18 +198,18 @@ function ProfileContent() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-2">
-          <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4">
+          <Card className="border-none bg-white shadow-lg rounded-4xl p-4">
             <CardHeader className="p-6">
               <CardTitle className="text-xl font-black tracking-tight">Profile Info</CardTitle>
             </CardHeader>
             <CardContent className="p-6 pt-0 space-y-6">
-              <div className="p-4 bg-primary/[0.02] rounded-2xl border border-primary/5">
+              <div className="p-4 bg-primary/[0.02] rounded-lg border border-primary/5">
                 <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Full Name</label>
                 <p className="text-sm font-bold text-foreground/80">
                   {session.user?.name || "Not provided"}
                 </p>
               </div>
-              <div className="p-4 bg-primary/[0.02] rounded-2xl border border-primary/5">
+              <div className="p-4 bg-primary/[0.02] rounded-lg border border-primary/5">
                 <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground/40">Email Address</label>
                 <p className="text-sm font-bold text-foreground/80">
                   {session.user?.email || "Not provided"}
@@ -219,7 +219,7 @@ function ProfileContent() {
           </Card>
 
           <div className="space-y-8">
-            <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4">
+            <Card className="border-none bg-white shadow-lg rounded-4xl p-4">
               <CardHeader className="p-6">
                 <CardTitle className="text-xl font-black tracking-tight">Security & Privacy</CardTitle>
               </CardHeader>
@@ -228,7 +228,7 @@ function ProfileContent() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full h-12 rounded-2xl font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all justify-between px-4"
+                    className="w-full h-12 rounded-lg font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all justify-between px-4"
                     onClick={async () => {
                       const next = !biometricEnabled
                       setBiometricEnabled(next)
@@ -247,14 +247,14 @@ function ProfileContent() {
                 <Button
                   onClick={() => signOut()}
                   variant="outline"
-                  className="w-full h-12 rounded-2xl font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all"
+                  className="w-full h-12 rounded-lg font-bold bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all"
                 >
                   <LogOut className="mr-2 h-4 w-4 opacity-50" />
                   Sign out
                 </Button>
                 <Button
                   variant="ghost"
-                  className="w-full h-12 rounded-2xl font-bold text-muted-foreground/60 hover:text-red-600 hover:bg-red-50 transition-all"
+                  className="w-full h-12 rounded-lg font-bold text-muted-foreground/60 hover:text-red-600 hover:bg-red-50 transition-all"
                   onClick={() => {
                     setDeleteModalOpen(true)
                     setDeleteError(null)
@@ -267,7 +267,7 @@ function ProfileContent() {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="w-full h-12 rounded-2xl font-bold text-muted-foreground/60 hover:text-primary hover:bg-primary/5 transition-all"
+                  className="w-full h-12 rounded-lg font-bold text-muted-foreground/60 hover:text-primary hover:bg-primary/5 transition-all"
                   asChild
                 >
                   <a href="mailto:support@nooc.io" target="_blank" rel="noopener noreferrer">
@@ -279,12 +279,12 @@ function ProfileContent() {
             </Card>
 
             {isAdmin && (
-              <Card className="border-none bg-primary text-white shadow-lg rounded-[2.5rem] p-4">
+              <Card className="border-none bg-primary text-white shadow-lg rounded-4xl p-4">
                 <CardHeader className="p-6">
                   <CardTitle className="text-xl font-black tracking-tight">Admin Portal</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-0">
-                  <Button size="lg" asChild className="w-full h-12 rounded-2xl font-black bg-white text-primary hover:bg-white/90">
+                  <Button size="lg" asChild className="w-full h-12 rounded-lg font-black bg-white text-primary hover:bg-white/90">
                     <Link href="/admin">
                       <Shield className="mr-2 h-4 w-4" />
                       Manage Platform
@@ -295,7 +295,7 @@ function ProfileContent() {
             )}
           </div>
 
-          <Card className="border-none bg-white shadow-lg rounded-[2.5rem] p-4 lg:col-span-2">
+          <Card className="border-none bg-white shadow-lg rounded-4xl p-4 lg:col-span-2">
             <CardHeader className="p-6">
               <CardTitle className="text-xl font-black tracking-tight">Venues Dashboard</CardTitle>
               <CardDescription className="text-sm font-medium text-muted-foreground/60">
@@ -316,7 +316,7 @@ function ProfileContent() {
                   <p className="text-sm font-medium text-foreground/60 leading-relaxed max-w-lg">
                     Whether you manage a boutique café, a hotel lobby, or a creative studio, join Nooc to reach thousands of remote workers looking for their next favorite spot.
                   </p>
-                  <Button size="lg" asChild className="w-full h-14 rounded-2xl font-black shadow-md shadow-primary/5">
+                  <Button size="lg" asChild className="w-full h-14 rounded-lg font-black shadow-md shadow-primary/5">
                     <Link href="/venue/onboard">
                       <Plus className="mr-2 h-5 w-5" />
                       Add your workspace
@@ -324,7 +324,7 @@ function ProfileContent() {
                   </Button>
                 </div>
               ) : (
-                <Button size="lg" variant="outline" asChild className="w-full h-14 rounded-2xl font-black bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all">
+                <Button size="lg" variant="outline" asChild className="w-full h-14 rounded-lg font-black bg-primary/5 border-none text-primary hover:bg-primary/10 transition-all">
                   <Link href="/venue/dashboard">
                     <LayoutDashboard className="mr-2 h-5 w-5" />
                     Open Management Dashboard
@@ -336,7 +336,7 @@ function ProfileContent() {
         </div>
 
         <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
-          <DialogContent className="rounded-[2.5rem] p-8 sm:max-w-md">
+          <DialogContent className="rounded-4xl p-8 sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-2xl font-black tracking-tight">Delete Account</DialogTitle>
               <DialogDescription className="text-sm font-medium text-muted-foreground pt-2">
@@ -351,7 +351,7 @@ function ProfileContent() {
                   value={deleteConfirmation}
                   onChange={(e) => setDeleteConfirmation(e.target.value)}
                   placeholder="DELETE"
-                  className="h-12 rounded-xl font-bold border-none bg-primary/[0.03]"
+                  className="h-12 rounded-sm font-bold border-none bg-primary/[0.03]"
                   autoComplete="off"
                 />
               </div>
@@ -363,7 +363,7 @@ function ProfileContent() {
                   onChange={(e) => setDeleteReason(e.target.value)}
                   placeholder="Tell us how we can improve"
                   rows={2}
-                  className="rounded-xl font-medium border-none bg-primary/[0.03]"
+                  className="rounded-sm font-medium border-none bg-primary/[0.03]"
                 />
               </div>
               {deleteError && (
@@ -375,7 +375,7 @@ function ProfileContent() {
                 variant="destructive"
                 onClick={handleDeleteAccount}
                 disabled={deleteLoading || deleteConfirmation !== "DELETE"}
-                className="rounded-2xl h-12 font-black shadow-md shadow-red-500/10"
+                className="rounded-lg h-12 font-black shadow-md shadow-red-500/10"
               >
                 {deleteLoading ? "Closing account..." : "Permanently Delete Account"}
               </Button>
@@ -383,7 +383,7 @@ function ProfileContent() {
                 variant="ghost"
                 onClick={() => setDeleteModalOpen(false)}
                 disabled={deleteLoading}
-                className="rounded-2xl h-12 font-bold text-muted-foreground"
+                className="rounded-lg h-12 font-bold text-muted-foreground"
               >
                 Go Back
               </Button>

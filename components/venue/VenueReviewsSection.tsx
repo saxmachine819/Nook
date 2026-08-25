@@ -38,7 +38,7 @@ export function ReviewListItem({ review, currentUserId }: { review: VenueReviewI
   const reviewerName = review.user?.name?.split(" ")[0] || "Guest"
   const isOwnReview = !!currentUserId && review.userId === currentUserId
   return (
-    <div className="space-y-2 rounded-2xl border-none bg-primary/[0.03] p-6">
+    <div className="space-y-2 rounded-lg border-none bg-primary/[0.03] p-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">

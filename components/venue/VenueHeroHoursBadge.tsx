@@ -34,7 +34,7 @@ export function VenueHeroHoursBadge({
           )}
         </summary>
         {hasHours && (
-          <div className="absolute top-full left-0 mt-1.5 min-w-[14rem] max-w-[min(100vw,24rem)] rounded-2xl border border-border/50 bg-background/95 py-3 px-4 shadow-xl backdrop-blur-sm z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="absolute top-full left-0 mt-1.5 min-w-[14rem] max-w-[min(100vw,24rem)] rounded-lg border border-border/50 bg-background/95 py-3 px-4 shadow-xl backdrop-blur-sm z-50 animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="space-y-1.5">
               {weeklyFormatted.map((dayHours, index) => (
                 <div
