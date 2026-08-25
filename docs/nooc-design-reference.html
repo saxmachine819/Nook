@@ -1,0 +1,956 @@
+<title>Nooc Design Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;900&display=swap">
+
+<style>
+:root {
+  --ground:        #FBFAF9;
+  --ground-sunk:   #F2EFEA;
+  --panel:         #FFFFFF;
+  --ink:           #14201A;
+  --ink-soft:      #5A6660;
+  --ink-faint:     #8C948F;
+  --rule:          #E4E0DA;
+  --rule-soft:     #EFECE6;
+  --brand:         #0F5132;
+  --brand-deep:    #0A4028;
+  --brand-tint:    #EEF3F0;
+  --flag:          #8A5A1E;
+  --flag-tint:     #FBF3E7;
+  --flag-rule:     #E8D5B4;
+  --shadow-card:   0 1px 2px rgba(20,32,26,.04), 0 8px 24px -12px rgba(20,32,26,.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0C110E;
+    --ground-sunk: #131A16;
+    --panel:       #141C18;
+    --ink:         #ECEAE4;
+    --ink-soft:    #9AA49E;
+    --ink-faint:   #6E7873;
+    --rule:        #263029;
+    --rule-soft:   #1C2420;
+    --brand:       #7FB499;
+    --brand-deep:  #6FAE8B;
+    --brand-tint:  #17241D;
+    --flag:        #D8A863;
+    --flag-tint:   #231C10;
+    --flag-rule:   #3D3220;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.30), 0 8px 24px -12px rgba(0,0,0,.55);
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:      #0C110E;
+  --ground-sunk: #131A16;
+  --panel:       #141C18;
+  --ink:         #ECEAE4;
+  --ink-soft:    #9AA49E;
+  --ink-faint:   #6E7873;
+  --rule:        #263029;
+  --rule-soft:   #1C2420;
+  --brand:       #7FB499;
+  --brand-deep:  #6FAE8B;
+  --brand-tint:  #17241D;
+  --flag:        #D8A863;
+  --flag-tint:   #231C10;
+  --flag-rule:   #3D3220;
+  --shadow-card: 0 1px 2px rgba(0,0,0,.30), 0 8px 24px -12px rgba(0,0,0,.55);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+
+/* ---------- masthead ---------- */
+.masthead {
+  padding: 72px 0 40px;
+  border-bottom: 1px solid var(--rule);
+}
+.wordmark {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: clamp(2.6rem, 6vw, 4.1rem);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -.02em;
+  margin: 0 0 18px;
+  text-wrap: balance;
+}
+.wordmark em { font-style: italic; color: var(--brand); }
+.standfirst {
+  font-size: 1.075rem;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  margin: 0 0 32px;
+}
+.provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .74rem;
+  color: var(--ink-faint);
+}
+.provenance b { color: var(--ink-soft); font-weight: 500; }
+
+/* ---------- layout ---------- */
+.shell { display: block; }
+@media (min-width: 1080px) {
+  .shell { display: grid; grid-template-columns: 190px 1fr; gap: 64px; align-items: start; }
+  .toc { position: sticky; top: 32px; }
+}
+.toc { padding-top: 56px; }
+.toc-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: .66rem; text-transform: uppercase; letter-spacing: .13em;
+  color: var(--ink-faint); margin-bottom: 14px;
+}
+.toc a {
+  display: block; padding: 5px 0;
+  font-size: .845rem; color: var(--ink-soft);
+  text-decoration: none; border-bottom: 1px solid transparent;
+}
+.toc a:hover, .toc a:focus-visible { color: var(--brand); }
+@media (max-width: 1079px) { .toc { display: none; } }
+
+section { padding-top: 56px; scroll-margin-top: 24px; }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: .67rem; text-transform: uppercase; letter-spacing: .15em;
+  color: var(--brand); margin-bottom: 10px;
+}
+h2 {
+  font-family: "Newsreader", Georgia, serif;
+  font-size: clamp(1.7rem, 3.4vw, 2.25rem);
+  font-weight: 500; letter-spacing: -.015em; line-height: 1.15;
+  margin: 0 0 14px; text-wrap: balance;
+}
+h3 {
+  font-size: .95rem; font-weight: 600; letter-spacing: -.005em;
+  margin: 36px 0 12px; color: var(--ink);
+}
+h4 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .11em;
+  color: var(--ink-faint); font-weight: 500; margin: 26px 0 10px;
+}
+p { max-width: 68ch; margin: 0 0 14px; }
+.lede { color: var(--ink-soft); max-width: 66ch; }
+a { color: var(--brand); }
+code, .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: .855em;
+}
+code {
+  background: var(--ground-sunk);
+  padding: .12em .38em;
+  border-radius: 4px;
+}
+
+/* ---------- tables ---------- */
+.tw { overflow-x: auto; margin: 18px 0 8px; border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: .845rem; min-width: 520px; }
+th {
+  text-align: left; font-family: "IBM Plex Mono", monospace;
+  font-size: .66rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink-faint); font-weight: 500;
+  padding: 11px 14px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+td {
+  padding: 10px 14px; border-bottom: 1px solid var(--rule-soft);
+  vertical-align: middle; font-variant-numeric: tabular-nums;
+}
+tr:last-child td { border-bottom: 0; }
+td.m, th.m { font-family: "IBM Plex Mono", monospace; font-size: .79rem; white-space: nowrap; }
+td.note { color: var(--ink-soft); }
+
+/* ---------- swatches ---------- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr)); gap: 12px; margin: 18px 0; }
+.sw { border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.sw .chip { height: 62px; border-bottom: 1px solid var(--rule); }
+.sw .meta { padding: 9px 11px 11px; }
+.sw .name { font-family: "IBM Plex Mono", monospace; font-size: .72rem; font-weight: 500; color: var(--ink); }
+.sw .val { font-family: "IBM Plex Mono", monospace; font-size: .68rem; color: var(--ink-faint); margin-top: 3px; line-height: 1.5; }
+
+/* ---------- flags ---------- */
+.flag {
+  border: 1px solid var(--flag-rule);
+  background: var(--flag-tint);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin: 20px 0;
+}
+.flag-tag {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: .64rem; text-transform: uppercase; letter-spacing: .13em;
+  color: var(--flag); font-weight: 600; margin-bottom: 7px;
+}
+.flag p { margin: 0 0 9px; font-size: .885rem; max-width: 72ch; }
+.flag p:last-child { margin-bottom: 0; }
+.flag strong { font-weight: 600; }
+
+.card {
+  border: 1px solid var(--rule); background: var(--panel);
+  border-radius: 10px; padding: 16px 18px; margin: 18px 0;
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- specimens ---------- */
+.spec { border: 1px solid var(--rule); border-radius: 10px; background: var(--panel); padding: 20px 22px; margin: 16px 0; }
+.spec-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 20px; padding: 12px 0; border-bottom: 1px solid var(--rule-soft); }
+.spec-row:last-child { border-bottom: 0; }
+.spec-row:first-child { padding-top: 0; }
+.spec-label { font-family: "IBM Plex Mono", monospace; font-size: .68rem; color: var(--ink-faint); width: 132px; flex-shrink: 0; }
+.inter { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; letter-spacing: -.01em; }
+.sysfont { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; letter-spacing: -.01em; }
+
+/* radius + shadow demos */
+.shapes { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 12px; margin: 18px 0; }
+.shape { text-align: center; }
+.shape .box { height: 62px; background: var(--brand-tint); border: 1px solid var(--brand); }
+.shape .cap { font-family: "IBM Plex Mono", monospace; font-size: .66rem; color: var(--ink-faint); margin-top: 7px; line-height: 1.45; }
+.shape .cap b { color: var(--ink); font-weight: 500; display: block; }
+
+hr.div { border: 0; border-top: 1px solid var(--rule); margin: 56px 0 0; }
+
+ul.tight { margin: 10px 0 14px; padding-left: 20px; max-width: 68ch; }
+ul.tight li { margin-bottom: 7px; }
+
+.pillrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.pill {
+  font-family: "IBM Plex Mono", monospace; font-size: .7rem;
+  padding: 4px 11px; border-radius: 999px;
+  background: var(--brand-tint); color: var(--brand); border: 1px solid var(--rule);
+}
+
+footer {
+  margin-top: 72px; padding-top: 28px; border-top: 1px solid var(--rule);
+  font-family: "IBM Plex Mono", monospace; font-size: .72rem; color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <h1 class="wordmark">The Nooc <em>design system</em>, as actually built</h1>
+  <p class="standfirst">A reference for a designer joining the project. Every value here was read out of the repository or measured in a running build — nothing is inferred from screenshots or reconstructed by eye. Where the code still contradicts itself, it says so rather than picking a winner.</p>
+  <div class="provenance">
+    <span><b>Repo</b> nooc @ design-system-cleanup</span>
+    <span><b>Base</b> fce81c5</span>
+    <span><b>Verified</b> local build, 2026-08-24</span>
+    <span><b>Stack</b> Next.js 14 · Tailwind · shadcn/ui</span>
+  </div>
+
+  <div class="flag" style="margin-top:28px">
+    <div class="flag-tag">Updated — three system fixes have landed</div>
+    <p><strong>Brand green is now one value.</strong> The <code>--primary</code> token resolves to exactly <code>#0F5132</code>, matching the green already used in email, maps and print. <strong>Inter now actually renders</strong> — <code>font-sans</code> was wired to the font variable it had been ignoring. <strong>The radius scale is monotonic</strong>, and every step is derived from <code>--radius</code>.</p>
+    <p>Sections below describe the system <em>as it now stands</em>. Each fix notes what changed, so this doubles as the changelog. Two items are deliberately unresolved and still flagged: the logo artwork's own green, and the absence of a vector master.</p>
+  </div>
+</header>
+
+<div class="shell">
+
+  <nav class="toc">
+    <div class="toc-label">Contents</div>
+    <a href="#architecture">Architecture</a>
+    <a href="#color">Color</a>
+    <a href="#greens">Brand green</a>
+    <a href="#type">Typography</a>
+    <a href="#shape">Shape &amp; elevation</a>
+    <a href="#components">Components</a>
+    <a href="#motion">Motion</a>
+    <a href="#layout">Layout &amp; spacing</a>
+    <a href="#native">Native shell</a>
+    <a href="#offapp">Off-app surfaces</a>
+    <a href="#assets">Assets</a>
+    <a href="#decisions">Open decisions</a>
+  </nav>
+
+  <main>
+
+  <section id="architecture">
+    <div class="eyebrow">How it is built</div>
+    <h2>One token layer, two consumers that ignore it</h2>
+    <p class="lede">Nooc is a Next.js 14 app styled with Tailwind and shadcn/ui components. The design tokens live in one file — <code>app/globals.css</code> — as HSL triplets on <code>:root</code>, which <code>tailwind.config.ts</code> maps onto Tailwind color names.</p>
+
+    <div class="card">
+      <h4 style="margin-top:0">Token flow</h4>
+      <p style="margin:0;font-size:.875rem"><code>app/globals.css</code> defines <code>--primary: 151.8 68.8% 18.8%</code> → <code>tailwind.config.ts</code> maps it as <code>primary: "hsl(var(--primary))"</code> → components use <code>bg-primary</code>, <code>text-primary</code>.</p>
+    </div>
+
+    <p>Because tokens are stored as bare HSL channel values (not full colors), they only work through the <code>hsl(var(--x))</code> wrapper. Any surface that can't read CSS variables — transactional email, the Mapbox canvas, generated PDFs — hard-codes its own hex values instead. The token is now chosen so it resolves to exactly the hex those surfaces already use; see <a href="#greens">Brand green</a>.</p>
+
+    <h3>Where things live</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Path</th><th>Holds</th></tr></thead>
+      <tbody>
+        <tr><td class="m">app/globals.css</td><td class="note">All color tokens, radius, base type rules, glass &amp; shadow utilities, native safe-area rules</td></tr>
+        <tr><td class="m">tailwind.config.ts</td><td class="note">Token → Tailwind mapping, radius scale, custom easing</td></tr>
+        <tr><td class="m">components/ui/</td><td class="note">Primitives: button, card, input, dialog, toast, spinner, label, textarea</td></tr>
+        <tr><td class="m">components/venue/, explore/, layout/</td><td class="note">Product surfaces — venue cards, booking, search, bottom nav</td></tr>
+        <tr><td class="m">emails/shared-styles.ts</td><td class="note">Independent inline-style token set for transactional email</td></tr>
+        <tr><td class="m">components/map/MapboxMap.tsx</td><td class="note">Map palette, pin and cluster rendering</td></tr>
+        <tr><td class="m">lib/qr-sticker-generator.ts</td><td class="note">Print QR sticker brand spec</td></tr>
+        <tr><td class="m">mobile/capacitor.config.ts</td><td class="note">Native shell chrome — background, splash, status bar</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <hr class="div">
+
+  <section id="color">
+    <div class="eyebrow">Color</div>
+    <h2>A warm neutral ground under a dark forest green</h2>
+    <p class="lede">The palette is deliberately warm: every neutral carries a hue bias around 30° (a soft sand), rather than the cool slate that shadcn ships by default. The single accent is a deep, desaturated green. There is no secondary brand hue.</p>
+
+    <h3>Light theme — the shipping palette</h3>
+    <p>These are the live values, read from <code>document.documentElement</code> in a running build. Hex equivalents are computed from the HSL source and confirmed against the rendered pixels.</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#FBFAF9"></div><div class="meta"><div class="name">--background</div><div class="val">30 20% 98%<br>#FBFAF9</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FFFFFF"></div><div class="meta"><div class="name">--card / --popover</div><div class="val">0 0% 100%<br>#FFFFFF</div></div></div>
+      <div class="sw"><div class="chip" style="background:#0F1729"></div><div class="meta"><div class="name">--foreground</div><div class="val">222 47% 11%<br>#0F1729</div></div></div>
+      <div class="sw"><div class="chip" style="background:#0F5132"></div><div class="meta"><div class="name">--primary / --ring</div><div class="val">151.8 68.8% 18.8%<br>#0F5132</div></div></div>
+      <div class="sw"><div class="chip" style="background:#FFFFFF"></div><div class="meta"><div class="name">--primary-foreground</div><div class="val">0 0% 100%<br>#FFFFFF</div></div></div>
+      <div class="sw"><div class="chip" style="background:#E8E6E3"></div><div class="meta"><div class="name">--secondary</div><div class="val">30 10% 90%<br>#E8E6E3</div></div></div>
+      <div class="sw"><div class="chip" style="background:#F1F0EE"></div><div class="meta"><div class="name">--muted</div><div class="val">30 10% 94%<br>#F1F0EE</div></div></div>
+      <div class="sw"><div class="chip" style="background:#64748B"></div><div class="meta"><div class="name">--muted-foreground</div><div class="val">215.4 16.3% 46.9%<br>#64748B</div></div></div>
+      <div class="sw"><div class="chip" style="background:#E9FBF3"></div><div class="meta"><div class="name">--accent</div><div class="val">151.8 68.8% 95%<br>#E9FBF3</div></div></div>
+      <div class="sw"><div class="chip" style="background:#E8E6E3"></div><div class="meta"><div class="name">--border / --input</div><div class="val">30 10% 90%<br>#E8E6E3</div></div></div>
+      <div class="sw"><div class="chip" style="background:#EF4444"></div><div class="meta"><div class="name">--destructive</div><div class="val">0 84.2% 60.2%<br>#EF4444</div></div></div>
+    </div>
+
+    <div class="flag">
+      <div class="flag-tag">Inconsistency — worth a decision</div>
+      <p><strong>Two neutrals are cool, not warm.</strong> <code>--foreground</code> (<code>222 47% 11%</code>) and <code>--muted-foreground</code> (<code>215.4 16.3% 46.9%</code>) are shadcn's stock slate values and were never re-tuned to the warm 30° family used by every background, border and surface token. In practice this puts blue-grey text on sand-tinted paper throughout the app.</p>
+    </div>
+
+    <h3>Dark theme — defined but unreachable</h3>
+    <p>A complete dark palette exists under <code>.dark</code> in <code>globals.css</code>, and it abandons the warm neutrals entirely for a cool near-black (<code>222 47% 4%</code>).</p>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#05080F"></div><div class="meta"><div class="name">--background</div><div class="val">222 47% 4%<br>#05080F</div></div></div>
+      <div class="sw"><div class="chip" style="background:#080C16"></div><div class="meta"><div class="name">--card</div><div class="val">222 47% 6%<br>#080C16</div></div></div>
+      <div class="sw"><div class="chip" style="background:#F8FAFC"></div><div class="meta"><div class="name">--foreground</div><div class="val">210 40% 98%<br>#F8FAFC</div></div></div>
+      <div class="sw"><div class="chip" style="background:#188150"></div><div class="meta"><div class="name">--primary</div><div class="val">151.8 68.8% 30%<br>#188150</div></div></div>
+      <div class="sw"><div class="chip" style="background:#10192D"></div><div class="meta"><div class="name">--secondary / --muted<br>--accent / --border</div><div class="val">222 47% 12%<br>#10192D</div></div></div>
+      <div class="sw"><div class="chip" style="background:#94A3B8"></div><div class="meta"><div class="name">--muted-foreground</div><div class="val">215 20.2% 65.1%<br>#94A3B8</div></div></div>
+      <div class="sw"><div class="chip" style="background:#7F1D1D"></div><div class="meta"><div class="name">--destructive</div><div class="val">0 62.8% 30.6%<br>#7F1D1D</div></div></div>
+    </div>
+
+    <div class="flag">
+      <div class="flag-tag">Verified — dark mode never activates</div>
+      <p>Tailwind is set to <code>darkMode: ["class"]</code>, but <strong>nothing in the codebase ever applies the <code>dark</code> class.</strong> There is no theme provider, no toggle, no <code>prefers-color-scheme</code> listener, and no <code>next-themes</code> dependency. Only 7 <code>dark:</code> utilities exist across the whole app, all on red/green status text.</p>
+      <p>Treat the dark palette as an untested draft, not a shipped theme. Its greens were moved into the new brand hue for consistency, but nothing beyond that was designed or tested — if dark mode is picked up later it needs a proper contrast pass.</p>
+    </div>
+
+    <h3>Status &amp; semantic color</h3>
+    <p>Status colors bypass the token layer and use raw Tailwind palette utilities. This is the honest picture of what's in use, by frequency:</p>
+    <div class="tw"><table>
+      <thead><tr><th>Meaning</th><th class="m">Utilities in use</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Error / destructive</td><td class="m">red-50, red-100, red-200, red-500, red-600, red-700, red-800, red-900</td><td class="note">Form errors, cancellation, toast error state</td></tr>
+        <tr><td>Success / available</td><td class="m">green-100, green-600, green-800; emerald-50, emerald-500, emerald-600</td><td class="note">Toast success, availability, seat state</td></tr>
+        <tr><td>Warning / pending</td><td class="m">amber-50, amber-100, amber-200, amber-700, amber-800, amber-900; yellow-100, yellow-800</td><td class="note">Approval states, venue warnings</td></tr>
+        <tr><td>Rating</td><td class="m">amber-400 (fill + text)</td><td class="note">Star rating badge</td></tr>
+        <tr><td>Informational</td><td class="m">blue-100, blue-700</td><td class="note">Occasional admin notices</td></tr>
+      </tbody>
+    </table></div>
+    <div class="flag">
+      <div class="flag-tag">Inconsistency</div>
+      <p><strong>Green and emerald are used interchangeably</strong> for the same "success" meaning, and <strong>amber and yellow</strong> both stand for "warning." Neither pair is tokenized, so there is no single place to change them. A designer should collapse each pair to one ramp and promote it into <code>globals.css</code>.</p>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section id="greens">
+    <div class="eyebrow">Brand color</div>
+    <h2>One brand green: <span class="mono" style="font-size:.8em">#0F5132</span></h2>
+    <p class="lede">Four different greens used to ship as “the brand green.” The three that live in code are now unified on <code>#0F5132</code> — the value that was already labelled <code>brandGreen</code> in the source and already used by email, maps and printed stickers.</p>
+
+    <div class="card">
+      <h4 style="margin-top:0">Why this exact HSL</h4>
+      <p style="margin:0;font-size:.9rem">The token is written as <code>151.8 68.8% 18.8%</code> rather than a rounded <code>152 69% 19%</code> because only those decimals round-trip to <em>exactly</em> <code>#0F5132</code>. That matters: email, map pins and print hard-code the literal hex, so an approximate token would leave a visible mismatch between a button and the confirmation email for the same booking. Verified in the browser — <code>hsl(var(--primary))</code> computes to <code>rgb(15, 81, 50)</code>.</p>
+    </div>
+
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#0F5132"></div><div class="meta"><div class="name">#0F5132</div><div class="val">hsl(151.8 68.8% 18.8%)<br>Brand green — all code</div></div></div>
+      <div class="sw"><div class="chip" style="background:#274229"></div><div class="meta"><div class="name">#274229</div><div class="val">hsl(126 27% 20%)<br>Logo artwork — unchanged</div></div></div>
+      <div class="sw"><div class="chip" style="background:#052A10"></div><div class="meta"><div class="name">#052A10</div><div class="val">hsl(137 79% 9%)<br>Splash artwork — unchanged</div></div></div>
+    </div>
+
+    <h3>Where the brand green now applies</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Surface</th><th class="m">Source</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="note">All in-app UI — buttons, active nav, links, focus rings, pills, spinner</td><td class="m">app/globals.css<br><span style="color:var(--ink-faint)">--primary / --ring / --accent-foreground</span></td><td class="note">Changed from <code>#1E3E30</code></td></tr>
+        <tr><td class="note">Email headings, highlights &amp; CTAs</td><td class="m">emails/shared-styles.ts</td><td class="note">Already correct</td></tr>
+        <tr><td class="note">Map pins, clusters, user-location dot</td><td class="m">components/map/*.tsx</td><td class="note">Already correct</td></tr>
+        <tr><td class="note">Printed QR stickers</td><td class="m">lib/qr-sticker-generator.ts</td><td class="note">Already correct</td></tr>
+        <tr><td class="note">Native offline fallback page</td><td class="m">mobile/www/index.html</td><td class="note">Changed from <code>#1e3d32</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>The green tint token moved with it: <code>--accent</code> is now <code>151.8 68.8% 95%</code> (<code>#E9FBF3</code>), mirroring the primary's hue and saturation exactly as it did before.</p>
+
+    <div class="flag">
+      <div class="flag-tag">Still divergent — deliberately left alone</div>
+      <p><strong>The logo artwork is a different green.</strong> The mark is <code>#274229</code> — noticeably more olive (hue 126° against the brand's 152°) — and the splash screen is <code>#052A10</code>. Both live inside raster PNGs, not code.</p>
+      <p>These were not touched, because recoloring them means algorithmically remapping anti-aliased pixels in artwork that has no vector master. That would degrade the mark rather than fix it. <strong>Correcting these is a design task:</strong> redraw the mark as vector at <code>#0F5132</code>, then re-export the icon, splash and email assets. The splash's config color (<code>#052A10</code> in <code>capacitor.config.ts</code>) must change in lockstep with its artwork or a seam appears.</p>
+    </div>
+
+    <h3>Off-whites</h3>
+    <p>The app ground and the native shell now agree exactly. Two values remain distinct by intent.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Value</th><th>Role</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="m">#FBFAF9</td><td class="note">App background token (<code>30 20% 98%</code>)</td><td class="note">Unchanged</td></tr>
+        <tr><td class="m">#FBFAF9</td><td class="note">Native WebView, status bar, Android background, offline page</td><td class="note">Changed from <code>#FAF8F5</code> — now matches the token exactly, as its own comment always claimed</td></tr>
+        <tr><td class="m">#f5f5f0</td><td class="note">Email body background</td><td class="note">Left as-is — email is a separate visual context</td></tr>
+        <tr><td class="m">#faf9f7</td><td class="note">Map road fill</td><td class="note">Left as-is — a map layer, not a UI ground</td></tr>
+        <tr><td class="m">#FAF4EB</td><td class="note">Cream inside the logo artwork</td><td class="note">Raster — see above</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <hr class="div">
+
+  <section id="type">
+    <div class="eyebrow">Typography</div>
+    <h2>The product is set in Inter — as of now, actually</h2>
+
+    <div class="flag">
+      <div class="flag-tag">Fixed — Inter had been configured but never applied</div>
+      <p><code>app/layout.tsx</code> had always loaded Inter via <code>next/font/google</code> and exposed it as <code>--font-inter</code> on <code>&lt;body&gt;</code>. But <code>tailwind.config.ts</code> never extended <code>fontFamily.sans</code> to point at that variable, so <code>font-sans</code> fell through to Tailwind's stock stack. <strong>The product rendered in the OS UI font</strong> — SF Pro, Roboto or Segoe UI depending on platform — while still downloading the Inter woff2 on every page load.</p>
+      <p>The theme now maps <code>sans</code> to <code>["var(--font-inter)", ...defaultTheme.fontFamily.sans]</code>. Confirmed in a running build: <code>&lt;h1&gt;</code> computes to the Inter face, <code>document.fonts.check()</code> returns true, and the face reports <code>loaded</code> rather than <code>unloaded</code>.</p>
+    </div>
+
+    <div class="spec">
+      <div class="spec-row"><div class="spec-label">Now (Inter)</div><div class="inter" style="font-size:1.55rem;font-weight:700">Reserve a workspace by the hour</div></div>
+      <div class="spec-row"><div class="spec-label">Before (system UI)</div><div class="sysfont" style="font-size:1.55rem;font-weight:700">Reserve a workspace by the hour</div></div>
+    </div>
+
+    <p>The stack: <code>Inter → system-ui → -apple-system → BlinkMacSystemFont → Segoe UI → Roboto → Arial → sans-serif</code>, loaded <code>display: swap</code>, Latin subset only.</p>
+
+    <h3>What the switch did to layouts</h3>
+    <p>Inter is marginally wider than SF Pro, so this was tested rather than assumed. Every text-bearing element on each page was measured twice — once in Inter, once with the old system stack forced back on — and compared for new clipping or added height.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Surface</th><th class="m">Viewport</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Home / search form</td><td class="m">375 · 1280</td><td class="note">No clipping, no overflow, no height change</td></tr>
+        <tr><td>Venue detail</td><td class="m">375 · 1280</td><td class="note">No clipping, no overflow, no height change</td></tr>
+        <tr><td>Explore map + drawer</td><td class="m">1280</td><td class="note">No clipping, no overflow</td></tr>
+        <tr><td>Support</td><td class="m">1280</td><td class="note">No clipping, no overflow</td></tr>
+        <tr><td>Terms</td><td class="m">1280</td><td class="note">Two long prose paragraphs gained one line each. No clipping — normal reflow in a flowing text block.</td></tr>
+      </tbody>
+    </table></div>
+    <p>No control, label, badge or button anywhere began clipping. The one measurable effect is that long body copy wraps very slightly earlier.</p>
+
+    <div class="flag">
+      <div class="flag-tag">Pre-existing layout issue — not caused by the font, not fixed here</div>
+      <p>On the venue detail page at 375px, a long venue name wraps to five lines (“Black Milk Coffee and Crepe”). This is <strong>not</strong> a font regression — measured with Inter and with the old system font, it wraps to five lines either way. The cause is that the title's container is only <strong>135px wide</strong> on a 375px viewport, because the header row lets four circular icon buttons take the rest. Worth a designer's attention as a layout fix.</p>
+    </div>
+
+    <h3>Base text settings</h3>
+    <p>These <em>are</em> applied globally, from the <code>body</code> rule in <code>globals.css</code>:</p>
+    <div class="tw"><table>
+      <thead><tr><th>Property</th><th class="m">Value</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>letter-spacing</td><td class="m">-0.01em</td><td class="note">−0.16px at 16px base; slight negative tracking on all body text</td></tr>
+        <tr><td>font-feature-settings</td><td class="m">"rlig" 1, "calt" 1, "ss01" 1</td><td class="note">Required ligatures, contextual alternates, and Inter's stylistic set 01 (single-storey <span class="mono">a</span>, open <span class="mono">g</span>). <em>Currently inert — the system font ignores ss01.</em></td></tr>
+        <tr><td>antialiasing</td><td class="m">antialiased</td><td class="note">Subpixel smoothing off</td></tr>
+        <tr><td>h1–h6 defaults</td><td class="m">tracking-tight, font-semibold</td><td class="note">All headings get −0.025em and weight 600 unless overridden</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Type scale in use</h3>
+    <p>Nooc uses Tailwind's default scale unmodified. Usage is heavily bottom-weighted — <code>text-sm</code> and <code>text-xs</code> account for roughly 80% of all sized text, which is what gives the product its dense, utilitarian feel.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Class</th><th class="m">Size / line-height</th><th class="m">Instances</th><th>Typical role</th></tr></thead>
+      <tbody>
+        <tr><td class="m">text-6xl</td><td class="m">60 / 60px</td><td class="m">1</td><td class="note">Venue name, desktop</td></tr>
+        <tr><td class="m">text-5xl</td><td class="m">48 / 48px</td><td class="m">2</td><td class="note">Venue name, tablet</td></tr>
+        <tr><td class="m">text-4xl</td><td class="m">36 / 40px</td><td class="m">6</td><td class="note">Venue name mobile; page titles</td></tr>
+        <tr><td class="m">text-3xl</td><td class="m">30 / 36px</td><td class="m">13</td><td class="note">Section headings, “Find a Nooc”</td></tr>
+        <tr><td class="m">text-2xl</td><td class="m">24 / 32px</td><td class="m">30</td><td class="note">Card titles, panel headings</td></tr>
+        <tr><td class="m">text-xl</td><td class="m">20 / 28px</td><td class="m">32</td><td class="note">Subheadings, prices</td></tr>
+        <tr><td class="m">text-lg</td><td class="m">18 / 28px</td><td class="m">21</td><td class="note">Venue card title</td></tr>
+        <tr><td class="m">text-base</td><td class="m">16 / 24px</td><td class="m">20</td><td class="note">Body; large button label</td></tr>
+        <tr><td class="m">text-sm</td><td class="m">14 / 20px</td><td class="m">542</td><td class="note">The workhorse — body, labels, buttons, inputs</td></tr>
+        <tr><td class="m">text-xs</td><td class="m">12 / 16px</td><td class="m">267</td><td class="note">Meta, captions, secondary detail</td></tr>
+        <tr><td class="m">text-[11px]</td><td class="m">11px</td><td class="m">—</td><td class="note">Eyebrow labels, drawer handle</td></tr>
+        <tr><td class="m">text-[10px]</td><td class="m">10px</td><td class="m">—</td><td class="note">Nav labels, tag pills, “/ hr”</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Weight</h3>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Class</th><th class="m">Weight</th><th class="m">Instances</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td class="m">font-normal</td><td class="m">400</td><td class="m">8</td><td class="note">Rare explicit reset</td></tr>
+        <tr><td class="m">font-medium</td><td class="m">500</td><td class="m">320</td><td class="note">Default emphasis — most labels and body</td></tr>
+        <tr><td class="m">font-semibold</td><td class="m">600</td><td class="m">103</td><td class="note">Buttons, headings, nav labels</td></tr>
+        <tr><td class="m">font-bold</td><td class="m">700</td><td class="m">104</td><td class="note">Card titles, prices, page h1</td></tr>
+        <tr><td class="m">font-black</td><td class="m">900</td><td class="m">40</td><td class="note">Venue detail hero only — the loudest move in the system</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Tracking</h3>
+    <p>Two opposing patterns, both deliberate: display type tightens, small uppercase type opens up.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Class</th><th class="m">Value</th><th class="m">Instances</th><th>Applied to</th></tr></thead>
+      <tbody>
+        <tr><td class="m">tracking-tighter</td><td class="m">−0.05em</td><td class="m">11</td><td class="note">Largest display headings</td></tr>
+        <tr><td class="m">tracking-tight</td><td class="m">−0.025em</td><td class="m">57</td><td class="note">All headings (also the global h1–h6 default)</td></tr>
+        <tr><td class="m">tracking-wide</td><td class="m">+0.025em</td><td class="m">4</td><td class="note">Occasional labels</td></tr>
+        <tr><td class="m">tracking-wider</td><td class="m">+0.05em</td><td class="m">18</td><td class="note">Bottom-nav labels, small caps meta</td></tr>
+        <tr><td class="m">tracking-widest</td><td class="m">+0.1em</td><td class="m">27</td><td class="note">Uppercase eyebrows</td></tr>
+        <tr><td class="m">tracking-[0.15em]</td><td class="m">+0.15em</td><td class="m">—</td><td class="note">Status badge, e.g. “OPEN”</td></tr>
+      </tbody>
+    </table></div>
+
+    <h4>Measured specimens from the live site</h4>
+    <div class="tw"><table>
+      <thead><tr><th>Element</th><th class="m">Computed</th></tr></thead>
+      <tbody>
+        <tr><td>Venue detail h1</td><td class="m">60px / 900 / −1.5px / lh 60px / <span style="color:var(--ink-faint)">rgba(15,23,41,.9)</span></td></tr>
+        <tr><td>Home h1 “Find a Nooc”</td><td class="m">36px / 700 / −0.9px / lh 40px</td></tr>
+        <tr><td>Eyebrow label</td><td class="m">11px / 500 / +1.1px / uppercase / muted-fg 60%</td></tr>
+        <tr><td>Status badge “OPEN”</td><td class="m">10px / 700 / +1.5px / uppercase / #0F5132</td></tr>
+        <tr><td>Bottom-nav label</td><td class="m">10px / 600 / wider / uppercase</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <hr class="div">
+
+  <section id="shape">
+    <div class="eyebrow">Shape &amp; elevation</div>
+    <h2>A 16px corner radius, on a scale that finally runs in order</h2>
+    <p class="lede">The system sets <code>--radius: 1rem</code> — commented in source as “Softer, more modern corners.” That's double shadcn's 0.5rem default, and it's the defining shape decision of the product. Every step of the scale is now derived from it.</p>
+
+    <div class="shapes">
+      <div class="shape"><div class="box" style="border-radius:12px"></div><div class="cap"><b>rounded-sm</b>12px<br>radius − 4</div></div>
+      <div class="shape"><div class="box" style="border-radius:14px"></div><div class="cap"><b>rounded-md</b>14px<br>radius − 2</div></div>
+      <div class="shape"><div class="box" style="border-radius:16px"></div><div class="cap"><b>rounded-lg</b>16px<br>var(--radius)</div></div>
+      <div class="shape"><div class="box" style="border-radius:20px"></div><div class="cap"><b>rounded-xl</b>20px<br>radius + 4</div></div>
+      <div class="shape"><div class="box" style="border-radius:24px"></div><div class="cap"><b>rounded-2xl</b>24px<br>radius + 8</div></div>
+      <div class="shape"><div class="box" style="border-radius:32px"></div><div class="cap"><b>rounded-3xl</b>32px<br>radius + 16</div></div>
+      <div class="shape"><div class="box" style="border-radius:40px"></div><div class="cap"><b>rounded-4xl</b>40px<br>radius + 24</div></div>
+      <div class="shape"><div class="box" style="border-radius:999px"></div><div class="cap"><b>rounded-full</b>9999px</div></div>
+    </div>
+
+    <div class="flag">
+      <div class="flag-tag">Fixed — the scale used to run backwards</div>
+      <p>Previously only <code>sm</code>, <code>md</code> and <code>lg</code> were derived from <code>--radius</code> while <code>xl</code>, <code>2xl</code> and <code>3xl</code> kept Tailwind's defaults. Because <code>--radius</code> had been raised to 1rem, the ranges overlapped: <code>rounded-xl</code> (12px) came out <em>smaller</em> than <code>rounded-md</code> (14px) and equal to <code>rounded-sm</code>, and <code>rounded-2xl</code> (16px) was identical to <code>rounded-lg</code>. Picking a corner by name gave you something other than what you meant.</p>
+      <p>All seven steps now derive from <code>--radius</code>, and a <code>4xl</code> step was added so the large panel corners already in use have a name. Verified in the browser: <strong>12 · 14 · 16 · 20 · 24 · 32 · 40</strong>.</p>
+    </div>
+
+    <h4>The migration was pixel-preserving</h4>
+    <p>Because the numbers behind several names moved, 99 class usages across 26 files were remapped so <strong>every corner in the product still renders at exactly the radius it did before</strong>. Nothing about the product's shape changed — only the vocabulary describing it. This also retired every hand-written arbitrary radius.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Was</th><th class="m">Rendered</th><th class="m">Now</th><th class="m">Uses</th></tr></thead>
+      <tbody>
+        <tr><td class="m">rounded-xl</td><td class="m">12px</td><td class="m">rounded-sm</td><td class="m">9</td></tr>
+        <tr><td class="m">rounded-2xl</td><td class="m">16px</td><td class="m">rounded-lg</td><td class="m">53</td></tr>
+        <tr><td class="m">rounded-3xl</td><td class="m">24px</td><td class="m">rounded-2xl</td><td class="m">7</td></tr>
+        <tr><td class="m">rounded-[1.25rem]</td><td class="m">20px</td><td class="m">rounded-xl</td><td class="m">1</td></tr>
+        <tr><td class="m">rounded-[1.5rem]</td><td class="m">24px</td><td class="m">rounded-2xl</td><td class="m">3</td></tr>
+        <tr><td class="m">rounded-[2rem]</td><td class="m">32px</td><td class="m">rounded-3xl</td><td class="m">8</td></tr>
+        <tr><td class="m">rounded-[2.5rem]</td><td class="m">40px</td><td class="m">rounded-4xl</td><td class="m">15</td></tr>
+        <tr><td class="m">rounded-sm · md · lg</td><td class="m">12 · 14 · 16</td><td class="note">unchanged</td><td class="m">219</td></tr>
+      </tbody>
+    </table></div>
+    <p>Two arbitrary values were deliberately kept: <code>rounded-[42px]</code> and <code>rounded-[32px]</code> in <code>app-shell-preview</code> draw a phone bezel mockup. Those are physical device dimensions, not design-system radii, and shouldn't track <code>--radius</code>.</p>
+
+    <h4>Radius usage after migration</h4>
+    <div class="pillrow">
+      <span class="pill">rounded-md · 172</span>
+      <span class="pill">rounded-full · 142</span>
+      <span class="pill">rounded-lg · 98</span>
+      <span class="pill">rounded-4xl · 15</span>
+      <span class="pill">rounded-sm · 11</span>
+      <span class="pill">rounded-2xl · 10</span>
+      <span class="pill">rounded-3xl · 8</span>
+      <span class="pill">rounded-xl · 1</span>
+    </div>
+    <p>Practically: <strong>pills and circles are everywhere</strong> (142 uses of <code>rounded-full</code> — badges, icon buttons, avatars, tags, the drawer handle), controls sit at 14–16px, and the largest panels run 24–40px.</p>
+
+    <h3>Elevation</h3>
+    <p>Two custom shadow utilities are defined in <code>globals.css</code> alongside Tailwind's defaults.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Utility</th><th class="m">Value</th><th class="m">Uses</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td class="m">premium-shadow</td><td class="m">0 10px 15px −3px rgba(0,0,0,.05),<br>0 4px 6px −2px rgba(0,0,0,.025)</td><td class="m">12</td><td class="note">The signature lift — primary buttons, search bar, floating controls. Very soft, ~half Tailwind's opacity.</td></tr>
+        <tr><td class="m">inner-shadow</td><td class="m">inset 0 2px 4px 0 rgba(0,0,0,.06)</td><td class="m">1</td><td class="note">Recessed wells</td></tr>
+        <tr><td class="m">shadow-lg</td><td class="m">Tailwind default</td><td class="m">38</td><td class="note">Cards, panels, toasts, glass buttons</td></tr>
+        <tr><td class="m">shadow-sm</td><td class="m">Tailwind default</td><td class="m">32</td><td class="note">Inputs, resting cards</td></tr>
+        <tr><td class="m">shadow-md</td><td class="m">Tailwind default</td><td class="m">16</td><td class="note">Hover states</td></tr>
+        <tr><td class="m">shadow-2xl / xl</td><td class="m">Tailwind default</td><td class="m">6 / 5</td><td class="note">Modals, sheets</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Glass</h3>
+    <p>A frosted-translucency treatment is a core part of the visual language — it's how the bottom nav, floating map controls and status badges sit over content.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Utility</th><th class="m">Definition</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr><td class="m">.glass</td><td class="m">bg-background/70<br>backdrop-blur-xl (24px)<br>border border-white/20</td><td class="note">Bottom nav, venue-page icon buttons, hours badge, map overlay controls</td></tr>
+        <tr><td class="m">.glass-dark</td><td class="m">bg-black/40<br>backdrop-blur-xl (24px)<br>border border-white/10</td><td class="note">Controls layered over photography, e.g. the favorite button on venue images</td></tr>
+      </tbody>
+    </table></div>
+    <p>Measured live, <code>.glass</code> renders as <code>rgba(251,250,249,0.7)</code> with <code>blur(24px)</code>.</p>
+  </section>
+
+  <hr class="div">
+
+  <section id="components">
+    <div class="eyebrow">Components</div>
+    <h2>Primitives and how they've drifted in practice</h2>
+
+    <h3>Button</h3>
+    <p><code>components/ui/button.tsx</code>, built with <code>class-variance-authority</code>. Base: <code>rounded-lg</code> (16px), <code>text-sm</code>, <code>font-semibold</code>, <code>transition-all duration-300</code>, <code>active:scale-[0.97]</code>, focus ring 2px in <code>--ring</code> with 2px offset, <code>disabled:opacity-50</code>.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Variant</th><th>Fill</th><th>Text</th><th>Elevation &amp; hover</th></tr></thead>
+      <tbody>
+        <tr><td class="m">default</td><td class="m">--primary #0F5132</td><td class="m">#FFFFFF</td><td class="note">premium-shadow → shadow-lg; fill lightens to primary/95</td></tr>
+        <tr><td class="m">destructive</td><td class="m">--destructive #EF4444</td><td class="m">#F8FAFC</td><td class="note">shadow-sm; fill → destructive/90</td></tr>
+        <tr><td class="m">outline</td><td class="m">--background</td><td class="m">inherit</td><td class="note">2px border at primary/10 → primary/20; bg → primary/5</td></tr>
+        <tr><td class="m">secondary</td><td class="m">--secondary #E8E6E3</td><td class="m">--foreground</td><td class="note">shadow-sm; fill → secondary/80</td></tr>
+        <tr><td class="m">ghost</td><td class="m">transparent</td><td class="m">inherit</td><td class="note">bg → primary/5, text → primary</td></tr>
+        <tr><td class="m">link</td><td class="m">transparent</td><td class="m">--primary</td><td class="note">underline on hover, offset 4px</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tw"><table>
+      <thead><tr><th>Size</th><th class="m">Height</th><th class="m">Radius</th><th class="m">Padding</th><th class="m">Text</th></tr></thead>
+      <tbody>
+        <tr><td class="m">sm</td><td class="m">40px</td><td class="m">rounded-sm → 12px</td><td class="m">16px</td><td class="m">14px</td></tr>
+        <tr><td class="m">default</td><td class="m">48px</td><td class="m">rounded-lg → 16px</td><td class="m">24px</td><td class="m">14px</td></tr>
+        <tr><td class="m">lg</td><td class="m">56px</td><td class="m">rounded-xl → 20px</td><td class="m">40px</td><td class="m">16px</td></tr>
+        <tr><td class="m">icon</td><td class="m">48 × 48px</td><td class="m">rounded-sm → 12px</td><td class="m">—</td><td class="m">—</td></tr>
+      </tbody>
+    </table></div>
+    <p>Live confirmation, the home page Search button (<code>lg</code>, <code>default</code>): <code>rgb(15,81,50)</code> · white · 56px tall · 20px radius · 0 40px padding · 16px/600 · premium-shadow · rendered in Inter.</p>
+    <p>Buttons also accept <code>loading</code>, which prepends a 16px spinner and disables the control.</p>
+
+    <h3>Card</h3>
+    <p>The primitive is plain shadcn: <code>rounded-lg</code> (16px) · <code>border</code> · <code>bg-card</code> (#FFFFFF) · <code>shadow-sm</code>. Sub-parts use 24px padding (<code>p-6</code>), and <code>CardTitle</code> is <code>text-2xl / 600 / tracking-tight</code>.</p>
+    <div class="flag">
+      <div class="flag-tag">Drift — the primitive is usually overridden</div>
+      <p>Product surfaces rarely use the card as shipped. The venue booking panel, for example, renders as <code>border-none bg-white shadow-lg rounded-2xl</code> — 24px corners, no border, heavier shadow — and venue cards override padding to <code>p-4</code> and titles to <code>text-lg</code>. <strong>The real card style is the override, not the primitive.</strong> Worth reconciling.</p>
+    </div>
+
+    <h3>Input</h3>
+    <p>Primitive: <code>h-10</code> (40px) · <code>rounded-md</code> (14px) · 1px <code>--input</code> border · <code>bg-background</code> · <code>text-sm</code> · <code>px-3 py-2</code> · focus ring 2px + 2px offset.</p>
+    <p>Note the height mismatch with buttons: <strong>inputs are 40px, the default button is 48px</strong>, so a field and its adjacent button don't align without intervention. In the live search form, inputs are further overridden to <code>bg-white</code>, <code>border-muted/60</code>, <code>shadow-sm</code>, and a 1px focus ring in <code>--primary</code> instead of the standard 2px offset ring.</p>
+
+    <h3>Bottom navigation</h3>
+    <p>The primary chrome on mobile and the app. <code>components/layout/BottomNav.tsx</code>.</p>
+    <ul class="tight">
+      <li>Fixed, full width, <code>z-50</code>, <code>.glass</code> with a <code>border-white/20</code> top edge.</li>
+      <li>Measured height 87px on web; the component publishes its own real height to <code>--bottom-nav-height</code> via <code>ResizeObserver</code> so sticky bars above it can reserve exact space.</li>
+      <li>Items: Explore (Home icon), Reservations (Calendar), Profile/Login (User), plus Manage (Laptop) only for venue owners — so the nav is 3 or 4 items depending on the account.</li>
+      <li>Icons are Lucide at 22px; <strong>stroke width shifts 2 → 2.5 when active</strong>.</li>
+      <li>Labels: 10px, semibold, uppercase, <code>tracking-wider</code>; 70% opacity when inactive.</li>
+      <li>Active state: <code>text-primary</code> plus a <code>bg-primary/10</code> pill at <code>rounded-lg</code>, animated in with fade + zoom over 300ms.</li>
+      <li>Hover lifts the icon <code>-translate-y-0.5</code>; press gives <code>active:scale-95</code>.</li>
+    </ul>
+
+    <h3>Pills, badges &amp; tags</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Element</th><th class="m">Specification</th></tr></thead>
+      <tbody>
+        <tr><td>Venue tag</td><td class="m">10px/600 · px-2 py-0.5 · rounded-full · bg-primary/5 · text-primary/70 · border primary/10</td></tr>
+        <tr><td>Status badge (“OPEN”)</td><td class="m">10px/700 · uppercase · tracking-[0.15em] · rounded-full · .glass · shadow-lg · text-primary #0F5132</td></tr>
+        <tr><td>Rating badge</td><td class="m">Lucide Star 14px, fill+text amber-400, label text-muted-foreground/70</td></tr>
+        <tr><td>Drawer handle</td><td class="m">10px × 48px · rounded-full · bg-primary/20 · backdrop-blur-sm</td></tr>
+      </tbody>
+    </table></div>
+    <p>There is no <code>badge.tsx</code> primitive — every badge is composed inline. A designer specifying new badge styles should expect to define one.</p>
+
+    <h3>Dialog &amp; sheets</h3>
+    <p>Radix-backed. Overlay is <code>bg-black/80</code> with fade. Content: centered, <code>max-w-lg</code>, <code>p-4</code> rising to <code>p-6</code> at <code>sm</code>, <code>shadow-lg</code>, <code>max-h-[90vh]</code> scrolling, corners only rounded at <code>sm</code> and up (full-bleed on mobile). Enter/exit is a 200ms fade + <code>zoom-95</code> + slide from 48% top. Close affordance is a 16px Lucide <code>X</code> at 70% opacity, top-right, 16px inset. Bottom sheets use <code>vaul</code>.</p>
+
+    <h3>Toast</h3>
+    <p>Fixed top-center, <code>z-50</code>, <code>rounded-lg</code>, <code>px-4 py-3</code>, <code>shadow-lg</code>, 4s auto-dismiss, 14px medium text with a manual close button.</p>
+    <ul class="tight">
+      <li><strong>Success</strong> — <code>bg-green-50</code>, <code>border-green-200</code>, <code>text-green-900</code>, with a <code>CheckCircle2</code> icon in <code>green-600</code>.</li>
+      <li><strong>Error</strong> — <code>bg-red-50</code>, <code>border-red-200</code>, <code>text-red-900</code>, no icon.</li>
+    </ul>
+    <p>Only these two states exist — there is no info or warning toast.</p>
+
+    <h3>Loading spinner</h3>
+    <p>An inline SVG circle, <code>r=10</code>, <code>stroke-width 3</code>, round caps, <code>stroke-dasharray "32 100"</code> (an arc of roughly 51% of the circumference), <code>animate-spin</code>, colored <code>text-primary</code>. Two sizes only: <code>sm</code> 16px, <code>md</code> 20px.</p>
+
+    <h3>Iconography</h3>
+    <p><strong>Lucide React</strong> throughout (<code>lucide-react</code> 0.424). Default 2px stroke, raised to 2.5 for active nav. Common sizes: 14px (<code>h-3.5</code>) for inline meta, 16px (<code>h-4</code>) for buttons and close, 20–22px for nav, 40px (<code>h-10</code>) for empty states. No custom icon set.</p>
+  </section>
+
+  <hr class="div">
+
+  <section id="motion">
+    <div class="eyebrow">Motion</div>
+    <h2>300ms, and a press that shrinks</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Property</th><th class="m">Value</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Standard duration</td><td class="m">300ms</td><td class="note">31 uses — the house transition for hover, color and transform</td></tr>
+        <tr><td>Emphasis duration</td><td class="m">500ms / 700ms</td><td class="note">9 / 3 uses — entrance animations, empty states</td></tr>
+        <tr><td>Utility duration</td><td class="m">200ms</td><td class="note">5 uses — dialogs, accordion</td></tr>
+        <tr><td>Custom easing</td><td class="m">smooth-out<br>cubic-bezier(0.23, 1, 0.32, 1)</td><td class="note">Defined in tailwind.config.ts — a strong decelerating ease</td></tr>
+        <tr><td>Accordion</td><td class="m">0.2s ease-out</td><td class="note">Height-based open/close keyframes</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Press feedback — the most consistent interaction signature</h4>
+    <div class="pillrow">
+      <span class="pill">active:scale-[0.98] · 8</span>
+      <span class="pill">active:scale-95 · 7</span>
+      <span class="pill">active:scale-90 · 5</span>
+      <span class="pill">active:scale-[0.99] · 3</span>
+      <span class="pill">active:scale-[0.97] · 1</span>
+    </div>
+    <p>Almost every tappable element shrinks on press, scaled inversely to its size — large surfaces barely move (0.99), small circular icon buttons compress hard (0.90). Entrance animations come from <code>tailwindcss-animate</code>: <code>animate-in</code>, <code>fade-in</code>, <code>zoom-in</code>, <code>slide-in-from-*</code>.</p>
+    <div class="flag">
+      <div class="flag-tag">Accessibility gap</div>
+      <p>There is no <code>prefers-reduced-motion</code> handling anywhere in the codebase. Every transform, scale and entrance animation plays regardless of the user's system setting.</p>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section id="layout">
+    <div class="eyebrow">Layout &amp; spacing</div>
+    <h2>Tight, mobile-first, 4px-grid</h2>
+    <p class="lede">Spacing is Tailwind's default 4px scale, used unmodified. The distribution shows a tight, compact product — <code>gap-2</code> (8px) alone accounts for more than a third of all gaps.</p>
+
+    <h4>Most-used spacing steps</h4>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Padding</th><th class="m">Gap</th><th class="m">Vertical rhythm</th></tr></thead>
+      <tbody>
+        <tr><td class="m">p-2 · 8px · 58</td><td class="m">gap-2 · 8px · 191</td><td class="m">space-y-4 · 16px · 76</td></tr>
+        <tr><td class="m">p-4 · 16px · 49</td><td class="m">gap-4 · 16px · 59</td><td class="m">space-y-2 · 8px · 63</td></tr>
+        <tr><td class="m">p-3 · 12px · 33</td><td class="m">gap-3 · 12px · 51</td><td class="m">space-y-3 · 12px · 47</td></tr>
+        <tr><td class="m">p-6 · 24px · 24</td><td class="m">gap-1 · 4px · 44</td><td class="m">space-y-1 · 4px · 38</td></tr>
+        <tr><td class="m">p-8 · 32px · 11</td><td class="m">gap-1.5 · 6px · 20</td><td class="m">space-y-6 · 24px · 31</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Breakpoints</h3>
+    <p>Tailwind defaults, plus a container capped at 1400px with 2rem padding. Usage is overwhelmingly <code>sm</code> and <code>lg</code> — the product is designed mobile-first, then jumps to a desktop two-column layout, with little tablet-specific work.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Prefix</th><th class="m">Min width</th><th class="m">Uses</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td class="m">sm:</td><td class="m">640px</td><td class="m">112</td><td class="note">The main mobile → larger transition</td></tr>
+        <tr><td class="m">md:</td><td class="m">768px</td><td class="m">26</td><td class="note">Occasional</td></tr>
+        <tr><td class="m">lg:</td><td class="m">1024px</td><td class="m">64</td><td class="note">Desktop split layouts, e.g. venue page</td></tr>
+        <tr><td class="m">xl: / 2xl:</td><td class="m">1280 / 1536px</td><td class="m">4 / 4</td><td class="note">Rare</td></tr>
+      </tbody>
+    </table></div>
+
+    <h4>Container widths</h4>
+    <p><code>max-w-md</code> (448px) dominates with 45 uses — it's the standard content column, which keeps even desktop layouts feeling phone-shaped. Then <code>max-w-2xl</code> (672px, 11), <code>max-w-lg</code> (512px, 8), <code>max-w-sm</code> (384px, 5). The bottom nav uses <code>max-w-screen-md</code> (768px).</p>
+
+    <h4>Z-index ladder</h4>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Layer</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td class="m">z-0 / z-10 / z-20</td><td class="note">In-page stacking — image overlays, floating map controls, card badges</td></tr>
+        <tr><td class="m">z-40 / z-50</td><td class="note">Bottom nav, dialogs, overlays, toasts</td></tr>
+        <tr><td class="m">z-[55]</td><td class="note">Above nav, below modals</td></tr>
+        <tr><td class="m">z-60</td><td class="note">Status-bar scrim (native only)</td></tr>
+        <tr><td class="m">z-[100] / z-[110]</td><td class="note">Topmost — full-screen gallery, critical modals</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <hr class="div">
+
+  <section id="native">
+    <div class="eyebrow">Native shell</div>
+    <h2>The iOS app is the website in a WebView</h2>
+    <p class="lede">The Capacitor app (<code>io.nooc.app</code>, “Nooc”) loads <code>https://nooc.io</code> directly rather than bundling a build. <strong>Web and app share one design implementation</strong> — any change to the site changes the app. Bundled local files are used only for the splash screen and the offline fallback page.</p>
+
+    <div class="tw"><table>
+      <thead><tr><th>Surface</th><th class="m">Value</th></tr></thead>
+      <tbody>
+        <tr><td>WebView background</td><td class="m">#FBFAF9</td></tr>
+        <tr><td>Status bar</td><td class="m">style LIGHT · #FBFAF9</td></tr>
+        <tr><td>Splash background</td><td class="m">#052A10 · 1200ms · no spinner</td></tr>
+        <tr><td>Android background</td><td class="m">#FBFAF9</td></tr>
+        <tr><td>App icon</td><td class="m">1024×1024 · #274229 mark on #FAF4EB cream</td></tr>
+        <tr><td>Splash artwork</td><td class="m">2732×2732 · @1x/2x/3x · cream mark on #052A10</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Safe areas — a real design constraint</h3>
+    <p>The iOS WebView runs with <code>contentInset: "never"</code> (required to stop <code>position: fixed</code> elements drifting during scroll), so the WebView spans the entire screen and <strong>all safe-area spacing is handled in CSS, not by the OS.</strong> Anything you design that anchors to a screen edge must account for this:</p>
+    <div class="tw"><table>
+      <thead><tr><th class="m">Token / class</th><th class="m">Web</th><th class="m">Native app</th></tr></thead>
+      <tbody>
+        <tr><td class="m">--safe-area-top</td><td class="m">0px</td><td class="m">env(safe-area-inset-top) + 10px</td></tr>
+        <tr><td class="m">--bottom-nav-height</td><td class="m">4.25rem (68px)</td><td class="m">4.25rem + env(safe-area-inset-bottom)</td></tr>
+        <tr><td class="m">.safe-area-top</td><td class="note" colspan="2">Applies <code>top: var(--safe-area-top)</code> — for fixed, full-bleed elements that must start below the status bar</td></tr>
+        <tr><td class="m">.status-bar-scrim</td><td class="note" colspan="2">Native-only opaque strip in <code>--background</code> at <code>z-60</code>, so scrolled content doesn't slide under the clock and Dynamic Island</td></tr>
+      </tbody>
+    </table></div>
+    <p>The extra <strong>+10px</strong> on the top inset is a deliberate buffer: iOS reports the Dynamic Island's resting height, but the cluster grows taller while showing a transient indicator (such as the location-in-use arrow that Nooc's own “Use my location” triggers), and CSS can't detect that state.</p>
+    <p>The offline fallback page (<code>mobile/www/index.html</code>) is styled independently in plain CSS, and now uses the same values as the app: <code>#fbfaf9</code> ground, <code>#0f172a</code> text, <code>#64748b</code> secondary, <code>#0f5132</code> accent, 1rem and 1.25rem radii, system font stack. It deliberately stays on the system stack — it is the page shown when the network is unavailable, so it cannot depend on a web font loading.</p>
+    <p>Capacitor copies <code>mobile/www/</code> into <code>ios/App/App/public/</code> and <code>android/…/assets/public/</code> on <code>cap sync</code>. Those copies are gitignored build artifacts — <strong><code>mobile/www/</code> is the source of truth</strong>; run a sync after changing it.</p>
+  </section>
+
+  <hr class="div">
+
+  <section id="offapp">
+    <div class="eyebrow">Off-app surfaces</div>
+    <h2>Email, maps and print each carry their own palette</h2>
+
+    <h3>Transactional email</h3>
+    <p><code>emails/shared-styles.ts</code>, rendered with React Email. Entirely independent of the CSS tokens.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Element</th><th class="m">Specification</th></tr></thead>
+      <tbody>
+        <tr><td>Body</td><td class="m">#f5f5f0 ground · system font stack (never Inter)</td></tr>
+        <tr><td>Container</td><td class="m">max-width 560px · 24px padding · 12px radius</td></tr>
+        <tr><td>Brand lockup</td><td class="m">28px logo + 24px/600 wordmark in #0F5132 · −0.02em · 10px gap</td></tr>
+        <tr><td>Body text</td><td class="m">16px / 1.6 / #374151 · 24px bottom margin</td></tr>
+        <tr><td>Highlight</td><td class="m">#0F5132 / 600 — venue and guest names</td></tr>
+        <tr><td>Time lines</td><td class="m">16px / 1.6 / #6b7280</td></tr>
+        <tr><td>Primary button</td><td class="m">#0F5132 fill · white · 16px/600 · 12px 24px · 8px radius</td></tr>
+        <tr><td>Secondary button</td><td class="m">transparent · 1px #0F5132 border · #0F5132 text · 8px radius</td></tr>
+        <tr><td>Rule</td><td class="m">#e5e5e0 · 24px margins</td></tr>
+        <tr><td>Footer</td><td class="m">13px / #6b7280</td></tr>
+      </tbody>
+    </table></div>
+    <p>Email now shares the app's exact green. What still differs is shape and type: email corners are 8–12px against the app's 12–40px, and email never uses Inter — it stays on a system stack, which is standard practice since mail clients handle web fonts inconsistently. Email therefore reads as a tighter, more conventional relative of the product rather than a different brand.</p>
+
+    <h3>Map</h3>
+    <p>Mapbox GL, base style <code>mapbox://styles/mapbox/light-v11</code>, then repainted:</p>
+    <div class="tw"><table>
+      <thead><tr><th>Layer</th><th class="m">Treatment</th></tr></thead>
+      <tbody>
+        <tr><td>Labels</td><td class="m">#5c6b66 text · #ffffff halo, width 1.5, blur 1</td></tr>
+        <tr><td>Water</td><td class="m">#e8f5e9 — a pale mint</td></tr>
+        <tr><td>Roads</td><td class="m">#faf9f7</td></tr>
+        <tr><td>Available venue pin</td><td class="m">#0F5132 · circle radius 8 · label 11px</td></tr>
+        <tr><td>Cluster — available</td><td class="m">#0F5132 · 64px source image · rendered 40 / 60 / 80px by count</td></tr>
+        <tr><td>Cluster — unavailable</td><td class="m">#991b1b · same sizing</td></tr>
+        <tr><td>Cluster label</td><td class="m">#ffffff · 12px</td></tr>
+        <tr><td>User location</td><td class="m">#0F5132 dot inside rgba(15,81,50,0.2) ring</td></tr>
+      </tbody>
+    </table></div>
+    <p>A Google Maps implementation also exists with a parallel palette (<code>#0F5132</code> pins, <code>#faf9f7</code> / <code>#f5f3f0</code> land, <code>#0a4028</code> button hover).</p>
+
+    <h3>Printed QR stickers</h3>
+    <p><code>lib/qr-sticker-generator.ts</code> produces print-ready SVG/PDF for the physical seat markers.</p>
+    <ul class="tight">
+      <li>Palette: <code>brandGreen #0F5132</code> and <code>#FFFFFF</code> only.</li>
+      <li><strong>Inverted QR</strong> — white modules on a dark green field, error-correction level H so the logo can overlay the center.</li>
+      <li>Geometry: 300px QR, 24px quiet zone, 16px padding, 102px logo, 60px top text band, 30px bottom band.</li>
+      <li>Copy: “This seat is reserved for Nooc” above, “Scan here to book” below.</li>
+    </ul>
+  </section>
+
+  <hr class="div">
+
+  <section id="assets">
+    <div class="eyebrow">Assets</div>
+    <h2>What exists today</h2>
+    <div class="tw"><table>
+      <thead><tr><th class="m">File</th><th class="m">Size</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="m">public/nooc-logo.png</td><td class="m">798×862</td><td class="note">Primary mark — #274229 on #FAF4EB cream</td></tr>
+        <tr><td class="m">public/email-logo.png</td><td class="m">798×862</td><td class="note">Byte-identical to nooc-logo.png</td></tr>
+        <tr><td class="m">app/icon.png</td><td class="m">798×862</td><td class="note">Favicon — same artwork again</td></tr>
+        <tr><td class="m">app/apple-icon.png</td><td class="m">798×862</td><td class="note">Apple touch icon — same artwork again</td></tr>
+        <tr><td class="m">AppIcon-512@2x.png</td><td class="m">1024×1024</td><td class="note">iOS app icon</td></tr>
+        <tr><td class="m">splash-2732×2732 ×3</td><td class="m">2732×2732</td><td class="note">@1x/2x/3x, cream mark on #052A10</td></tr>
+        <tr><td class="m">NoocLogo.png (repo root)</td><td class="m">805×806</td><td class="note">Cream mark on solid #052A10</td></tr>
+        <tr><td class="m">NoocLogo1.png (repo root)</td><td class="m">451×564</td><td class="note">Cream-dominant variant</td></tr>
+      </tbody>
+    </table></div>
+    <div class="flag">
+      <div class="flag-tag">Asset gaps</div>
+      <p><strong>There is no vector master.</strong> Every logo asset in the repository is a raster PNG at a non-square 798×862, including the favicon and touch icon — so the mark cannot be rendered cleanly at arbitrary sizes, recolored, or used in print without redrawing. There is also no wordmark asset: the Nooc wordmark in email is set in live text, not artwork.</p>
+      <p>Two untracked logo files sit loose in the repository root rather than in <code>public/</code>, and four separate copies of the same 343KB artwork are committed under different names.</p>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <section id="decisions">
+    <div class="eyebrow">Open decisions</div>
+    <h2>What's settled, and what a designer should take next</h2>
+    <p class="lede">Three of the eight items in the first edition of this reference have been resolved in code. The rest need a designer, not an engineer — they are judgement calls about how the product should look, not defects with an obvious correct answer.</p>
+
+    <h3>Resolved</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Was</th><th>Now</th></tr></thead>
+      <tbody>
+        <tr><td class="note">Four greens shipping as “the brand green”</td><td class="note">All code unified on <code>#0F5132</code>; only the raster logo and splash artwork still differ</td></tr>
+        <tr><td class="note">Inter configured but never applied</td><td class="note"><code>font-sans</code> mapped to the font variable; Inter renders, verified across five surfaces at two viewports</td></tr>
+        <tr><td class="note">Radius scale non-monotonic, with name collisions</td><td class="note">One derived scale, 12–40px in order, plus a <code>4xl</code> step; 99 usages remapped with zero pixel change</td></tr>
+        <tr><td class="note">App ground and native shell off-whites disagreed</td><td class="note">Both <code>#FBFAF9</code></td></tr>
+        <tr><td class="note">Hand-written arbitrary radii scattered through components</td><td class="note">All retired except two intentional device-bezel values</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Still open</h3>
+
+    <div class="card">
+      <h4 style="margin-top:0">1 · Redraw the logo as vector, in the brand green</h4>
+      <p style="margin:0;font-size:.9rem">The mark is <code>#274229</code> and the splash is <code>#052A10</code>, both raster-only. This is now the single remaining source of brand-color inconsistency, and it can't be fixed in code — it needs the mark redrawn as vector at <code>#0F5132</code> and re-exported to favicon, touch icon, iOS app icon, email logo and splash. The splash's <code>capacitor.config.ts</code> color must move with its artwork or a seam appears at launch.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">2 · Fix the venue-title header on mobile</h4>
+      <p style="margin:0;font-size:.9rem">At 375px the venue name gets a 135px-wide container because four circular icon buttons take the rest of the header row, so a normal café name wraps to five lines. Independent of the font — it wraps identically either way. Needs a layout decision: wrap the actions, shrink them, or move them.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">3 · Tokenize status color</h4>
+      <p style="margin:0;font-size:.9rem">Green and emerald both mean success; amber and yellow both mean warning. None are tokenized, so there's no single place to change them. Collapse each pair to one ramp and lift them into <code>globals.css</code> alongside the other tokens.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">4 · Reconcile the card primitive with reality</h4>
+      <p style="margin:0;font-size:.9rem">The shipped <code>Card</code> (16px radius, bordered, <code>shadow-sm</code>, 24px padding) is overridden nearly everywhere it's used — most real cards are borderless, 24px-cornered and <code>shadow-lg</code>. Redefine the primitive to match the real pattern, or define named variants.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">5 · Warm the two cool neutrals</h4>
+      <p style="margin:0;font-size:.9rem"><code>--foreground</code> and <code>--muted-foreground</code> are still shadcn's stock slate while every other neutral was tuned to a warm 30° hue, so text reads slightly blue against warm paper. Left alone deliberately — retuning body text color across the whole product is a design call.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">6 · Decide whether dark mode is real</h4>
+      <p style="margin:0;font-size:.9rem">A full dark palette exists and is unreachable — no toggle, no provider, no media query. Its greens were kept in the brand hue during this pass, but nothing was designed or contrast-tested. Either design and ship it, or delete it so it stops implying support.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">7 · Fill the primitive and accessibility gaps</h4>
+      <p style="margin:0;font-size:.9rem">There's no <code>badge</code> primitive despite badges appearing throughout; inputs (40px) and buttons (48px) don't align when placed side by side; and there is no <code>prefers-reduced-motion</code> handling anywhere, so every scale and entrance animation plays regardless of the user's system setting.</p>
+    </div>
+  </section>
+
+  <footer>
+    Compiled from source on branch design-system-cleanup (base fce81c5), 2026-08-24. Values marked “measured” or “verified” were read from the rendered DOM in a running build; all others were read directly from the files cited. Production build passes on all 30 routes; the 2 failing test files are a pre-existing jsdom/ESM dependency issue present on main and unrelated to these changes.
+  </footer>
+
+  </main>
+</div>
+</div>

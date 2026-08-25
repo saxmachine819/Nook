@@ -52,7 +52,7 @@ export function TopOverlayControls({
             variant="outline"
             size="icon"
             onClick={() => onFilterPanelOpenChange(true)}
-            className="relative shrink-0 h-14 w-14 rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
+            className="relative shrink-0 h-14 w-14 rounded-lg border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
             aria-label="Filter workspaces"
           >
             <Filter size={20} strokeWidth={2.5} className="text-primary/70" />

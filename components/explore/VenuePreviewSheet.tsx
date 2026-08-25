@@ -223,7 +223,7 @@ export function VenuePreviewSheet({
       <div
         data-testid="venue-preview-sheet"
         className={cn(
-          "fixed left-0 right-0 z-[110] rounded-t-xl border-t border-border bg-background shadow-lg",
+          "fixed left-0 right-0 z-[110] rounded-t-sm border-t border-border bg-background shadow-lg",
           "ease-out",
           className
         )}

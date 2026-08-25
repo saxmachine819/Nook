@@ -22,7 +22,7 @@ export function EmbeddedCheckoutModal({
 }: EmbeddedCheckoutModalProps) {
   return (
     <Dialog open={!!clientSecret} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+      <DialogContent className="max-w-3xl h-[90vh] flex flex-col p-0 overflow-hidden border-none shadow-2xl rounded-2xl">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="text-xl font-bold tracking-tight">
             Complete your reservation

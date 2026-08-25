@@ -104,7 +104,7 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
         </div>
         {deal && (
           <div className="w-full flex-shrink-0 sm:max-w-xs lg:hidden">
-            <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/20 h-fit rounded-[2rem]">
+            <Card className="overflow-hidden border-none bg-emerald-500 shadow-lg shadow-emerald-500/20 h-fit rounded-3xl">
               <CardContent className="p-5">
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
@@ -122,7 +122,7 @@ export function VenuePageHeader({ name, address, returnTo, isFavorited = false, 
                       </p>
                     )}
                   </div>
-                  <div className="rounded-2xl bg-white/10 p-4">
+                  <div className="rounded-lg bg-white/10 p-4">
                     <p className="text-xs font-medium leading-relaxed text-white/90">
                       {deal.description || dealDescription}
                     </p>

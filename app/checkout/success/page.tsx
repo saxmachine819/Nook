@@ -28,7 +28,7 @@ export default async function CheckoutSuccessPage({ searchParams }: CheckoutSucc
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.05),transparent_50%)]" />
 
         <div className="container relative mx-auto flex min-h-screen items-center justify-center px-4 py-12">
-          <Card className="w-full max-w-2xl border-none bg-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-[2.5rem] overflow-hidden">
+          <Card className="w-full max-w-2xl border-none bg-white shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] rounded-4xl overflow-hidden">
             <div className="h-3 bg-emerald-500" />
 
             <CardHeader className="p-8 sm:p-12 pb-6 text-center space-y-6">
@@ -47,12 +47,12 @@ export default async function CheckoutSuccessPage({ searchParams }: CheckoutSucc
 
               {payment?.venue?.name && (
                 <div className="flex flex-wrap items-center justify-center gap-4">
-                  <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-2 text-sm text-slate-600">
+                  <div className="inline-flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-100 px-4 py-2 text-sm text-slate-600">
                     <MapPin className="h-4 w-4 text-emerald-500" />
                     <span className="font-medium">{payment.venue.name}</span>
                   </div>
                   {payment.amount && (
-                    <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-50 border border-slate-100 px-4 py-2 text-sm text-slate-600">
+                    <div className="inline-flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-100 px-4 py-2 text-sm text-slate-600">
                       <ReceiptText className="h-4 w-4 text-emerald-500" />
                       <span className="font-medium">${(payment.amount / 100).toFixed(2)} USD</span>
                     </div>
@@ -108,7 +108,7 @@ export default async function CheckoutSuccessPage({ searchParams }: CheckoutSucc
                 <Button
                   asChild
                   size="lg"
-                  className="flex-1 rounded-2xl h-14 text-base font-bold shadow-xl shadow-emerald-500/10 transition-all hover:scale-[1.02]"
+                  className="flex-1 rounded-lg h-14 text-base font-bold shadow-xl shadow-emerald-500/10 transition-all hover:scale-[1.02]"
                 >
                   <Link href={reservationId ? `/reservations/${reservationId}` : '/reservations'}>
                     View Reservation details
@@ -119,7 +119,7 @@ export default async function CheckoutSuccessPage({ searchParams }: CheckoutSucc
                   variant="outline"
                   asChild
                   size="lg"
-                  className="flex-1 rounded-2xl h-14 text-base font-semibold border-slate-200 hover:bg-slate-50 transition-all"
+                  className="flex-1 rounded-lg h-14 text-base font-semibold border-slate-200 hover:bg-slate-50 transition-all"
                 >
                   <Link href="/venue/dashboard">Go to your dashboard</Link>
                 </Button>
