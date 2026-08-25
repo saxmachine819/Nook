@@ -158,7 +158,7 @@ export function InlineVenueBookingSheet({ venue, onClose }: InlineVenueBookingSh
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 bottom-16 z-40 flex justify-center px-4 pb-2">
-        <div className="pointer-events-auto w-full max-w-md rounded-2xl border bg-background/95 p-4 shadow-xl backdrop-blur">
+        <div className="pointer-events-auto w-full max-w-md rounded-lg border bg-background/95 p-4 shadow-xl backdrop-blur">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div className="space-y-1">
               <h2 className="text-base font-semibold leading-tight">

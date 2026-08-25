@@ -79,7 +79,7 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "group relative flex flex-col items-center gap-1.5 rounded-2xl px-5 py-2 transition-all duration-300 active:scale-95",
+                "group relative flex flex-col items-center gap-1.5 rounded-lg px-5 py-2 transition-all duration-300 active:scale-95",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground/70 hover:text-foreground hover:bg-black/5"
@@ -98,7 +98,7 @@ export function BottomNav() {
                 {label}
               </span>
               {isActive && (
-                <div className="absolute inset-0 z-0 scale-95 rounded-2xl bg-primary/10 animate-in fade-in zoom-in duration-300" />
+                <div className="absolute inset-0 z-0 scale-95 rounded-lg bg-primary/10 animate-in fade-in zoom-in duration-300" />
               )}
             </Link>
           );

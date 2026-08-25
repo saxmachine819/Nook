@@ -59,7 +59,7 @@ export function SeatCard({
           }
         }}
         className={cn(
-          "relative w-full rounded-2xl border-none p-4 text-left transition-all duration-300",
+          "relative w-full rounded-lg border-none p-4 text-left transition-all duration-300",
           "focus:outline-none focus:ring-2 focus:ring-primary/20",
           isAvailable && "cursor-pointer",
           isSelected
@@ -72,7 +72,7 @@ export function SeatCard({
         {/* Thumbnail image */}
         {thumbnailUrl && (
           <div
-            className="mb-4 aspect-square w-full overflow-hidden rounded-xl cursor-zoom-in group"
+            className="mb-4 aspect-square w-full overflow-hidden rounded-sm cursor-zoom-in group"
             onClick={(e) => {
               e.preventDefault()
               e.stopPropagation()
@@ -107,7 +107,7 @@ export function SeatCard({
         {/* Communal indicator */}
         {/* Communal indicator */}
         {isCommunal && (
-          <div className="mb-3 p-2 bg-primary/5 rounded-xl border border-primary/5">
+          <div className="mb-3 p-2 bg-primary/5 rounded-sm border border-primary/5">
             <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-widest text-primary/60">
               <svg
                 className="h-2.5 w-2.5"

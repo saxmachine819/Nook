@@ -10,19 +10,19 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 154 35% 18%; /* Refined dark green */
+    --primary: 151.8 68.8% 18.8%; /* Brand green #0F5132 */
     --primary-foreground: 0 0% 100%;
     --secondary: 30 10% 90%; /* Warm secondary */
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 30 10% 94%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 154 35% 95%; /* Subtle green accent */
-    --accent-foreground: 154 35% 18%;
+    --accent: 151.8 68.8% 95%; /* Subtle green accent */
+    --accent-foreground: 151.8 68.8% 18.8%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 30 10% 90%;
     --input: 30 10% 90%;
-    --ring: 154 35% 18%;
+    --ring: 151.8 68.8% 18.8%;
     --radius: 1rem; /* Softer, more modern corners */
   }
 
@@ -33,7 +33,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 47% 4%;
     --popover-foreground: 210 40% 98%;
-    --primary: 154 35% 30%;
+    --primary: 151.8 68.8% 30%;
     --primary-foreground: 210 40% 98%;
     --secondary: 222 47% 12%;
     --secondary-foreground: 210 40% 98%;
@@ -45,7 +45,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 222 47% 12%;
     --input: 222 47% 12%;
-    --ring: 154 35% 30%;
+    --ring: 151.8 68.8% 30%;
   }
 }
 

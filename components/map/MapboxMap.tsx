@@ -1716,7 +1716,7 @@ export function MapboxMap({
             size="icon"
             onClick={handleCenterOnMe}
             disabled={locationState === "requesting"}
-            className="shrink-0 h-14 w-14 rounded-2xl border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
+            className="shrink-0 h-14 w-14 rounded-lg border-none bg-white font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] premium-shadow"
             aria-label={userLocation ? "Center on me" : "Enable location"}
           >
             <Navigation size={20} strokeWidth={2.5} className="text-primary/70" />

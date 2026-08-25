@@ -312,7 +312,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
         <h1 className="text-4xl font-black tracking-tight mb-8 px-1">My Reservations</h1>
 
         {/* Tabs: compact pill, width fits content */}
-        <div className="mb-5 inline-flex p-0.5 gap-0.5 bg-primary/5 rounded-xl">
+        <div className="mb-5 inline-flex p-0.5 gap-0.5 bg-primary/5 rounded-sm">
           {(["upcoming", "past", "cancelled"] as TabType[]).map((tab) => (
             <button
               key={tab}
@@ -341,7 +341,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
         {activeTab === "upcoming" && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {upcoming.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
+              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-4xl border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
                 <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
                   <Calendar className="h-10 w-10 text-primary/30" />
                 </div>
@@ -349,7 +349,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
                 <p className="mb-8 text-sm text-muted-foreground/70 max-w-[220px]">
                   When you reserve your next spot, it will show up right here.
                 </p>
-                <Button asChild className="rounded-2xl font-black px-8">
+                <Button asChild className="rounded-lg font-black px-8">
                   <Link href="/">Book a Workspace</Link>
                 </Button>
               </div>
@@ -397,11 +397,11 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-24 rounded-[2rem] bg-primary/[0.02] animate-pulse" />
+                  <div key={i} className="h-24 rounded-3xl bg-primary/[0.02] animate-pulse" />
                 ))}
               </div>
             ) : currentReservations.length === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
+              <div className="flex min-h-[400px] flex-col items-center justify-center rounded-4xl border border-dashed border-primary/20 p-12 text-center bg-primary/[0.02]">
                 <div className="h-20 w-20 rounded-full bg-primary/5 flex items-center justify-center mb-6">
                   <Calendar className="h-10 w-10 text-primary/30" />
                 </div>
@@ -452,7 +452,7 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-        <DialogContent className="rounded-[2.5rem] p-8">
+        <DialogContent className="rounded-4xl p-8">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black tracking-tight">Change of plans?</DialogTitle>
             <DialogDescription className="text-sm font-medium leading-relaxed text-muted-foreground pt-2">
@@ -465,11 +465,11 @@ export function ReservationsClient({ initialUpcoming, counts }: ReservationsClie
               variant="destructive"
               onClick={() => heroReservation && handleCancel(heroReservation.id)}
               disabled={cancellingId !== null}
-              className="rounded-2xl font-black py-6 shadow-md shadow-red-500/10"
+              className="rounded-lg font-black py-6 shadow-md shadow-red-500/10"
             >
               {cancellingId ? "Cancelling..." : "Yes, cancel reservation"}
             </Button>
-            <Button variant="ghost" onClick={() => setShowCancelConfirm(false)} className="rounded-2xl font-bold py-6 text-muted-foreground">
+            <Button variant="ghost" onClick={() => setShowCancelConfirm(false)} className="rounded-lg font-bold py-6 text-muted-foreground">
               Keep my booking
             </Button>
           </div>
@@ -507,7 +507,7 @@ function HeroReservationCard({
       : null)
 
   return (
-    <Card className="overflow-hidden border-none shadow-xl rounded-[2.5rem] bg-white group">
+    <Card className="overflow-hidden border-none shadow-xl rounded-4xl bg-white group">
       {imageUrl && (
         <div className="relative h-72 sm:h-96 w-full overflow-hidden bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element -- dynamic venue image URL */}
@@ -536,26 +536,26 @@ function HeroReservationCard({
             <div className="text-sm font-bold text-primary bg-primary/5 px-3 py-1 rounded-full w-fit min-w-0">
               {getSeatInfo(reservation)}
             </div>
-            <Button onClick={(e) => { e.stopPropagation(); onViewDetails() }} className="rounded-2xl font-black px-6 h-10 shadow-md shadow-primary/10 shrink-0">
+            <Button onClick={(e) => { e.stopPropagation(); onViewDetails() }} className="rounded-lg font-black px-6 h-10 shadow-md shadow-primary/10 shrink-0">
               Details
             </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
-            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onAddToCalendar() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onAddToCalendar() }} className="rounded-lg border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
               <Calendar size={18} className="mr-2 opacity-50" />
               Add to Cal
             </Button>
-            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onGetDirections() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+            <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onGetDirections() }} className="rounded-lg border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
               Map
             </Button>
             {isPast && onViewReceipt ? (
-              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onViewReceipt() }} className="rounded-2xl border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
+              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onViewReceipt() }} className="rounded-lg border-none bg-primary/5 hover:bg-primary/10 text-primary font-bold transition-all duration-300">
                 <Receipt size={18} className="mr-2 opacity-50" />
                 Receipt
               </Button>
             ) : (
-              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onCancel() }} className="rounded-2xl border-none bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-all duration-300">
+              <Button variant="outline" size="lg" onClick={(e) => { e.stopPropagation(); onCancel() }} className="rounded-lg border-none bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-all duration-300">
                 <X size={18} className="mr-2 opacity-50" />
                 Cancel
               </Button>
@@ -581,7 +581,7 @@ function UpcomingListItem({
 }) {
   return (
     <div
-      className="group relative flex w-full gap-4 rounded-[2rem] border border-white bg-white/40 p-4 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98] cursor-pointer"
+      className="group relative flex w-full gap-4 rounded-3xl border border-white bg-white/40 p-4 shadow-sm transition-all duration-300 hover:premium-shadow hover:bg-white/80 active:scale-[0.98] cursor-pointer"
       onClick={onViewDetails}
     >
       <div className="flex-1 space-y-1 py-1">
@@ -620,7 +620,7 @@ function PastReservationCard({
 
   return (
     <div
-      className="group flex items-center justify-between p-5 rounded-[2rem] border border-white bg-white/40 shadow-sm transition-all duration-300 hover:bg-white/80 hover:premium-shadow active:scale-[0.99] cursor-pointer"
+      className="group flex items-center justify-between p-5 rounded-3xl border border-white bg-white/40 shadow-sm transition-all duration-300 hover:bg-white/80 hover:premium-shadow active:scale-[0.99] cursor-pointer"
       onClick={onViewDetails}
     >
       <div className="flex-1 space-y-1">
@@ -683,7 +683,7 @@ function CancelledReservationCard({
 }) {
   return (
     <div
-      className="group flex items-center justify-between p-5 rounded-[2rem] border border-white bg-white/20 shadow-sm grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:bg-white/40 active:scale-[0.99] cursor-pointer"
+      className="group flex items-center justify-between p-5 rounded-3xl border border-white bg-white/20 shadow-sm grayscale opacity-60 transition-all duration-300 hover:grayscale-0 hover:opacity-100 hover:bg-white/40 active:scale-[0.99] cursor-pointer"
       onClick={onViewDetails}
     >
       <div className="flex-1 space-y-1">

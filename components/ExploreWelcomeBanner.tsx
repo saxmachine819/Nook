@@ -60,7 +60,7 @@ export function ExploreWelcomeBanner({
   return (
     <div
       className={cn(
-        "fixed left-1/2 top-1/2 z-[100] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[2rem] glass px-8 py-10 shadow-2xl overflow-hidden",
+        "fixed left-1/2 top-1/2 z-[100] w-[calc(100%-2.5rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-3xl glass px-8 py-10 shadow-2xl overflow-hidden",
         "animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out"
       )}
     >
@@ -77,7 +77,7 @@ export function ExploreWelcomeBanner({
 
       <div className="relative z-10 flex flex-col items-center justify-center text-center gap-6">
         <div className="space-y-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 animate-bounce-slow">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-primary/10 text-primary mb-4 animate-bounce-slow">
             <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -97,7 +97,7 @@ export function ExploreWelcomeBanner({
             size="lg"
             onClick={handleUseLocation}
             disabled={locationState === "requesting"}
-            className="w-full rounded-2xl font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full rounded-lg font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             {locationState === "requesting" ? "Finding you…" : "Use my location"}
           </Button>

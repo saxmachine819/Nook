@@ -2654,7 +2654,7 @@ export function VenueOpsConsoleClient({
               We&apos;re working on self-serve signage ordering. Until then, book a short call and we&apos;ll get you set up with everything you need.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl overflow-hidden border border-border bg-card min-h-[380px] w-full">
+          <div className="rounded-sm overflow-hidden border border-border bg-card min-h-[380px] w-full">
             <iframe
               title="Schedule a call for signage"
               src={CAL_EMBED_URL}

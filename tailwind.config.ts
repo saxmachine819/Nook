@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss"
+import defaultTheme from "tailwindcss/defaultTheme"
 
 const config = {
   darkMode: ["class"],
@@ -18,6 +19,12 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        // layout.tsx exposes Inter as --font-inter on <body>. Without this
+        // mapping, `font-sans` silently falls through to Tailwind's stock
+        // stack and Inter is downloaded but never rendered.
+        sans: ["var(--font-inter)", ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -53,10 +60,19 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      // One monotonic scale, every step derived from --radius (1rem = 16px):
+      // sm 12 · md 14 · lg 16 · xl 20 · 2xl 24 · 3xl 32 · 4xl 40.
+      // Previously only sm/md/lg were derived while xl/2xl/3xl kept Tailwind's
+      // defaults, which made the scale run backwards — rounded-xl (12px) came
+      // out smaller than rounded-md (14px), and rounded-2xl equalled rounded-lg.
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 2px)",
+        lg: "var(--radius)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+        "3xl": "calc(var(--radius) + 16px)",
+        "4xl": "calc(var(--radius) + 24px)",
       },
       keyframes: {
         "accordion-down": {

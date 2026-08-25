@@ -227,7 +227,7 @@ export function VenueHoursDisplay({
   )
 
   return (
-    <div className="rounded-[2rem] bg-primary/[0.03] px-4 py-2 space-y-1 relative">
+    <div className="rounded-3xl bg-primary/[0.03] px-4 py-2 space-y-1 relative">
       {weeklyFormatted.length > 0 ? (
         <details className="group relative">
           <summary className="flex items-center justify-between gap-2 list-none cursor-pointer text-[10px] font-black uppercase tracking-widest text-primary/40 hover:text-primary/60 transition-colors py-0">
@@ -246,7 +246,7 @@ export function VenueHoursDisplay({
               </span>
             )}
           </summary>
-          <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(100vw,24rem)] rounded-2xl bg-background border border-border/50 shadow-lg py-3 px-4 space-y-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="absolute top-full left-0 mt-1 min-w-full w-max max-w-[min(100vw,24rem)] rounded-lg bg-background border border-border/50 shadow-lg py-3 px-4 space-y-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
             {weeklyFormatted.map((dayHours, index) => (
               <div key={index} className="flex justify-between items-center text-xs font-bold text-foreground/60 border-b border-primary/5 pb-2 last:border-0 last:pb-0">
                 {dayHours.split(': ').map((part, i) => (
