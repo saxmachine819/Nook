@@ -4,17 +4,25 @@ import { enqueueNotification } from "@/lib/notification-queue"
 import { formatDateAndTimeInZone, DEFAULT_TIMEZONE } from "@/lib/email-date-utils"
 
 // LOCAL-ONLY: set e.g. CUSTOMER_FOLLOW_UP_HOUR=14, CUSTOMER_FOLLOW_UP_MINUTE_START=0, CUSTOMER_FOLLOW_UP_MINUTE_END=59 to test in the 2pm hour
-function getFollowUpWindow(): { hour: number; minuteStart: number; minuteEnd: number } {
-  const hourStr = process.env.CUSTOMER_FOLLOW_UP_HOUR
+// The hour/minute gate only made sense while this cron ran every minute: it picked
+// which minute of the day to act on each venue, in that venue's own timezone. On a
+// daily schedule the cron expression in vercel.json is the selector, so the gate
+// defaults to off (hour: null) and every active venue is processed on the single
+// run. The "reservation started today in venue tz" check below is what scopes the
+// work. Set CUSTOMER_FOLLOW_UP_HOUR to 0-23 to re-enable per-venue local-hour
+// gating (only useful on a sub-hourly cron); "*" or unset means any time.
+function getFollowUpWindow(): { hour: number | null; minuteStart: number; minuteEnd: number } {
+  const hourStr = process.env.CUSTOMER_FOLLOW_UP_HOUR?.trim()
   const startStr = process.env.CUSTOMER_FOLLOW_UP_MINUTE_START
   const endStr = process.env.CUSTOMER_FOLLOW_UP_MINUTE_END
-  const hour = hourStr != null ? parseInt(hourStr, 10) : 18
+  const hour =
+    hourStr != null && hourStr !== "" && hourStr !== "*" ? parseInt(hourStr, 10) : NaN
   const minuteStart = startStr != null ? parseInt(startStr, 10) : 0
-  const minuteEnd = endStr != null ? parseInt(endStr, 10) : 30
+  const minuteEnd = endStr != null ? parseInt(endStr, 10) : 59
   return {
-    hour: isNaN(hour) ? 18 : hour,
+    hour: isNaN(hour) ? null : hour,
     minuteStart: isNaN(minuteStart) ? 0 : minuteStart,
-    minuteEnd: isNaN(minuteEnd) ? 30 : minuteEnd,
+    minuteEnd: isNaN(minuteEnd) ? 59 : minuteEnd,
   }
 }
 
@@ -39,7 +47,11 @@ export async function GET(request: Request) {
   const now = new Date()
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
 
-  console.log(`[customer-follow-up] Cron triggered at ${now.toISOString()}, target window: ${targetHour}:${minuteStart.toString().padStart(2, "0")}-${targetHour}:${minuteEnd.toString().padStart(2, "0")}`)
+  const windowLabel =
+    targetHour === null
+      ? "any time (local-hour gate off; cron schedule is the selector)"
+      : `${targetHour}:${minuteStart.toString().padStart(2, "0")}-${targetHour}:${minuteEnd.toString().padStart(2, "0")}`
+  console.log(`[customer-follow-up] Cron triggered at ${now.toISOString()}, target window: ${windowLabel}`)
 
   const venues = await prisma.venue.findMany({
     where: { status: "ACTIVE" },
@@ -57,7 +69,7 @@ export async function GET(request: Request) {
     const { hour, minute } = getHourAndMinuteInTimezone(now, tz)
     
     // Fixed: use inclusive boundaries (minute >= minuteStart && minute <= minuteEnd)
-    if (hour !== targetHour || minute < minuteStart || minute > minuteEnd) {
+    if (targetHour !== null && (hour !== targetHour || minute < minuteStart || minute > minuteEnd)) {
       const reason = hour !== targetHour 
         ? `hour mismatch (${hour} !== ${targetHour})` 
         : `minute out of range (${minute} not in [${minuteStart}, ${minuteEnd}])`

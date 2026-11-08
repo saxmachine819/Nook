@@ -47,7 +47,7 @@ export default function BookingReminder60MinEmail(props: BookingReminder60MinEma
           <Section style={s.section}>
             <Text style={s.text}>
               Your booking at <span style={s.highlight}>{displayVenueName}</span>
-              {resourceLabel ? ` (${resourceLabel})` : ""} starts in about 1 hour.
+              {resourceLabel ? ` (${resourceLabel})` : ""} is coming up.
             </Text>
             <Text style={s.timeLine}>Start: {formatDateTimeInTimezone(startAt, timeZone)}</Text>
             <Text style={s.timeLine}>End: {formatDateTimeInTimezone(endAt, timeZone)}</Text>

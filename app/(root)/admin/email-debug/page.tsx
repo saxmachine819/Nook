@@ -15,7 +15,8 @@ const EMAIL_TYPE_SUBJECTS: Record<string, string> = {
   booking_canceled: "Booking canceled",
   venue_booking_created: "New booking at your venue",
   venue_booking_canceled: "Booking canceled at your venue",
-  booking_end_5min: "Your booking ends in 5 minutes",
+  booking_end_5min: "Your booking is ending soon",
+  booking_reminder_60min: "Your Nooc booking is coming up",
   venue_approved: "Venue approved",
   customer_follow_up: "Thanks for using Nooc today ☕",
 }

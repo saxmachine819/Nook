@@ -3,12 +3,23 @@ import { prisma } from "@/lib/prisma"
 import { enqueueNotification } from "@/lib/notification-queue"
 import { formatDateAndTimeInZone, DEFAULT_TIMEZONE } from "@/lib/email-date-utils"
 
+// Window defaults track the cron cadence in vercel.json. On a daily schedule a run
+// has to cover a whole day plus Hobby's +/-59min trigger jitter, hence 1560 minutes
+// (26h). The resulting overlap between runs is harmless: enqueueNotification is
+// idempotent per reservation via dedupeKey. Restore the narrow window if the cron
+// goes back to every-minute on a paid plan. (was 4/6.)
+const DEFAULT_WINDOW_START_MINUTES = 0
+const DEFAULT_WINDOW_END_MINUTES = 1560
+
 function getWindowMinutes(): { start: number; end: number } {
   const startStr = process.env.BOOKING_REMINDER_WINDOW_START_MINUTES
   const endStr = process.env.BOOKING_REMINDER_WINDOW_END_MINUTES
-  const start = startStr != null ? parseInt(startStr, 10) : 4
-  const end = endStr != null ? parseInt(endStr, 10) : 6
-  return { start: isNaN(start) ? 4 : start, end: isNaN(end) ? 6 : end }
+  const start = startStr != null ? parseInt(startStr, 10) : DEFAULT_WINDOW_START_MINUTES
+  const end = endStr != null ? parseInt(endStr, 10) : DEFAULT_WINDOW_END_MINUTES
+  return {
+    start: isNaN(start) ? DEFAULT_WINDOW_START_MINUTES : start,
+    end: isNaN(end) ? DEFAULT_WINDOW_END_MINUTES : end,
+  }
 }
 
 function buildExtendUrl(

@@ -1,5 +1,6 @@
 import { createSign } from "node:crypto"
 import { prisma } from "@/lib/prisma"
+import { formatTimeInTimezone } from "@/lib/email-date-utils"
 
 export interface PushPayload {
   title: string
@@ -25,20 +26,31 @@ const PUSH_COPY: Record<
       : "Your Nooc booking was canceled",
     data: { type: "booking_canceled" },
   }),
-  booking_reminder_60min: (p) => ({
-    title: "Booking in 1 hour",
-    body: p.venueName
-      ? `Head to ${String(p.venueName)} — your seat is reserved`
-      : "Your Nooc booking starts in 1 hour",
-    data: { type: "booking_reminder_60min" },
-  }),
-  booking_end_5min: (p) => ({
-    title: "Booking ending soon",
-    body: p.venueName
-      ? `Your time at ${String(p.venueName)} ends in 5 minutes`
-      : "Your booking ends in 5 minutes",
-    data: { type: "booking_end_5min" },
-  }),
+  booking_reminder_60min: (p) => {
+    const at = formatTimeInTimezone(
+      p.startAt as string | undefined,
+      p.timeZone as string | undefined
+    )
+    return {
+      title: at ? `Booking at ${at}` : "Booking coming up",
+      body: p.venueName
+        ? `Head to ${String(p.venueName)} — your seat is reserved`
+        : "Your Nooc booking is coming up",
+      data: { type: "booking_reminder_60min" },
+    }
+  },
+  booking_end_5min: (p) => {
+    const at = formatTimeInTimezone(
+      p.suggestedExtensionStartAt as string | undefined,
+      p.timeZone as string | undefined
+    )
+    const when = at ? `ends at ${at}` : "is ending soon"
+    return {
+      title: "Booking ending soon",
+      body: p.venueName ? `Your time at ${String(p.venueName)} ${when}` : `Your booking ${when}`,
+      data: { type: "booking_end_5min" },
+    }
+  },
   venue_booking_created: (p) => ({
     title: "New booking",
     body: p.venueName

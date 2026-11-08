@@ -4,12 +4,23 @@ import { enqueueNotification } from "@/lib/notification-queue"
 import { formatDateAndTimeInZone, DEFAULT_TIMEZONE } from "@/lib/email-date-utils"
 
 // LOCAL-ONLY: set BOOKING_REMINDER_60MIN_WINDOW_START=1 and BOOKING_REMINDER_60MIN_WINDOW_END=3 for near-term testing
+// Window defaults track the cron cadence in vercel.json. On a daily schedule a run
+// has to cover a whole day plus Hobby's +/-59min trigger jitter, hence 1560 minutes
+// (26h). The resulting overlap between runs is harmless: enqueueNotification is
+// idempotent per reservation via dedupeKey. Restore the narrow window if the cron
+// goes back to every-minute on a paid plan. (was 54/66.)
+const DEFAULT_WINDOW_START_MINUTES = 0
+const DEFAULT_WINDOW_END_MINUTES = 1560
+
 function getWindowMinutes(): { start: number; end: number } {
   const startStr = process.env.BOOKING_REMINDER_60MIN_WINDOW_START
   const endStr = process.env.BOOKING_REMINDER_60MIN_WINDOW_END
-  const start = startStr != null ? parseInt(startStr, 10) : 54
-  const end = endStr != null ? parseInt(endStr, 10) : 66
-  return { start: isNaN(start) ? 54 : start, end: isNaN(end) ? 66 : end }
+  const start = startStr != null ? parseInt(startStr, 10) : DEFAULT_WINDOW_START_MINUTES
+  const end = endStr != null ? parseInt(endStr, 10) : DEFAULT_WINDOW_END_MINUTES
+  return {
+    start: isNaN(start) ? DEFAULT_WINDOW_START_MINUTES : start,
+    end: isNaN(end) ? DEFAULT_WINDOW_END_MINUTES : end,
+  }
 }
 
 function buildViewBookingUrl(

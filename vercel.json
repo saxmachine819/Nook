@@ -1,9 +1,9 @@
 {
   "crons": [
-    { "path": "/api/email/dispatch", "schedule": "* * * * *" },
-    { "path": "/api/cron/booking-end-reminders", "schedule": "* * * * *" },
-    { "path": "/api/cron/booking-reminder-60min", "schedule": "* * * * *" },
-    { "path": "/api/cron/customer-follow-up", "schedule": "* * * * *" }
+    { "path": "/api/email/dispatch", "schedule": "0 13 * * *" },
+    { "path": "/api/cron/booking-reminder-60min", "schedule": "0 14 * * *" },
+    { "path": "/api/cron/booking-end-reminders", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/customer-follow-up", "schedule": "0 23 * * *" }
   ],
   "rewrites": [
     {

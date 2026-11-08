@@ -2,6 +2,7 @@ import React from "react"
 import { Resend } from "resend"
 import { prisma } from "@/lib/prisma"
 import { validateEmailEnv, getFromAddress } from "@/lib/email-send"
+import { formatTimeInTimezone } from "@/lib/email-date-utils"
 import { maybeSendPushForNotificationEvent } from "@/lib/push"
 import WelcomeEmail from "@/emails/WelcomeEmail"
 import BookingConfirmationEmail from "@/emails/BookingConfirmationEmail"
@@ -77,7 +78,16 @@ const REGISTRY: Record<string, Handler> = {
       }),
   },
   booking_end_5min: {
-    subject: "Your booking ends in 5 minutes",
+    // suggestedExtensionStartAt is the reservation's real endAt (see the
+    // booking-end-reminders cron), and it is what the template renders, so the
+    // subject and the body quote the same instant.
+    subject: (p) => {
+      const at = formatTimeInTimezone(
+        p.suggestedExtensionStartAt as string | undefined,
+        p.timeZone as string | undefined
+      )
+      return at ? `Your booking ends at ${at}` : "Your booking is ending soon"
+    },
     render: (p) =>
       React.createElement(BookingEndReminderEmail, {
         venueName: p.venueName as string | undefined,
@@ -88,7 +98,13 @@ const REGISTRY: Record<string, Handler> = {
       }),
   },
   booking_reminder_60min: {
-    subject: "Your Nooc booking starts in 1 hour",
+    subject: (p) => {
+      const at = formatTimeInTimezone(
+        p.startAt as string | undefined,
+        p.timeZone as string | undefined
+      )
+      return at ? `Your Nooc booking starts at ${at}` : "Your Nooc booking is coming up"
+    },
     render: (p) =>
       React.createElement(BookingReminder60MinEmail, {
         venueName: p.venueName as string | undefined,

@@ -54,6 +54,31 @@ export function formatDateTimeInTimezone(iso: string, timeZone?: string): string
 }
 
 /**
+ * Format an ISO date-time string as a bare clock time in a given timezone.
+ * Example: "2025-02-05T19:30:00.000Z" in America/New_York -> "2:30 PM"
+ *
+ * Unlike the formatters above this returns null for missing or unparseable
+ * input rather than echoing the raw string, because callers use it to build
+ * subject lines and push titles: a null lets them fall back to time-agnostic
+ * copy instead of mailing someone an ISO timestamp.
+ */
+export function formatTimeInTimezone(iso?: string, timeZone?: string): string | null {
+  if (!iso) return null
+  try {
+    const date = new Date(iso)
+    if (isNaN(date.getTime())) return null
+    const tz = timeZone?.trim() || DEFAULT_TIMEZONE
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Format a start and end ISO string as a time range in a given timezone.
  * Example: "2:30 PM – 4:30 PM"
  */
